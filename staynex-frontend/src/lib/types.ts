@@ -159,3 +159,164 @@ export interface BookingView {
   paymentStatus: PaymentState;
   paymentReference: string | null;
 }
+
+export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
+  HOLD: "On hold",
+  PENDING_PAYMENT: "Pending payment",
+  CONFIRMED: "Confirmed",
+  CANCELLED: "Cancelled",
+  EXPIRED: "Expired",
+};
+
+export const PAYMENT_STATE_LABELS: Record<PaymentState, string> = {
+  INITIATED: "Initiated",
+  PENDING: "Pending",
+  SUCCESS: "Paid",
+  FAILED: "Failed",
+  REFUNDED: "Refunded",
+};
+
+// --- Phase 4: dashboards, notifications, AI logs ---
+
+export interface BookingRow {
+  id: string;
+  status: BookingStatus;
+  propertyName: string;
+  cityName: string;
+  roomName: string;
+  guestEmail: string | null;
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  amountKobo: number;
+  currency: string;
+  paymentStatus: PaymentState;
+  paymentReference: string | null;
+  createdAt: string;
+}
+
+export interface OwnerBookingKpis {
+  confirmedBookings: number;
+  pendingPayments: number;
+  availableRooms: number;
+  estimatedEarningsKobo: number;
+  currency: string;
+}
+
+export interface OwnerBookingsView {
+  kpis: OwnerBookingKpis;
+  bookings: BookingRow[];
+}
+
+export interface AdminPaymentRow {
+  reference: string | null;
+  bookingId: string;
+  propertyName: string;
+  amountKobo: number;
+  currency: string;
+  provider: string | null;
+  status: PaymentState;
+  createdAt: string;
+}
+
+export interface AdminBookingsView {
+  bookings: BookingRow[];
+  payments: AdminPaymentRow[];
+}
+
+export interface AuditLogRow {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  actorUserId: string | null;
+  propertyId: string | null;
+  createdAt: string;
+}
+
+export interface AiLogRow {
+  id: string;
+  conversationId: string;
+  actionType: string;
+  summary: string | null;
+  createdAt: string;
+}
+
+// --- Phase 4: AI assistant ---
+
+export interface AssistantReply {
+  conversationId: string;
+  reply: string;
+  refused: boolean;
+  unavailable: boolean;
+  groundedFacts: string[];
+}
+
+// --- Phase 5: auth, testimonials, areas ---
+
+export type AppRole = "GUEST" | "OWNER" | "ADMIN_REVIEWER" | "ADMIN_MANAGER";
+
+export interface AuthUser {
+  id: string;
+  email: string | null;
+  name: string | null;
+  role: AppRole;
+}
+
+export type TestimonialStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED";
+
+export const TESTIMONIAL_STATUS_LABELS: Record<TestimonialStatus, string> = {
+  PENDING_REVIEW: "Pending review",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+};
+
+export interface PublicTestimonial {
+  id: string;
+  rating: number;
+  title: string | null;
+  body: string;
+  guestName: string | null;
+  propertyName: string;
+  propertySlug: string;
+  cityName: string;
+  createdAt: string;
+}
+
+export interface AdminTestimonialRow {
+  id: string;
+  rating: number;
+  title: string | null;
+  body: string;
+  guestName: string | null;
+  propertyName: string;
+  cityName: string;
+  status: TestimonialStatus;
+  bookingId: string;
+  createdAt: string;
+}
+
+export interface BookingReviewContext {
+  bookingId: string;
+  propertyName: string;
+  roomName: string;
+  canReview: boolean;
+  alreadyReviewed: boolean;
+  reason: string | null;
+}
+
+export type AreaTypeValue = "LOCAL_GOVERNMENT_AREA" | "NEIGHBORHOOD";
+
+export const AREA_TYPE_LABELS: Record<AreaTypeValue, string> = {
+  LOCAL_GOVERNMENT_AREA: "LGA",
+  NEIGHBORHOOD: "Neighborhood",
+};
+
+export interface AreaOption {
+  id: string;
+  name: string;
+  slug: string;
+  type: AreaTypeValue;
+  notable: boolean;
+  hasProperties: boolean;
+}

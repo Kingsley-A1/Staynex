@@ -2,13 +2,17 @@
 
 import { type FormEvent, useEffect, useState } from "react";
 import { Button, Field, Input } from "@/ui";
-import { guestApi } from "@/lib/api";
+import { AuthForm } from "@/features/auth/auth-form";
+import { guestApi, authApi } from "@/lib/api";
 import { formatNairaFromKobo } from "@/lib/format";
-import type { HoldSummary } from "@/lib/types";
+import type { AuthUser, HoldSummary } from "@/lib/types";
 
 export function CheckoutClient({ holdId }: { holdId: string }) {
   const [hold, setHold] = useState<HoldSummary | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // undefined = still checking session; null = signed out.
+  const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
+  const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
@@ -17,12 +21,18 @@ export function CheckoutClient({ holdId }: { holdId: string }) {
     let active = true;
     guestApi
       .getHold(holdId)
-      .then((h) => {
-        if (active) setHold(h);
+      .then((h) => active && setHold(h))
+      .catch((err) =>
+        active && setLoadError(err instanceof Error ? err.message : "Could not load reservation"),
+      );
+    authApi
+      .me()
+      .then((u) => {
+        if (!active) return;
+        setUser(u);
+        if (u?.email) setEmail(u.email);
       })
-      .catch((err) => {
-        if (active) setLoadError(err instanceof Error ? err.message : "Could not load reservation");
-      });
+      .catch(() => active && setUser(null));
     return () => {
       active = false;
     };
@@ -75,7 +85,40 @@ export function CheckoutClient({ holdId }: { holdId: string }) {
         )}
       </div>
 
-      {!hold.expired && (
+      {!hold.expired && user === undefined && (
+        <div className="surface-card p-5 text-muted-foreground">Checking your account…</div>
+      )}
+
+      {/* Registration/sign-in is required immediately before payment. */}
+      {!hold.expired && user === null && (
+        <div className="surface-card space-y-4 p-5">
+          <div>
+            <h3 className="text-title-sm text-ink">
+              {authMode === "register" ? "Create an account to pay" : "Sign in to pay"}
+            </h3>
+            <p className="text-caption">
+              Your booking is attached to your account so you get confirmation and can review your stay.
+            </p>
+          </div>
+          <AuthForm
+            mode={authMode}
+            compact
+            onSuccess={(u) => {
+              setUser(u);
+              if (u.email) setEmail(u.email);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => setAuthMode((m) => (m === "register" ? "login" : "register"))}
+            className="text-caption font-semibold text-primary"
+          >
+            {authMode === "register" ? "I already have an account" : "Create a new account instead"}
+          </button>
+        </div>
+      )}
+
+      {!hold.expired && user && (
         <form onSubmit={pay} className="surface-card space-y-4 p-5">
           <Field label="Email for your receipt" htmlFor="email" required>
             <Input

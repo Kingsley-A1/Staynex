@@ -3,16 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
+import type { NavItem } from "@/components/nav-config";
 
-export interface NavItem {
-  href: string;
-  label: string;
-}
-
-export function DashboardNav({ items }: { items: NavItem[] }) {
+// Reusable role navigation. Horizontal + scrollable on mobile, vertical sidebar
+// on large screens (controlled by the parent layout via the `orientation` hint).
+export function RoleNav({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
   return (
-    <nav aria-label="Dashboard sections" className="flex gap-1 overflow-x-auto">
+    <nav
+      aria-label="Workspace sections"
+      className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-x-visible"
+    >
       {items.map((item) => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (

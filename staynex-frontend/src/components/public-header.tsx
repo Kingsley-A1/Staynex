@@ -20,10 +20,22 @@ export function PublicHeader() {
             Find a stay
           </Link>
           <Link
+            href="/reviews"
+            className="hidden rounded-md px-3 py-2 text-muted-foreground hover:text-ink sm:block"
+          >
+            Reviews
+          </Link>
+          <Link
             href="/list-your-property"
             className="hidden rounded-md px-3 py-2 text-muted-foreground hover:text-ink sm:block"
           >
             List your property
+          </Link>
+          <Link
+            href="/sign-in"
+            className="rounded-md px-3 py-2 font-semibold text-primary hover:bg-secondary"
+          >
+            Sign in
           </Link>
         </nav>
       </div>

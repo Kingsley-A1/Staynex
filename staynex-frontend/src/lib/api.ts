@@ -3,17 +3,28 @@
 // components render from centralized fixtures until the API is wired live.
 
 import type {
+  AdminBookingsView,
+  AdminTestimonialRow,
   ApprovalActionResult,
+  AreaOption,
+  AssistantReply,
+  AuditLogRow,
+  AuthUser,
+  AiLogRow,
   AvailabilityDay,
   AvailabilityQuote,
+  BookingReviewContext,
+  BookingRow,
   BookingView,
   CheckoutResult,
   HoldSummary,
   MediaItem,
   MediaUploadTarget,
+  OwnerBookingsView,
   PaymentStatusView,
   PropertyDetail,
   PropertySummary,
+  PublicTestimonial,
 } from "@/lib/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -28,6 +39,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const { userId, headers, ...rest } = options;
   const res = await fetch(`${API_BASE}${path}`, {
     ...rest,
+    // Send/receive the session cookie so auth-aware endpoints resolve the user.
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(userId ? { "x-user-id": userId } : {}),
@@ -121,6 +134,10 @@ export const ownerApi = {
     request<AvailabilityDay[]>(
       `/availability/room-types/${roomTypeId}?from=${from}&to=${to}`,
     ),
+  listBookings: (userId: string) =>
+    request<OwnerBookingsView>("/owner/bookings", { userId }),
+  getBooking: (userId: string, id: string) =>
+    request<BookingRow>(`/owner/bookings/${id}`, { userId }),
 };
 
 export const adminApi = {
@@ -132,6 +149,82 @@ export const adminApi = {
     body: { decision: "APPROVE" | "REJECT" | "REQUEST_CHANGES"; note?: string },
   ) =>
     request<ApprovalActionResult>(`/admin/approvals/${id}/decision`, {
+      method: "POST",
+      userId,
+      body: JSON.stringify(body),
+    }),
+  bookings: () => request<AdminBookingsView>("/admin/bookings"),
+  auditLogs: () => request<AuditLogRow[]>("/admin/audit-logs"),
+  aiLogs: () => request<AiLogRow[]>("/admin/ai-logs"),
+  testimonials: (status?: string) =>
+    request<AdminTestimonialRow[]>(
+      `/admin/testimonials${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+    ),
+  moderateTestimonial: (
+    userId: string,
+    id: string,
+    decision: "APPROVE" | "REJECT" | "PENDING",
+  ) =>
+    request<{ id: string; status: string }>(`/admin/testimonials/${id}/decision`, {
+      method: "POST",
+      userId,
+      body: JSON.stringify({ decision }),
+    }),
+  areas: (city?: string) =>
+    request<AreaOption[]>(`/admin/areas${city ? `?city=${encodeURIComponent(city)}` : ""}`),
+  createArea: (body: { cityId: string; name: string; type: string; notable?: boolean }) =>
+    request<AreaOption>("/admin/areas", { method: "POST", body: JSON.stringify(body) }),
+  updateArea: (id: string, body: { name?: string; type?: string; notable?: boolean }) =>
+    request<AreaOption>(`/admin/areas/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+};
+
+export const authApi = {
+  me: () => request<AuthUser | null>("/auth/me"),
+  register: (body: { email: string; password: string; name?: string; role?: "GUEST" | "OWNER" }) =>
+    request<AuthUser>("/auth/register", { method: "POST", body: JSON.stringify(body) }),
+  adminRegister: (body: {
+    email: string;
+    password: string;
+    name?: string;
+    role: "ADMIN_REVIEWER" | "ADMIN_MANAGER";
+    accessCode: string;
+  }) => request<AuthUser>("/auth/admin/register", { method: "POST", body: JSON.stringify(body) }),
+  login: (body: { email: string; password: string }) =>
+    request<AuthUser>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
+  logout: () => request<{ ok: true }>("/auth/logout", { method: "POST" }),
+};
+
+export const reviewsApi = {
+  list: (propertySlug?: string, limit?: number) => {
+    const qs = new URLSearchParams();
+    if (propertySlug) qs.set("propertySlug", propertySlug);
+    if (limit) qs.set("limit", String(limit));
+    const suffix = qs.toString();
+    return request<PublicTestimonial[]>(`/reviews${suffix ? `?${suffix}` : ""}`);
+  },
+  bookingContext: (bookingId: string) =>
+    request<BookingReviewContext>(`/reviews/booking/${bookingId}/context`),
+  submit: (
+    bookingId: string,
+    body: { rating: number; body: string; title?: string; guestName?: string },
+  ) =>
+    request<{ id: string; status: string }>(`/reviews/booking/${bookingId}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+};
+
+export const areasApi = {
+  listForCity: (city: string) =>
+    request<AreaOption[]>(`/areas?city=${encodeURIComponent(city)}`),
+};
+
+export const assistantApi = {
+  ask: (
+    body: { message: string; conversationId?: string; propertySlug?: string },
+    userId?: string,
+  ) =>
+    request<AssistantReply>("/ai/assistant", {
       method: "POST",
       userId,
       body: JSON.stringify(body),

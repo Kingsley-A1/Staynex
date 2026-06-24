@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { TestimonialsSection } from "@/features/reviews/testimonials-section";
 
 export const metadata: Metadata = {
   title: "Staynex — Book trusted stays",
@@ -99,16 +100,13 @@ const slug = (s: string) =>
 export default function HomePage() {
   return (
     <>
-      <a href="#main" className="skip-link">
-        Skip to content
-      </a>
-
       <SiteHeader />
 
       <main id="main">
         <Hero />
         <Destinations />
         <FeaturedStays />
+        <TestimonialsSection />
         <ValueProps />
         <OwnerCta />
       </main>

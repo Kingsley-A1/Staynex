@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { RoomGalleryCarousel } from "@/ui";
 import { BookingWidget } from "@/features/booking/booking-widget";
-import { getPublicProperty } from "@/lib/server-catalog";
+import { TestimonialCard } from "@/features/reviews/testimonial-card";
+import { getApprovedTestimonials, getPublicProperty } from "@/lib/server-catalog";
 import { formatNairaFromKobo } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,8 @@ export default async function StayPage({
   const sp = await searchParams;
   const { property } = await getPublicProperty(slug);
   if (!property) notFound();
+
+  const reviews = await getApprovedTestimonials(slug, 4);
 
   const slides = property.media.map((m) => ({ id: m.id, url: m.url, altText: m.altText }));
   const rooms = property.roomTypes.map((rt) => ({
@@ -62,6 +65,16 @@ export default async function StayPage({
               ))}
             </ul>
           </section>
+          {reviews.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-title-sm text-ink">Guest reviews</h2>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {reviews.map((r) => (
+                  <TestimonialCard key={r.id} review={r} />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
 
         <aside className="lg:sticky lg:top-20 lg:self-start">

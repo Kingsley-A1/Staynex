@@ -70,6 +70,9 @@ export default async function ConfirmedPage({
         </div>
 
         <div className="flex flex-wrap gap-3">
+          {confirmed && (
+            <LinkButton href={`/reviews/submit?booking=${booking.id}`}>Write a review</LinkButton>
+          )}
           <LinkButton href="/search" variant="secondary">
             Browse more stays
           </LinkButton>

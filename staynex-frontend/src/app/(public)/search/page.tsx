@@ -1,5 +1,5 @@
 import { PropertyCard } from "@/ui";
-import { SearchForm } from "@/features/booking/search-form";
+import { SearchPanel } from "@/features/booking/search-panel";
 import { searchProperties } from "@/lib/server-catalog";
 import type { PropertySummary } from "@/lib/types";
 
@@ -8,7 +8,13 @@ export const dynamic = "force-dynamic";
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ city?: string; checkIn?: string; checkOut?: string; guests?: string }>;
+  searchParams: Promise<{
+    city?: string;
+    area?: string;
+    checkIn?: string;
+    checkOut?: string;
+    guests?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const city = (sp.city ?? "").trim();
@@ -24,6 +30,7 @@ export default async function SearchPage({
   if (city) {
     const res = await searchProperties({
       city,
+      area: sp.area,
       checkIn: sp.checkIn,
       checkOut: sp.checkOut,
       guests: sp.guests ? Number(sp.guests) : undefined,
@@ -34,7 +41,7 @@ export default async function SearchPage({
 
   return (
     <main className="layout-container space-y-6 py-8">
-      <SearchForm defaults={sp} />
+      <SearchPanel defaults={sp} />
 
       <header>
         <h1 className="text-title-lg text-ink">{city ? `Stays in ${city}` : "Search stays"}</h1>
