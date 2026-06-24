@@ -1,0 +1,45 @@
+/* =============================================================================
+   Staynex Global Stylesheet — Tailwind v4 entrypoint
+   -----------------------------------------------------------------------------
+   `@import "tailwindcss"` pulls in Tailwind's theme, Preflight (reset), and
+   utilities. The token files contribute @theme / @theme inline blocks and base
+   styles, which Tailwind's PostCSS plugin processes across imports.
+
+   Order:
+     1. tailwindcss   — theme + preflight + utilities
+     2. tokens.css    — primitive @theme (colors, type, radius, shadow)
+     3. theme.css     — semantic roles (@theme inline) + base layer
+     4. motion.css    — easings, animations, durations, reduced-motion
+
+   Imported once in app/src/app/layout.tsx.
+   ============================================================================= */
+@import "tailwindcss";
+@import "./tokens.css";
+@import "./theme.css";
+@import "./motion.css";
+
+/* Tell the variant system that we drive dark mode with [data-theme="dark"]
+   (in addition to the OS-preference fallback handled in theme.css), so the
+   `dark:` utility variant works when a theme is pinned. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ----------------------------------------------------------------------------
+   Small global additions on top of Preflight
+   ---------------------------------------------------------------------------- */
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+  body {
+    min-height: 100dvh;
+  }
+  /* Long words shouldn't break layout */
+  p, h1, h2, h3, h4, h5, h6 {
+    overflow-wrap: break-word;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}

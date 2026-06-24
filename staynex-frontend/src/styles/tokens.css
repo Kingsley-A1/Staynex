@@ -1,0 +1,168 @@
+/* =============================================================================
+   Staynex Design Tokens — Primitives (Tailwind v4 @theme)
+   -----------------------------------------------------------------------------
+   Theme-INDEPENDENT foundation values. Declared inside `@theme` so Tailwind
+   generates utilities AND exposes each as a CSS variable (var(--color-indigo-700)).
+   Semantic, theme-able roles (primary/surface/text/status) live in theme.css.
+
+   Principles: Apple HIG clarity · Google Material structure · WCAG 2.2 AA.
+   Brand source of truth: skill.md §6 + Staynex_plan.md.
+
+   Notes on Tailwind defaults we intentionally KEEP (so they're not redefined):
+     - Spacing: default 4px base (p-1=4px, p-2=8px, p-4=16px…) matches Staynex.
+     - Breakpoints: default sm 640 · md 768 · lg 1024 · xl 1280 · 2xl 1536.
+   ============================================================================= */
+
+@theme {
+  /* ===========================================================================
+     COLOR PRIMITIVES — tonal ramps (utility examples: bg-indigo-700, text-neutral-600)
+     Do NOT consume these directly in feature components — use the semantic roles
+     from theme.css (bg-primary, text-ink, bg-surface, …).
+     =========================================================================== */
+
+  /* Brand indigo (anchored on #27187D = indigo-700) */
+  --color-indigo-50:  #eeebf8;
+  --color-indigo-100: #dcd6f0;
+  --color-indigo-200: #baaee1;
+  --color-indigo-300: #9888d1;
+  --color-indigo-400: #6e59b9;
+  --color-indigo-500: #4b36a0;
+  --color-indigo-600: #382593;
+  --color-indigo-700: #27187d; /* Brand primary */
+  --color-indigo-800: #1e1263;
+  --color-indigo-900: #150c46;
+
+  /* Neutrals (purple-tinted slate to match #F7F7FF / #6E6A83 / #101014) */
+  --color-neutral-0:   #ffffff;
+  --color-neutral-50:  #f7f7ff; /* Brand background */
+  --color-neutral-100: #efeef6;
+  --color-neutral-200: #e7e5f2; /* Brand border */
+  --color-neutral-300: #d5d2e4;
+  --color-neutral-400: #b3afc6;
+  --color-neutral-500: #8c8799;
+  --color-neutral-600: #6e6a83; /* Brand muted */
+  --color-neutral-700: #4a4759;
+  --color-neutral-800: #2a2834;
+  --color-neutral-900: #101014; /* Brand ink */
+  --color-neutral-950: #0a0910;
+
+  /* ===========================================================================
+     TYPOGRAPHY
+     System-font-first (Apple HIG). Swap --font-sans to add a brand web font
+     later — every text token cascades from these.
+     =========================================================================== */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji";
+  --font-display: var(--font-sans);
+  --font-mono:
+    "SF Mono", ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  /* Type scale — base 16px, ~1.2 ratio. Utilities: text-2xs … text-5xl
+     (each pairs a default line-height; override with leading-* when needed). */
+  --text-2xs: 0.6875rem;            /* 11px — legal / dense meta */
+  --text-2xs--line-height: 1.25;
+  --text-xs: 0.75rem;               /* 12px — caption */
+  --text-xs--line-height: 1.3333;
+  --text-sm: 0.875rem;              /* 14px — label / secondary */
+  --text-sm--line-height: 1.4286;
+  --text-base: 1rem;                /* 16px — body (mobile min, avoids iOS zoom) */
+  --text-base--line-height: 1.5;
+  --text-md: 1.125rem;              /* 18px — lead body */
+  --text-md--line-height: 1.55;
+  --text-lg: 1.25rem;               /* 20px — title sm */
+  --text-lg--line-height: 1.4;
+  --text-xl: 1.5rem;                /* 24px — title md */
+  --text-xl--line-height: 1.3333;
+  --text-2xl: 1.875rem;             /* 30px — title lg */
+  --text-2xl--line-height: 1.2667;
+  --text-3xl: 2.25rem;              /* 36px — display sm */
+  --text-3xl--line-height: 1.1667;
+  --text-4xl: 3rem;                 /* 48px — display md */
+  --text-4xl--line-height: 1.0833;
+  --text-5xl: 3.75rem;              /* 60px — display lg */
+  --text-5xl--line-height: 1;
+
+  /* Weights — utilities: font-regular / font-medium / font-semibold / font-bold */
+  --font-weight-regular:  400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600;
+  --font-weight-bold:     700;
+
+  /* Letter spacing — utilities: tracking-tighter … tracking-wider */
+  --tracking-tighter: -0.02em;
+  --tracking-tight:   -0.01em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.02em;
+  --tracking-wider:   0.06em; /* overline / uppercase labels */
+
+  /* Line height — utilities: leading-tight … leading-relaxed */
+  --leading-none:    1;
+  --leading-tight:   1.1;
+  --leading-snug:    1.25;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.65;
+
+  /* ===========================================================================
+     RADIUS — utilities: rounded-xs … rounded-2xl (rounded-full from defaults)
+     =========================================================================== */
+  --radius-xs:  0.25rem;  /* 4px  — tags, chips */
+  --radius-sm:  0.375rem; /* 6px  — inputs, small buttons */
+  --radius-md:  0.625rem; /* 10px — buttons, fields */
+  --radius-lg:  0.875rem; /* 14px — cards */
+  --radius-xl:  1.25rem;  /* 20px — sheets, large cards */
+  --radius-2xl: 1.75rem;  /* 28px — modals / hero surfaces */
+
+  /* ===========================================================================
+     ELEVATION — soft, low-opacity, ink-tinted. Utilities: shadow-xs … shadow-xl
+     =========================================================================== */
+  --shadow-xs: 0 1px 2px rgba(16, 16, 20, 0.04);
+  --shadow-sm:
+    0 1px 2px rgba(16, 16, 20, 0.06),
+    0 1px 3px rgba(16, 16, 20, 0.04);
+  --shadow-md:
+    0 2px 4px rgba(16, 16, 20, 0.06),
+    0 4px 8px rgba(16, 16, 20, 0.06);
+  --shadow-lg:
+    0 4px 8px rgba(16, 16, 20, 0.06),
+    0 12px 24px rgba(16, 16, 20, 0.08);
+  --shadow-xl:
+    0 8px 16px rgba(16, 16, 20, 0.08),
+    0 24px 48px rgba(16, 16, 20, 0.1);
+}
+
+/* =============================================================================
+   NON-UTILITY PRIMITIVES
+   Values without a Tailwind theme namespace. Consume via var() or arbitrary
+   utilities, e.g. z-[var(--z-modal)] or min-h-[var(--tap-target-min)].
+   ============================================================================= */
+:root {
+  /* Z-index — named layering scale (utility: z-[var(--z-modal)]) */
+  --z-base:     0;
+  --z-raised:   10;
+  --z-dropdown: 1000;
+  --z-sticky:   1100;
+  --z-drawer:   1200;
+  --z-overlay:  1300;
+  --z-modal:    1400;
+  --z-popover:  1500;
+  --z-toast:    1600;
+  --z-tooltip:  1700;
+
+  /* Sizing & layout */
+  --tap-target-min:  2.75rem; /* 44px — Apple HIG minimum touch target */
+  --size-control-sm: 2.25rem; /* 36px */
+  --size-control-md: 2.75rem; /* 44px */
+  --size-control-lg: 3.25rem; /* 52px */
+  --layout-max-width: 1280px;
+  --layout-gutter:    clamp(1rem, 5vw, 2rem); /* responsive page padding */
+
+  /* Borders & focus ring */
+  --border-width-thin:    1px;
+  --border-width-default: 1.5px;
+  --border-width-thick:   2px;
+  --focus-ring-width:     2px;
+  --focus-ring-offset:    2px;
+}

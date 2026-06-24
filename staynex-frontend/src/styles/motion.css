@@ -1,0 +1,124 @@
+/* =============================================================================
+   Staynex Motion — Durations, Easings, Animations (Tailwind v4)
+   -----------------------------------------------------------------------------
+   "Motion must clarify state" (skill.md §6). Short, purposeful transitions for
+   drawers, carousels, steppers, skeletons, and assistant panels — no decorative
+   loops. Easings follow Material 3 + Apple HIG. All animation honours
+   prefers-reduced-motion at the bottom of this file.
+
+   Generated utilities:
+     - ease-standard / ease-decelerate / ease-accelerate / ease-emphasized / ease-spring
+     - animate-fade-in / animate-slide-up / animate-scale-in / animate-shimmer / animate-pulse-soft
+   ============================================================================= */
+
+@theme {
+  /* --- Easing curves (utilities: ease-standard …) --- */
+  --ease-standard:   cubic-bezier(0.2, 0, 0, 1);      /* default enter/exit (Material 3) */
+  --ease-decelerate: cubic-bezier(0, 0, 0, 1);        /* entering the screen */
+  --ease-accelerate: cubic-bezier(0.3, 0, 1, 1);      /* leaving the screen */
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);   /* expressive (HIG-smooth) */
+  --ease-spring:     cubic-bezier(0.5, 1.3, 0.7, 1);  /* gentle overshoot — sparingly */
+
+  /* --- Animations (utilities: animate-fade-in …) --- */
+  --animate-fade-in:    fade-in 0.2s var(--ease-standard) both;
+  --animate-slide-up:   slide-up 0.28s var(--ease-decelerate) both;
+  --animate-slide-down: slide-down 0.28s var(--ease-decelerate) both;
+  --animate-scale-in:   scale-in 0.2s var(--ease-emphasized) both;
+  --animate-shimmer:    shimmer 1.4s ease-in-out infinite;
+  --animate-pulse-soft: pulse-soft 1.6s var(--ease-standard) infinite;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slide-down {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.5; }
+  }
+  @keyframes shimmer {
+    from { background-position: -150% 0; }
+    to   { background-position: 250% 0; }
+  }
+}
+
+/* -----------------------------------------------------------------------------
+   Duration tokens — no Tailwind namespace; consume via var() or arbitrary
+   utilities, e.g. duration-[var(--duration-moderate)]. Bare duration-200 also
+   works for one-offs.
+   --------------------------------------------------------------------------- */
+:root {
+  --duration-instant:  0ms;
+  --duration-fast:     120ms; /* micro-feedback: hover */
+  --duration-quick:    160ms; /* toggles, small fades */
+  --duration-base:     200ms; /* default UI transition */
+  --duration-moderate: 280ms; /* drawers, sheets, accordions */
+  --duration-slow:     400ms; /* page-level transitions */
+  --duration-slower:   600ms; /* large surface reveals */
+
+  /* Ready-made transition shorthands for component CSS */
+  --transition-colors:
+    color var(--duration-quick) var(--ease-standard),
+    background-color var(--duration-quick) var(--ease-standard),
+    border-color var(--duration-quick) var(--ease-standard),
+    fill var(--duration-quick) var(--ease-standard),
+    stroke var(--duration-quick) var(--ease-standard);
+  --transition-transform: transform var(--duration-base) var(--ease-standard);
+  --transition-opacity:   opacity var(--duration-base) var(--ease-standard);
+  --transition-shadow:    box-shadow var(--duration-base) var(--ease-standard);
+}
+
+/* -----------------------------------------------------------------------------
+   Skeleton loading placeholder — apply to a sized, radius'd box.
+   --------------------------------------------------------------------------- */
+@layer components {
+  .skeleton {
+    background-color: var(--color-surface-sunken);
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--overlay-hover) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    animation: var(--animate-shimmer);
+    border-radius: var(--radius-sm);
+  }
+}
+
+/* =============================================================================
+   REDUCED MOTION (WCAG 2.3.3) — respect user preference globally.
+   ============================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast:     0ms;
+    --duration-quick:    0ms;
+    --duration-base:     0ms;
+    --duration-moderate: 0ms;
+    --duration-slow:     0ms;
+    --duration-slower:   0ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .skeleton { animation: none; }
+}
