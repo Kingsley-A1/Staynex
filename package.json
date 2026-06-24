@@ -1,0 +1,22 @@
+{
+  "name": "staynex",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "dev": "pnpm --filter @staynex/frontend dev",
+    "dev:frontend": "pnpm --filter @staynex/frontend dev",
+    "dev:backend": "pnpm --filter @staynex/backend dev",
+    "build": "pnpm -r --if-present build",
+    "check": "pnpm -r --if-present check",
+    "format": "prettier --write .",
+    "db:generate": "pnpm --filter @staynex/backend prisma:generate",
+    "db:push": "pnpm --filter @staynex/backend prisma:push",
+    "db:migrate": "pnpm --filter @staynex/backend prisma:migrate"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.6",
+    "typescript": "^5.9.2"
+  }
+}
