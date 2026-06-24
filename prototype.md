@@ -10,7 +10,7 @@
 
 ## 1. What Staynex Is
 
-Staynex is a modern hospitality booking platform for hotels, apartments, short-lets, resorts, serviced suites, and future travel-related stays.
+Staynex is a modern hospitality booking platform for hotels, apartments, short-lets, resorts, serviced suites, and future travel-related stays. But were a stating with Hotels first.
 
 The platform originates in Calabar, Nigeria, but it is not a Calabar-only product. Calabar is the first launch market because we understand the hospitality environment, the city has strong tourism energy, and many properties lack reliable digital booking systems.
 
@@ -104,8 +104,7 @@ This is short, clear, product-relevant, and scalable.
 
 ### 5.4 Origin Line
 
-**Born in Calabar. Built for the world.**
-
+**Book your trustted stay, stress-free**
 This should appear in brand presentations and investor/product documents, not necessarily on every UI screen.
 
 ---

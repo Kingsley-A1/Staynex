@@ -1,3 +1,8 @@
+---
+name: staynex-product-prototype-agent
+description: Professional reusable agent skill for building and maintaining Staynex, a global-grade hospitality booking platform prototype and POC using Next.js, React, TypeScript, Tailwind CSS, clean UI systems, and disciplined product execution.
+---
+
 # Staynex Agent Skill.md
 
 **Project:** Staynex  
