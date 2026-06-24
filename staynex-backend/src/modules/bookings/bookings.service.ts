@@ -17,6 +17,7 @@ import type {
   PaymentState,
   PaymentStatusView,
 } from "../../../types";
+import { NotificationsService } from "../notifications/notifications.service";
 import { PaystackService } from "../payments/paystack.service";
 import type { CheckoutInput, QuoteInput } from "./dto";
 import { iso, nightsOf } from "./util";
@@ -34,7 +35,10 @@ const PENDING_BOOKING_TTL_MS = 20 * 60_000; // abandoned pending payments releas
 export class BookingsService {
   private readonly logger = new Logger(BookingsService.name);
 
-  constructor(private readonly paystack: PaystackService) {}
+  constructor(
+    private readonly paystack: PaystackService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async quote(input: QuoteInput): Promise<AvailabilityQuote> {
     await this.releaseStale();
@@ -148,6 +152,7 @@ export class BookingsService {
         data: {
           roomUnitId: hold.roomUnitId,
           userId: guestUserId ?? hold.userId,
+          guestEmail: input.email,
           status: "PENDING_PAYMENT",
           checkIn: hold.checkIn,
           checkOut: hold.checkOut,
@@ -185,17 +190,17 @@ export class BookingsService {
 
   /** Webhook: confirm a verified successful payment + its booking, transactionally. */
   async confirmByReference(reference: string, paidAmountKobo: number | null): Promise<void> {
-    await prisma.$transaction(async (tx) => {
+    const confirmedBookingId = await prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
         where: { reference },
         include: { booking: { include: { roomUnit: { select: { roomTypeId: true } } } } },
       });
-      if (!payment) return; // unknown reference — ignore
-      if (payment.status === "SUCCESS") return; // idempotent
-      if (payment.status !== "PENDING" && payment.status !== "INITIATED") return;
+      if (!payment) return null; // unknown reference — ignore
+      if (payment.status === "SUCCESS") return null; // idempotent
+      if (payment.status !== "PENDING" && payment.status !== "INITIATED") return null;
 
       const booking = payment.booking;
-      if (booking.status !== "PENDING_PAYMENT") return;
+      if (booking.status !== "PENDING_PAYMENT") return null;
 
       const nights = nightsOf(iso(booking.checkIn), iso(booking.checkOut));
       const underpaid = paidAmountKobo != null && paidAmountKobo < payment.amount;
@@ -209,7 +214,7 @@ export class BookingsService {
           await tx.booking.update({ where: { id: booking.id }, data: { status: "CANCELLED" } });
         }
         await tx.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } });
-        return;
+        return null;
       }
 
       await tx.availabilityCalendar.updateMany({
@@ -218,7 +223,15 @@ export class BookingsService {
       });
       await tx.payment.update({ where: { id: payment.id }, data: { status: "SUCCESS" } });
       await tx.booking.update({ where: { id: booking.id }, data: { status: "CONFIRMED" } });
+      return booking.id;
     });
+
+    // Notify only on the real PENDING_PAYMENT -> CONFIRMED transition, after the
+    // transaction commits. Best-effort: notification failures never undo a
+    // verified booking. The notifications service re-checks SUCCESS/CONFIRMED.
+    if (confirmedBookingId) {
+      await this.notifications.onBookingConfirmed(confirmedBookingId);
+    }
   }
 
   /** Mark a payment failed and release any capacity its booking was holding. */

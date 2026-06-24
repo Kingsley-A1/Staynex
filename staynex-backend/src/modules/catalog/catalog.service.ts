@@ -38,6 +38,7 @@ export class CatalogService {
         status: "APPROVED",
         cityId: { in: cities.map((c) => c.id) },
         ...(propertyIds ? { id: { in: propertyIds } } : {}),
+        ...(query.area ? { area: { slug: query.area } } : {}),
         ...(query.guests
           ? { roomTypes: { some: { maxGuests: { gte: query.guests } } } }
           : {}),

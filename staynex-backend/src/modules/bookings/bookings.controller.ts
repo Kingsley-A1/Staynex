@@ -1,13 +1,17 @@
 import { Body, Controller, Get, Headers, Param, Post } from "@nestjs/common";
 import { parseBody } from "../../common/http";
+import { AuthService } from "../auth/auth.service";
 import { BookingsService } from "./bookings.service";
 import { checkoutSchema, createHoldSchema, quoteSchema } from "./dto";
 
-// Guest endpoints. Identity is optional (anonymous guests allowed); when present,
-// `x-user-id` is the temporary auth stand-in.
+// Guest endpoints. Search/quote/hold work without an account; checkout (payment)
+// requires a signed-in guest — registration happens just before payment.
 @Controller()
 export class BookingsController {
-  constructor(private readonly bookings: BookingsService) {}
+  constructor(
+    private readonly bookings: BookingsService,
+    private readonly auth: AuthService,
+  ) {}
 
   @Post("bookings/quote")
   quote(@Body() body: unknown) {
@@ -15,8 +19,13 @@ export class BookingsController {
   }
 
   @Post("bookings/holds")
-  createHold(@Headers("x-user-id") userId: string | undefined, @Body() body: unknown) {
-    return this.bookings.createHold(parseBody(createHoldSchema, body), userId?.trim() || null);
+  async createHold(
+    @Headers("cookie") cookie: string | undefined,
+    @Headers("x-user-id") userId: string | undefined,
+    @Body() body: unknown,
+  ) {
+    const user = await this.auth.resolve(cookie, userId);
+    return this.bookings.createHold(parseBody(createHoldSchema, body), user?.id ?? null);
   }
 
   @Get("bookings/holds/:id")
@@ -25,8 +34,13 @@ export class BookingsController {
   }
 
   @Post("checkout")
-  checkout(@Headers("x-user-id") userId: string | undefined, @Body() body: unknown) {
-    return this.bookings.checkout(parseBody(checkoutSchema, body), userId?.trim() || null);
+  async checkout(
+    @Headers("cookie") cookie: string | undefined,
+    @Headers("x-user-id") userId: string | undefined,
+    @Body() body: unknown,
+  ) {
+    const user = await this.auth.requireUser(cookie, userId);
+    return this.bookings.checkout(parseBody(checkoutSchema, body), user.id);
   }
 
   @Get("bookings/:id")

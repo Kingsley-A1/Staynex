@@ -18,7 +18,7 @@ function slugify(input: string): string {
 
 /**
  * Owner-facing property authoring. The backend owns every state transition;
- * `ownerId` is the authenticated principal (stubbed via header until AuthModule).
+ * `ownerId` is the authenticated principal.
  */
 @Injectable()
 export class PropertiesService {
@@ -64,6 +64,11 @@ export class PropertiesService {
       include: propertySummaryInclude,
     });
     return rows.map(toPropertySummary);
+  }
+
+  async getForOwner(ownerId: string, id: string): Promise<PropertyDetail> {
+    await this.assertOwned(ownerId, id);
+    return this.getById(id);
   }
 
   async getById(id: string): Promise<PropertyDetail> {

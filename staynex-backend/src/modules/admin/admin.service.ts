@@ -1,11 +1,21 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { prisma } from "../../../db";
 import type {
+  AdminBookingsView,
+  AuthUser,
+  AiLogRow,
   ApprovalActionResult,
+  AuditLogRow,
   PropertyDetail,
   PropertyStatus,
   PropertySummary,
 } from "../../../types";
+import {
+  bookingRowInclude,
+  paymentRowInclude,
+  toBookingRow,
+  toPaymentRow,
+} from "../bookings/report-mappers";
 import {
   propertyDetailInclude,
   propertySummaryInclude,
@@ -13,6 +23,7 @@ import {
   toPropertySummary,
 } from "../properties/mappers";
 import { AuditService } from "../audit/audit.service";
+import { auditActorId } from "../auth/auth.service";
 import type { ApprovalActionInput } from "./dto";
 
 const DECISION_STATUS: Record<ApprovalActionInput["decision"], PropertyStatus> = {
@@ -51,7 +62,7 @@ export class AdminService {
   }
 
   async review(
-    adminUserId: string,
+    admin: AuthUser,
     propertyId: string,
     input: ApprovalActionInput,
   ): Promise<ApprovalActionResult> {
@@ -72,7 +83,7 @@ export class AdminService {
       const next = await tx.property.update({ where: { id: propertyId }, data: { status } });
       await this.audit.record(
         {
-          actorUserId: adminUserId,
+          actorUserId: auditActorId(admin),
           action: DECISION_ACTION[input.decision],
           entityType: "Property",
           entityId: propertyId,
@@ -84,5 +95,50 @@ export class AdminService {
     });
 
     return { id: updated.id, status: updated.status as PropertyStatus };
+  }
+
+  // --- Phase 4: platform-wide operational visibility (read-only) ------------
+
+  /** Recent bookings + payments across the whole platform. */
+  async bookingsOverview(): Promise<AdminBookingsView> {
+    const [bookings, payments] = await Promise.all([
+      prisma.booking.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        include: bookingRowInclude,
+      }),
+      prisma.payment.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        include: paymentRowInclude,
+      }),
+    ]);
+    return { bookings: bookings.map(toBookingRow), payments: payments.map(toPaymentRow) };
+  }
+
+  /** Audit trail (admin overrides). */
+  async auditLogs(): Promise<AuditLogRow[]> {
+    const rows = await prisma.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 });
+    return rows.map((r) => ({
+      id: r.id,
+      action: r.action,
+      entityType: r.entityType,
+      entityId: r.entityId,
+      actorUserId: r.actorUserId,
+      propertyId: r.propertyId,
+      createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  /** AI assistant action log (conversations are tool-first; never authority). */
+  async aiLogs(): Promise<AiLogRow[]> {
+    const rows = await prisma.aIActionLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 });
+    return rows.map((r) => ({
+      id: r.id,
+      conversationId: r.conversationId,
+      actionType: r.actionType,
+      summary: r.summary,
+      createdAt: r.createdAt.toISOString(),
+    }));
   }
 }

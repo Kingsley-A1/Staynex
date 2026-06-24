@@ -5,6 +5,7 @@ const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"
 export const searchQuerySchema = z
   .object({
     city: z.string().min(1),
+    area: z.string().min(1).optional(),
     checkIn: dateString.optional(),
     checkOut: dateString.optional(),
     guests: z.coerce.number().int().positive().max(20).optional(),

@@ -1,33 +1,76 @@
 import { Body, Controller, Get, Headers, Param, Post } from "@nestjs/common";
-import { parseBody, requiredHeader } from "../../common/http";
+import { parseBody } from "../../common/http";
+import { AuthService } from "../auth/auth.service";
 import { AdminService } from "./admin.service";
 import { approvalActionSchema } from "./dto";
 
-// `x-user-id` stands in for the authenticated admin until AuthModule lands.
 @Controller("admin")
 export class AdminController {
-  constructor(private readonly admin: AdminService) {}
+  constructor(
+    private readonly admin: AdminService,
+    private readonly auth: AuthService,
+  ) {}
 
   @Get("approvals")
-  queue() {
+  async queue(
+    @Headers("cookie") cookie: string | undefined,
+    @Headers("x-user-id") userId: string | undefined,
+  ) {
+    await this.auth.requireAdmin(cookie, userId);
     return this.admin.approvalQueue();
   }
 
   @Get("approvals/:id")
-  review(@Param("id") id: string) {
+  async review(
+    @Headers("cookie") cookie: string | undefined,
+    @Headers("x-user-id") userId: string | undefined,
+    @Param("id") id: string,
+  ) {
+    await this.auth.requireAdmin(cookie, userId);
     return this.admin.getForReview(id);
   }
 
   @Post("approvals/:id/decision")
-  decide(
-    @Headers("x-user-id") adminUserId: string,
+  async decide(
+    @Headers("cookie") cookie: string | undefined,
+    @Headers("x-user-id") userId: string | undefined,
     @Param("id") id: string,
     @Body() body: unknown,
   ) {
+    const admin = await this.auth.requireAdmin(cookie, userId);
     return this.admin.review(
-      requiredHeader(adminUserId, "x-user-id"),
+      admin,
       id,
       parseBody(approvalActionSchema, body),
     );
+  }
+
+  // --- Phase 4: operational overview (read-only) ---
+
+  @Get("bookings")
+  async bookings(
+    @Headers("cookie") cookie: string | undefined,
+    @Headers("x-user-id") userId: string | undefined,
+  ) {
+    await this.auth.requireAdmin(cookie, userId);
+    return this.admin.bookingsOverview();
+  }
+
+  @Get("audit-logs")
+  async auditLogs(
+    @Headers("cookie") cookie: string | undefined,
+    @Headers("x-user-id") userId: string | undefined,
+  ) {
+    await this.auth.requireAdmin(cookie, userId);
+    return this.admin.auditLogs();
+  }
+
+  @Get("ai-logs")
+  async aiLogs(
+    @Headers("cookie") cookie: string | undefined,
+    @Headers("x-user-id") userId: string | undefined,
+  ) {
+    await this.auth.requireAdmin(cookie, userId);
+    return this.admin.aiLogs();
   }
 }

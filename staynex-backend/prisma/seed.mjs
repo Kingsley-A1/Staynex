@@ -24,11 +24,50 @@ const CITIES = [
   { slug: "abuja", name: "Abuja", region: "fct" },
 ];
 
+// Local areas per city (admin-editable later). LGA = local government area.
+const LGA = "LOCAL_GOVERNMENT_AREA";
+const HOOD = "NEIGHBORHOOD";
+const AREAS = {
+  calabar: [
+    { name: "Calabar Municipal", type: LGA, notable: true },
+    { name: "Calabar South", type: LGA, notable: true },
+    { name: "Marina", type: HOOD, notable: true },
+    { name: "State Housing", type: HOOD },
+    { name: "Diamond Hill", type: HOOD },
+  ],
+  uyo: [
+    { name: "Uyo", type: LGA, notable: true },
+    { name: "Ewet Housing", type: HOOD, notable: true },
+    { name: "Itam", type: HOOD },
+  ],
+  "port-harcourt": [
+    { name: "Port Harcourt City", type: LGA, notable: true },
+    { name: "Old GRA", type: HOOD, notable: true },
+    { name: "Diobu", type: HOOD },
+  ],
+  lagos: [
+    { name: "Eti-Osa", type: LGA, notable: true },
+    { name: "Victoria Island", type: HOOD, notable: true },
+    { name: "Lekki", type: HOOD, notable: true },
+    { name: "Ikeja", type: HOOD },
+  ],
+  abuja: [
+    { name: "Municipal Area Council", type: LGA, notable: true },
+    { name: "Maitama", type: HOOD, notable: true },
+    { name: "Wuse", type: HOOD },
+    { name: "Garki", type: HOOD },
+  ],
+};
+
+const areaSlug = (name, citySlug) =>
+  `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}-${citySlug}`;
+
 const PROPERTIES = [
   {
     slug: "marina-crest-hotel",
     name: "Marina Crest Hotel",
     city: "calabar",
+    area: "Marina",
     description: "Waterfront hotel with calm rooms and easy access to the marina.",
     rooms: [
       { name: "Standard Room", priceNaira: 48000, maxGuests: 2, units: 5 },
@@ -39,6 +78,7 @@ const PROPERTIES = [
     slug: "duke-town-suites",
     name: "Duke Town Suites",
     city: "calabar",
+    area: "Calabar Municipal",
     description: "Modern self-contained suites in the heart of Calabar.",
     rooms: [{ name: "Studio Suite", priceNaira: 36000, maxGuests: 2, units: 6 }],
   },
@@ -46,6 +86,7 @@ const PROPERTIES = [
     slug: "harbor-nest-apartments",
     name: "Harbor Nest Apartments",
     city: "uyo",
+    area: "Ewet Housing",
     description: "Quiet serviced apartments ideal for longer stays.",
     rooms: [{ name: "One-Bedroom Apartment", priceNaira: 29500, maxGuests: 2, units: 4 }],
   },
@@ -53,6 +94,7 @@ const PROPERTIES = [
     slug: "tinapa-grand-resort",
     name: "Tinapa Grand Resort",
     city: "calabar",
+    area: "Calabar Municipal",
     description: "Resort stays near Tinapa with family-friendly suites.",
     rooms: [{ name: "Resort Suite", priceNaira: 72000, maxGuests: 4, units: 4 }],
   },
@@ -104,11 +146,27 @@ async function main() {
     });
   }
 
-  // Demo owner
+  // Areas (LGAs + neighborhoods)
+  const areaBySlug = {};
+  for (const [citySlug, list] of Object.entries(AREAS)) {
+    const city = cityBySlug[citySlug];
+    if (!city) continue;
+    for (const a of list) {
+      const slug = areaSlug(a.name, citySlug);
+      areaBySlug[slug] = await prisma.area.upsert({
+        where: { slug },
+        update: { name: a.name, type: a.type, notable: a.notable ?? false, cityId: city.id },
+        create: { slug, name: a.name, type: a.type, notable: a.notable ?? false, cityId: city.id },
+      });
+    }
+  }
+
+  // Demo owner. Fixed id matches the frontend `DEMO_OWNER_ID` (x-user-id
+  // stand-in) so the owner dashboard sees these properties' bookings live.
   const owner = await prisma.user.upsert({
     where: { email: "owner@staynex.demo" },
     update: { role: "OWNER", name: "Demo Owner" },
-    create: { email: "owner@staynex.demo", name: "Demo Owner", role: "OWNER" },
+    create: { id: "demo-owner", email: "owner@staynex.demo", name: "Demo Owner", role: "OWNER" },
   });
   await prisma.ownerProfile.upsert({
     where: { userId: owner.id },
@@ -119,6 +177,7 @@ async function main() {
   // Properties + rooms + units + availability
   const dates = upcomingDates(30);
   for (const p of PROPERTIES) {
+    const areaId = p.area ? (areaBySlug[areaSlug(p.area, p.city)]?.id ?? null) : null;
     const property = await prisma.property.upsert({
       where: { slug: p.slug },
       update: {
@@ -127,6 +186,7 @@ async function main() {
         status: "APPROVED",
         ownerId: owner.id,
         cityId: cityBySlug[p.city].id,
+        areaId,
       },
       create: {
         name: p.name,
@@ -135,6 +195,7 @@ async function main() {
         status: "APPROVED",
         ownerId: owner.id,
         cityId: cityBySlug[p.city].id,
+        areaId,
       },
     });
 

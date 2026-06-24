@@ -14,6 +14,21 @@ export const envSchema = z.object({
   PAYSTACK_PUBLIC_KEY: z.string().optional(),
   // Public base URL of the web app, used for the Paystack payment callback.
   NEXT_PUBLIC_APP_URL: z.string().optional(),
+  // Email (Resend). Optional so the API boots without it; NotificationsService
+  // degrades to a logged "queued, not sent" state when unconfigured.
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().optional(),
+  // Push (Firebase Cloud Messaging). Foundation only — push is a documented
+  // placeholder until these are provided.
+  FCM_SERVER_KEY: z.string().optional(),
+  FIREBASE_PROJECT_ID: z.string().optional(),
+  // AI assistant (Google Gemini). Optional; AiModule fails gracefully (clear
+  // "unavailable" state) when missing.
+  GEMINI_API_KEY: z.string().optional(),
+  // 6-digit access code required to register an admin account.
+  ADMIN_ACCESS_CODE: z.string().regex(/^\d{6}$/, "ADMIN_ACCESS_CODE must be 6 digits").optional(),
+  // Set in production so session cookies are marked Secure.
+  COOKIE_DOMAIN: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -26,6 +41,9 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       .map((issue) => `  - ${issue.path.join(".") || "(root)"}: ${issue.message}`)
       .join("\n");
     throw new Error(`Invalid environment variables:\n${issues}`);
+  }
+  if (parsed.data.NODE_ENV === "production" && !parsed.data.ADMIN_ACCESS_CODE) {
+    throw new Error("Invalid environment variables:\n  - ADMIN_ACCESS_CODE: required in production");
   }
   return parsed.data;
 }

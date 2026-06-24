@@ -1,47 +1,70 @@
 import { Body, Controller, Get, Headers, Param, Patch, Post } from "@nestjs/common";
-import { parseBody, requiredHeader } from "../../common/http";
+import { parseBody } from "../../common/http";
+import { AuthService } from "../auth/auth.service";
 import { PropertiesService } from "./properties.service";
 import { createPropertySchema, updatePropertySchema } from "./dto";
 
-// `x-user-id` is a temporary stand-in for the authenticated principal until
-// AuthModule lands. The backend still owns all validation and state transitions.
 @Controller("owner/properties")
 export class PropertiesController {
-  constructor(private readonly properties: PropertiesService) {}
+  constructor(
+    private readonly properties: PropertiesService,
+    private readonly auth: AuthService,
+  ) {}
 
   @Get()
-  list(@Headers("x-user-id") ownerId: string) {
-    return this.properties.listForOwner(requiredHeader(ownerId, "x-user-id"));
+  async list(
+    @Headers("cookie") cookie: string | undefined,
+    @Headers("x-user-id") userId: string | undefined,
+  ) {
+    const owner = await this.auth.requireOwner(cookie, userId);
+    return this.properties.listForOwner(owner.id);
   }
 
   @Post()
-  create(@Headers("x-user-id") ownerId: string, @Body() body: unknown) {
+  async create(
+    @Headers("cookie") cookie: string | undefined,
+    @Headers("x-user-id") userId: string | undefined,
+    @Body() body: unknown,
+  ) {
+    const owner = await this.auth.requireOwner(cookie, userId);
     return this.properties.createDraft(
-      requiredHeader(ownerId, "x-user-id"),
+      owner.id,
       parseBody(createPropertySchema, body),
     );
   }
 
   @Get(":id")
-  get(@Param("id") id: string) {
-    return this.properties.getById(id);
+  async get(
+    @Headers("cookie") cookie: string | undefined,
+    @Headers("x-user-id") userId: string | undefined,
+    @Param("id") id: string,
+  ) {
+    const owner = await this.auth.requireOwner(cookie, userId);
+    return this.properties.getForOwner(owner.id, id);
   }
 
   @Patch(":id")
-  update(
-    @Headers("x-user-id") ownerId: string,
+  async update(
+    @Headers("cookie") cookie: string | undefined,
+    @Headers("x-user-id") userId: string | undefined,
     @Param("id") id: string,
     @Body() body: unknown,
   ) {
+    const owner = await this.auth.requireOwner(cookie, userId);
     return this.properties.update(
-      requiredHeader(ownerId, "x-user-id"),
+      owner.id,
       id,
       parseBody(updatePropertySchema, body),
     );
   }
 
   @Post(":id/submit")
-  submit(@Headers("x-user-id") ownerId: string, @Param("id") id: string) {
-    return this.properties.submitForReview(requiredHeader(ownerId, "x-user-id"), id);
+  async submit(
+    @Headers("cookie") cookie: string | undefined,
+    @Headers("x-user-id") userId: string | undefined,
+    @Param("id") id: string,
+  ) {
+    const owner = await this.auth.requireOwner(cookie, userId);
+    return this.properties.submitForReview(owner.id, id);
   }
 }

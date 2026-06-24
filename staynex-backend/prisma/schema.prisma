@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "cockroachdb"
   url      = env("DATABASE_URL")
 }
 
@@ -18,7 +18,19 @@ datasource db {
 enum UserRole {
   GUEST
   OWNER
-  ADMIN
+  ADMIN_REVIEWER
+  ADMIN_MANAGER
+}
+
+enum AreaType {
+  LOCAL_GOVERNMENT_AREA
+  NEIGHBORHOOD
+}
+
+enum TestimonialStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
 }
 
 enum PropertyStatus {
@@ -71,12 +83,14 @@ enum NotificationStatus {
 // ---------------------------------------------------------------------------
 
 model User {
-  id        String   @id @default(cuid())
-  email     String?  @unique
-  name      String?
-  role      UserRole @default(GUEST)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  email        String?  @unique
+  name         String?
+  /// scrypt hash as `salt:hash`. Null for seeded/demo users without a password.
+  passwordHash String?
+  role         UserRole @default(GUEST)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   guestProfile    GuestProfile?
   ownerProfile    OwnerProfile?
@@ -86,8 +100,23 @@ model User {
   notifications   Notification[]
   aiConversations AIConversation[]
   auditLogs       AuditLog[]       @relation("AuditActor")
+  sessions        Session[]
+  testimonials    Testimonial[]
 
   @@index([role])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model GuestProfile {
@@ -152,9 +181,29 @@ model City {
   country    Country    @relation(fields: [countryId], references: [id])
   region     Region?    @relation(fields: [regionId], references: [id])
   properties Property[]
+  areas      Area[]
 
   @@index([countryId])
   @@index([regionId])
+}
+
+// Local areas within a city. Scalable by `type` (LGA / neighborhood) and
+// admin-editable. `notable` areas surface first in search.
+model Area {
+  id        String   @id @default(cuid())
+  cityId    String
+  name      String
+  slug      String   @unique
+  type      AreaType @default(NEIGHBORHOOD)
+  notable   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  city       City       @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  properties Property[]
+
+  @@index([cityId])
+  @@index([type])
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +214,7 @@ model Property {
   id          String         @id @default(cuid())
   ownerId     String
   cityId      String
+  areaId      String?
   name        String
   slug        String         @unique
   description String?
@@ -172,15 +222,18 @@ model Property {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
-  owner     User            @relation("PropertyOwner", fields: [ownerId], references: [id])
-  city      City            @relation(fields: [cityId], references: [id])
-  media     PropertyMedia[]
-  roomTypes RoomType[]
-  payouts   Payout[]
-  auditLogs AuditLog[]
+  owner        User            @relation("PropertyOwner", fields: [ownerId], references: [id])
+  city         City            @relation(fields: [cityId], references: [id])
+  area         Area?           @relation(fields: [areaId], references: [id])
+  media        PropertyMedia[]
+  roomTypes    RoomType[]
+  payouts      Payout[]
+  auditLogs    AuditLog[]
+  testimonials Testimonial[]
 
   @@index([ownerId])
   @@index([cityId])
+  @@index([areaId])
   @@index([status])
 }
 
@@ -289,6 +342,9 @@ model BookingHold {
 model Booking {
   id         String        @id @default(cuid())
   userId     String?
+  /// Contact email captured at checkout. Anonymous guests have no User row, so
+  /// this is how confirmation emails are addressed and admins see the guest.
+  guestEmail String?
   roomUnitId String
   status     BookingStatus @default(HOLD)
   checkIn    DateTime
@@ -296,9 +352,10 @@ model Booking {
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 
-  user     User?    @relation(fields: [userId], references: [id])
-  roomUnit RoomUnit @relation(fields: [roomUnitId], references: [id])
-  payment  Payment?
+  user        User?        @relation(fields: [userId], references: [id])
+  roomUnit    RoomUnit     @relation(fields: [roomUnitId], references: [id])
+  payment     Payment?
+  testimonial Testimonial?
 
   @@index([roomUnitId])
   @@index([userId])
@@ -319,6 +376,31 @@ model Payment {
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
+  @@index([status])
+}
+
+// Guest rating + testimonial, always tied to a real booking (bookingId unique →
+// one per booking). New testimonials are PENDING_REVIEW; only APPROVED show
+// publicly. Approval authority is the backend/admin (skill.md §9).
+model Testimonial {
+  id         String            @id @default(cuid())
+  bookingId  String            @unique
+  userId     String?
+  propertyId String
+  /// 1–5 stars.
+  rating     Int
+  title      String?
+  body       String
+  guestName  String?
+  status     TestimonialStatus @default(PENDING_REVIEW)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  booking  Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
   @@index([status])
 }
 
@@ -344,7 +426,11 @@ model Payout {
 
 model Notification {
   id        String              @id @default(cuid())
-  userId    String
+  // userId is optional because anonymous guests still receive (and we still log)
+  // booking confirmation emails addressed by `email`.
+  userId    String?
+  bookingId String?
+  email     String?
   channel   NotificationChannel
   status    NotificationStatus  @default(QUEUED)
   title     String
@@ -352,9 +438,10 @@ model Notification {
   createdAt DateTime            @default(now())
   updatedAt DateTime            @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([bookingId])
   @@index([status])
 }
 
@@ -398,6 +485,9 @@ model AIActionLog {
   conversationId String
   auditLogId     String?
   actionType     String
+  /// Short, non-sensitive description for admin AI-log visibility
+  /// (e.g. "Compared rooms", "Refused: availability claim").
+  summary        String?
   createdAt      DateTime @default(now())
 
   conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
