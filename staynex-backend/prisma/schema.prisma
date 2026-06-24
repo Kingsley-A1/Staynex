@@ -1,0 +1,408 @@
+// Staynex Prisma schema — single source of truth for persistence.
+// Database: CockroachDB-compatible PostgreSQL. Money is stored as integer
+// minor units (kobo) to avoid floating-point error. Do not add Drizzle.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  GUEST
+  OWNER
+  ADMIN
+}
+
+enum PropertyStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum BookingStatus {
+  HOLD
+  PENDING_PAYMENT
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  INITIATED
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+}
+
+enum NotificationChannel {
+  EMAIL
+  PUSH
+  SMS
+  IN_APP
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+  READ
+}
+
+// ---------------------------------------------------------------------------
+// Identity & profiles
+// ---------------------------------------------------------------------------
+
+model User {
+  id        String   @id @default(cuid())
+  email     String?  @unique
+  name      String?
+  role      UserRole @default(GUEST)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  guestProfile    GuestProfile?
+  ownerProfile    OwnerProfile?
+  ownedProperties Property[]       @relation("PropertyOwner")
+  bookings        Booking[]
+  bookingHolds    BookingHold[]
+  notifications   Notification[]
+  aiConversations AIConversation[]
+  auditLogs       AuditLog[]       @relation("AuditActor")
+
+  @@index([role])
+}
+
+model GuestProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model OwnerProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  businessName String?
+  phone        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Location hierarchy
+// ---------------------------------------------------------------------------
+
+model Country {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  regions Region[]
+  cities  City[]
+}
+
+model Region {
+  id        String   @id @default(cuid())
+  countryId String
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  country Country @relation(fields: [countryId], references: [id])
+  cities  City[]
+
+  @@index([countryId])
+}
+
+model City {
+  id        String   @id @default(cuid())
+  countryId String
+  regionId  String?
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  country    Country    @relation(fields: [countryId], references: [id])
+  region     Region?    @relation(fields: [regionId], references: [id])
+  properties Property[]
+
+  @@index([countryId])
+  @@index([regionId])
+}
+
+// ---------------------------------------------------------------------------
+// Supply: properties, rooms, media
+// ---------------------------------------------------------------------------
+
+model Property {
+  id          String         @id @default(cuid())
+  ownerId     String
+  cityId      String
+  name        String
+  slug        String         @unique
+  description String?
+  status      PropertyStatus @default(DRAFT)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  owner     User            @relation("PropertyOwner", fields: [ownerId], references: [id])
+  city      City            @relation(fields: [cityId], references: [id])
+  media     PropertyMedia[]
+  roomTypes RoomType[]
+  payouts   Payout[]
+  auditLogs AuditLog[]
+
+  @@index([ownerId])
+  @@index([cityId])
+  @@index([status])
+}
+
+model PropertyMedia {
+  id         String   @id @default(cuid())
+  propertyId String
+  url        String
+  altText    String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+}
+
+model RoomType {
+  id            String   @id @default(cuid())
+  propertyId    String
+  name          String
+  description   String?
+  /// Nightly base price in minor units (kobo).
+  basePriceKobo Int      @default(0)
+  maxGuests     Int      @default(2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  property     Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  roomUnits    RoomUnit[]
+  media        RoomMedia[]
+  availability AvailabilityCalendar[]
+
+  @@index([propertyId])
+}
+
+model RoomUnit {
+  id         String   @id @default(cuid())
+  roomTypeId String
+  code       String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  roomType     RoomType      @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  bookingHolds BookingHold[]
+  bookings     Booking[]
+
+  @@index([roomTypeId])
+}
+
+model RoomMedia {
+  id         String   @id @default(cuid())
+  roomTypeId String
+  url        String
+  altText    String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  roomType RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  @@index([roomTypeId])
+}
+
+// ---------------------------------------------------------------------------
+// Availability (capacity per room type per day)
+// ---------------------------------------------------------------------------
+
+model AvailabilityCalendar {
+  id          String   @id @default(cuid())
+  roomTypeId  String
+  date        DateTime @db.Date
+  totalUnits  Int
+  bookedUnits Int      @default(0)
+  heldUnits   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roomType RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([roomTypeId, date])
+  @@index([date])
+}
+
+// ---------------------------------------------------------------------------
+// Demand: holds, bookings, payments, payouts
+// ---------------------------------------------------------------------------
+
+model BookingHold {
+  id         String   @id @default(cuid())
+  userId     String?
+  roomUnitId String
+  checkIn    DateTime
+  checkOut   DateTime
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User?    @relation(fields: [userId], references: [id])
+  roomUnit RoomUnit @relation(fields: [roomUnitId], references: [id])
+
+  @@index([roomUnitId])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Booking {
+  id         String        @id @default(cuid())
+  userId     String?
+  roomUnitId String
+  status     BookingStatus @default(HOLD)
+  checkIn    DateTime
+  checkOut   DateTime
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  user     User?    @relation(fields: [userId], references: [id])
+  roomUnit RoomUnit @relation(fields: [roomUnitId], references: [id])
+  payment  Payment?
+
+  @@index([roomUnitId])
+  @@index([userId])
+  @@index([status])
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  bookingId String        @unique
+  /// Amount charged in minor units (kobo).
+  amount    Int
+  currency  String        @default("NGN")
+  provider  String?
+  reference String?       @unique
+  status    PaymentStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+model Payout {
+  id         String       @id @default(cuid())
+  propertyId String
+  /// Payout amount in minor units (kobo).
+  amount     Int
+  currency   String       @default("NGN")
+  status     PayoutStatus @default(PENDING)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([propertyId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications & audit
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String
+  channel   NotificationChannel
+  status    NotificationStatus  @default(QUEUED)
+  title     String
+  body      String
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  propertyId  String?
+  action      String
+  entityType  String
+  entityId    String
+  createdAt   DateTime @default(now())
+
+  actor      User?         @relation("AuditActor", fields: [actorUserId], references: [id])
+  property   Property?     @relation(fields: [propertyId], references: [id])
+  aiActions  AIActionLog[]
+
+  @@index([actorUserId])
+  @@index([propertyId])
+  @@index([entityType, entityId])
+}
+
+// ---------------------------------------------------------------------------
+// AI assistant logs (tool-first; never an authority of record)
+// ---------------------------------------------------------------------------
+
+model AIConversation {
+  id        String   @id @default(cuid())
+  userId    String?
+  topic     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User?         @relation(fields: [userId], references: [id])
+  actions AIActionLog[]
+
+  @@index([userId])
+}
+
+model AIActionLog {
+  id             String   @id @default(cuid())
+  conversationId String
+  auditLogId     String?
+  actionType     String
+  createdAt      DateTime @default(now())
+
+  conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  auditLog     AuditLog?      @relation(fields: [auditLogId], references: [id])
+
+  @@index([conversationId])
+  @@index([auditLogId])
+}
