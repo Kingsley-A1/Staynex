@@ -17,11 +17,26 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 export const loginSchema = z.object({ email, password });
 export type LoginInput = z.infer<typeof loginSchema>;
 
+export const googleSchema = z.object({
+  idToken: z.string().min(1, "Google credential is required"),
+});
+export type GoogleInput = z.infer<typeof googleSchema>;
+
+export const updateProfileSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    email: z.string().trim().toLowerCase().email("A valid email is required").optional(),
+    phone: z.string().trim().max(40).nullable().optional(),
+  })
+  .refine((v) => v.name !== undefined || v.email !== undefined || v.phone !== undefined, {
+    message: "Nothing to update",
+  });
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+
 export const adminRegisterSchema = z.object({
   email,
   password,
   name,
-  role: z.enum(["ADMIN_REVIEWER", "ADMIN_MANAGER"]).default("ADMIN_REVIEWER"),
   accessCode: z.string().regex(/^\d{6}$/, "Access code must be 6 digits"),
 });
 export type AdminRegisterInput = z.infer<typeof adminRegisterSchema>;

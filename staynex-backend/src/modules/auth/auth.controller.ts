@@ -1,7 +1,13 @@
-import { Body, Controller, Get, Headers, Ip, Post, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Headers, Ip, Patch, Post, Res } from "@nestjs/common";
 import { parseBody } from "../../common/http";
 import { AuthService, SESSION_COOKIE, SESSION_TTL_MS, readCookie } from "./auth.service";
-import { adminRegisterSchema, loginSchema, registerSchema } from "./dto";
+import {
+  adminRegisterSchema,
+  googleSchema,
+  loginSchema,
+  registerSchema,
+  updateProfileSchema,
+} from "./dto";
 
 // Minimal structural type so we can set cookies without an @types/express dep.
 interface CookieResponse {
@@ -57,6 +63,30 @@ export class AuthController {
     return result.user;
   }
 
+  @Post("google")
+  async google(@Body() body: unknown, @Res({ passthrough: true }) res: CookieResponse) {
+    const result = await this.auth.googleSignIn(parseBody(googleSchema, body).idToken);
+    res.cookie(SESSION_COOKIE, result.token, cookieOptions());
+    return result.user;
+  }
+
+  @Patch("profile")
+  async updateProfile(@Body() body: unknown, @Headers("cookie") cookie: string | undefined) {
+    const user = await this.auth.requireUser(cookie);
+    return this.auth.updateProfile(user, parseBody(updateProfileSchema, body));
+  }
+
+  @Delete("profile")
+  async deleteProfile(
+    @Headers("cookie") cookie: string | undefined,
+    @Res({ passthrough: true }) res: CookieResponse,
+  ) {
+    const user = await this.auth.requireUser(cookie);
+    const result = await this.auth.deleteAccount(user);
+    res.clearCookie(SESSION_COOKIE, clearCookieOptions());
+    return result;
+  }
+
   @Post("logout")
   async logout(
     @Headers("cookie") cookie: string | undefined,
@@ -68,10 +98,7 @@ export class AuthController {
   }
 
   @Get("me")
-  me(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-  ) {
-    return this.auth.resolve(cookie, userId);
+  me(@Headers("cookie") cookie: string | undefined) {
+    return this.auth.resolve(cookie);
   }
 }

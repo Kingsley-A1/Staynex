@@ -3,10 +3,18 @@
 // Run with: pnpm --filter @staynex/backend prisma:seed  (requires DATABASE_URL).
 
 import { PrismaClient } from "@prisma/client";
+import { randomBytes, scryptSync } from "node:crypto";
 
 const prisma = new PrismaClient();
 
 const NGN = (naira) => naira * 100; // store money as minor units (kobo)
+
+// Mirror of the backend's scrypt `salt:hash` format so demo accounts can sign in.
+function hashPassword(password) {
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
 
 const REGIONS = [
   { slug: "cross-river", name: "Cross River" },
@@ -161,12 +169,30 @@ async function main() {
     }
   }
 
-  // Demo owner. Fixed id matches the frontend `DEMO_OWNER_ID` (x-user-id
-  // stand-in) so the owner dashboard sees these properties' bookings live.
+  // Demo accounts (session-only auth). Sign in to use the dashboards:
+  //   blessedkingkingsley2002@gmail.com / staynexdemo   (OWNER)
+  //   admin@staynex.demo / staynexadmin  (ADMIN_MANAGER)
   const owner = await prisma.user.upsert({
-    where: { email: "owner@staynex.demo" },
-    update: { role: "OWNER", name: "Demo Owner" },
-    create: { id: "demo-owner", email: "owner@staynex.demo", name: "Demo Owner", role: "OWNER" },
+    where: { email: "blessedkingkingsley2002@gmail.com" },
+    update: { role: "OWNER", name: "Blessed King: Owner", passwordHash: hashPassword("staynexdemo") },
+    create: {
+      id: "blssed-king",
+      email: "blessedkingkingsley2002@gmail.com",
+      name: "Blessed King",
+      role: "OWNER",
+      passwordHash: hashPassword("Kingley.Staynex"),
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { email: "deblessedking001@gmail.com" },
+    update: { role: "ADMIN_MANAGER", name: "De Blessd Admin", passwordHash: hashPassword("staynexadmin") },
+    create: {
+      email: "deblessedking001@gmail.com",
+      name: "Demo Admin",
+      role: "ADMIN_MANAGER",
+      passwordHash: hashPassword("staynexadmin"),
+    },
   });
   await prisma.ownerProfile.upsert({
     where: { userId: owner.id },

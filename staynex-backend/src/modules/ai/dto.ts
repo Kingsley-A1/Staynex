@@ -9,3 +9,15 @@ export const assistantSchema = z.object({
 });
 
 export type AssistantInput = z.infer<typeof assistantSchema>;
+
+export const createConversationSchema = z.object({
+  title: z.string().trim().max(120).optional(),
+});
+
+export const renameConversationSchema = z.object({
+  title: z.string().trim().min(1, "Title is required").max(120),
+});
+
+export const pinConversationSchema = z.object({
+  pinned: z.boolean(),
+});

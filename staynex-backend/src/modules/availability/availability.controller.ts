@@ -19,11 +19,9 @@ export class AvailabilityController {
 
   @Put("capacity")
   async setCapacity(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-    @Body() body: unknown,
+    @Headers("cookie") cookie: string | undefined,    @Body() body: unknown,
   ) {
-    const owner = await this.auth.requireOwner(cookie, userId);
+    const owner = await this.auth.requireOwner(cookie);
     return this.availability.setCapacity(
       owner.id,
       parseBody(setCapacitySchema, body),

@@ -23,10 +23,8 @@ export class ReviewsController {
   @Get("booking/:bookingId/context")
   async context(
     @Param("bookingId") bookingId: string,
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-  ) {
-    const user = await this.auth.requireUser(cookie, userId);
+    @Headers("cookie") cookie: string | undefined,  ) {
+    const user = await this.auth.requireUser(cookie);
     return this.reviews.bookingContext(bookingId, user);
   }
 
@@ -34,10 +32,8 @@ export class ReviewsController {
   async create(
     @Param("bookingId") bookingId: string,
     @Body() body: unknown,
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-  ) {
-    const user = await this.auth.requireUser(cookie, userId);
+    @Headers("cookie") cookie: string | undefined,  ) {
+    const user = await this.auth.requireUser(cookie);
     return this.reviews.create(bookingId, user, parseBody(createReviewSchema, body));
   }
 }

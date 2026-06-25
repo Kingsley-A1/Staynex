@@ -174,7 +174,7 @@ function confirmationEmailHtml(p: {
       </table>
     </div>
     <p style="color:#6E6A83;font-size:12px;margin:16px 0 0">
-      Staynex — Born in Calabar. Built for the world.
+      Staynex — Book trusted stays, Confidently.
     </p>
   </div>
 </body></html>`;

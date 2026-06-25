@@ -18,11 +18,9 @@ export class AdminReviewsController {
 
   @Get()
   async list(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-    @Query("status") status?: string,
+    @Headers("cookie") cookie: string | undefined,    @Query("status") status?: string,
   ) {
-    await this.auth.requireAdmin(cookie, userId);
+    await this.auth.requireAdmin(cookie);
     return this.reviews.adminList(parseStatus(status));
   }
 
@@ -30,10 +28,8 @@ export class AdminReviewsController {
   async decide(
     @Param("id") id: string,
     @Body() body: unknown,
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-  ) {
-    const admin = await this.auth.requireAdmin(cookie, userId);
+    @Headers("cookie") cookie: string | undefined,  ) {
+    const admin = await this.auth.requireAdmin(cookie);
     return this.reviews.moderate(admin, id, parseBody(moderateReviewSchema, body));
   }
 }

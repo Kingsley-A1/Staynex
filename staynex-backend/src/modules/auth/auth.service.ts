@@ -38,18 +38,11 @@ export class AuthService {
   }
 
   async adminRegister(input: AdminRegisterInput, ip: string): Promise<AuthResult> {
-    const expected = process.env.ADMIN_ACCESS_CODE;
-    if (!expected) {
-      throw new ServiceUnavailableException("Admin registration is not configured");
-    }
+    const codes = this.adminAccessCodes();
     this.assertAdminCodeRate(ip);
-    const a = Buffer.from(input.accessCode);
-    const b = Buffer.from(expected);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) {
-      throw new ForbiddenException("Invalid admin access code");
-    }
+    const role = this.roleFromAdminAccessCode(input.accessCode, codes);
     this.adminAttempts.delete(ip); // success clears the counter
-    return this.createUserAndSession(input, input.role as UserRole);
+    return this.createUserAndSession(input, role);
   }
 
   async login(input: LoginInput): Promise<AuthResult> {
@@ -65,48 +58,107 @@ export class AuthService {
   }
 
   /**
-   * Resolve the current principal from the session cookie, falling back to the
-   * legacy `x-user-id` header (demo stand-in) so existing dashboards keep working
-   * during the auth transition.
+   * Verify a Google ID token, link or create the user, and start a session.
+   * We verify via Google's tokeninfo endpoint and check `aud` matches our client
+   * id. No Google tokens are stored.
    */
-  async resolve(cookieHeader?: string, fallbackUserId?: string): Promise<AuthUser | null> {
-    const token = readCookie(cookieHeader, SESSION_COOKIE);
-    if (token) {
-      const session = await prisma.session.findUnique({ where: { token }, include: { user: true } });
-      if (session && session.expiresAt.getTime() > Date.now()) {
-        return toAuthUser(session.user);
-      }
+  async googleSignIn(idToken: string): Promise<AuthResult> {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) throw new ServiceUnavailableException("Google sign-in is not configured");
+
+    let payload: { aud?: string; email?: string; email_verified?: string; name?: string } | null = null;
+    try {
+      const res = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
+      );
+      if (res.ok) payload = await res.json();
+    } catch {
+      payload = null;
     }
 
-    const fallback = fallbackUserId?.trim();
-    if (fallback) {
-      const user = await prisma.user.findUnique({ where: { id: fallback } });
-      if (user) return toAuthUser(user);
-      // Synthetic demo principals (no row) — keep the POC dashboards usable.
-      if (fallback === "demo-admin") return demoPrincipal(fallback, UserRole.ADMIN_MANAGER);
-      if (fallback === "demo-reviewer") return demoPrincipal(fallback, UserRole.ADMIN_REVIEWER);
-      if (fallback === "demo-owner") return demoPrincipal(fallback, UserRole.OWNER);
-      return demoPrincipal(fallback, UserRole.GUEST);
+    if (!payload || payload.aud !== clientId || !payload.email || payload.email_verified !== "true") {
+      throw new UnauthorizedException("Could not verify Google sign-in");
     }
-    return null;
+
+    const email = payload.email.toLowerCase();
+    const user =
+      (await prisma.user.findUnique({ where: { email } })) ??
+      (await prisma.user.create({
+        data: { email, name: payload.name ?? null, role: UserRole.GUEST },
+      }));
+    return this.startSession(user);
   }
 
-  async requireUser(cookieHeader?: string, fallbackUserId?: string): Promise<AuthUser> {
-    const user = await this.resolve(cookieHeader, fallbackUserId);
+  /** Update the signed-in user's profile (name, email, phone). */
+  async updateProfile(
+    user: AuthUser,
+    input: { name?: string; email?: string; phone?: string | null },
+  ): Promise<AuthUser> {
+    const exists = await prisma.user.findUnique({ where: { id: user.id }, select: { id: true } });
+    if (!exists) throw new ForbiddenException("Profile isn't editable for this session");
+
+    if (input.email) {
+      const clash = await prisma.user.findFirst({
+        where: { email: input.email, NOT: { id: user.id } },
+        select: { id: true },
+      });
+      if (clash) throw new ConflictException("That email is already in use");
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.email !== undefined ? { email: input.email } : {}),
+        ...(input.phone !== undefined ? { phone: input.phone } : {}),
+      },
+    });
+    return toAuthUser(updated);
+  }
+
+  /** Delete the signed-in user's account (cascades sessions). */
+  async deleteAccount(user: AuthUser): Promise<{ ok: true }> {
+    const exists = await prisma.user.findUnique({ where: { id: user.id }, select: { id: true } });
+    if (!exists) throw new ForbiddenException("Account can't be deleted for this session");
+    try {
+      await prisma.user.delete({ where: { id: user.id } });
+    } catch {
+      // e.g. an owner that still has properties referencing them.
+      throw new ConflictException(
+        "This account has linked records (such as properties) and can't be deleted yet.",
+      );
+    }
+    return { ok: true };
+  }
+
+  /** Resolve the current principal from the session cookie. Session-only. */
+  async resolve(cookieHeader?: string): Promise<AuthUser | null> {
+    const token = readCookie(cookieHeader, SESSION_COOKIE);
+    if (!token) return null;
+    const session = await prisma.session.findUnique({
+      where: { token },
+      include: { user: true },
+    });
+    if (!session || session.expiresAt.getTime() <= Date.now()) return null;
+    return toAuthUser(session.user);
+  }
+
+  async requireUser(cookieHeader?: string): Promise<AuthUser> {
+    const user = await this.resolve(cookieHeader);
     if (!user) throw new UnauthorizedException("Sign in required");
     return user;
   }
 
-  async requireAdmin(cookieHeader?: string, fallbackUserId?: string): Promise<AuthUser> {
-    const user = await this.requireUser(cookieHeader, fallbackUserId);
+  async requireAdmin(cookieHeader?: string): Promise<AuthUser> {
+    const user = await this.requireUser(cookieHeader);
     if (!ADMIN_ROLES.includes(user.role as UserRole)) {
       throw new ForbiddenException("Admin access required");
     }
     return user;
   }
 
-  async requireOwner(cookieHeader?: string, fallbackUserId?: string): Promise<AuthUser> {
-    const user = await this.requireUser(cookieHeader, fallbackUserId);
+  async requireOwner(cookieHeader?: string): Promise<AuthUser> {
+    const user = await this.requireUser(cookieHeader);
     if (user.role !== UserRole.OWNER) {
       throw new ForbiddenException("Owner access required");
     }
@@ -137,6 +189,7 @@ export class AuthService {
     id: string;
     email: string | null;
     name: string | null;
+    phone: string | null;
     role: UserRole;
   }): Promise<AuthResult> {
     const token = randomBytes(32).toString("hex");
@@ -157,23 +210,52 @@ export class AuthService {
     }
     entry.count += 1;
   }
+
+  private adminAccessCodes(): { reviewerCode: string; managerCode: string } {
+    const reviewerCode = process.env.ADMIN_REVIEWER_ACCESS_CODE;
+    const managerCode = process.env.ADMIN_MANAGER_ACCESS_CODE;
+    if (!reviewerCode || !managerCode || reviewerCode === managerCode) {
+      throw new ServiceUnavailableException("Admin registration is not configured");
+    }
+    return { reviewerCode, managerCode };
+  }
+
+  private roleFromAdminAccessCode(
+    accessCode: string,
+    codes: { reviewerCode: string; managerCode: string },
+  ): UserRole {
+    const { reviewerCode, managerCode } = codes;
+    if (safeEquals(accessCode, reviewerCode)) return UserRole.ADMIN_REVIEWER;
+    if (safeEquals(accessCode, managerCode)) return UserRole.ADMIN_MANAGER;
+    throw new ForbiddenException("Invalid admin access code");
+  }
+}
+
+function safeEquals(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
 }
 
 function toAuthUser(user: {
   id: string;
   email: string | null;
   name: string | null;
+  phone: string | null;
   role: UserRole;
 }): AuthUser {
-  return { id: user.id, email: user.email, name: user.name, role: user.role };
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    phone: user.phone,
+    role: user.role,
+  };
 }
 
-function demoPrincipal(id: string, role: UserRole): AuthUser {
-  return { id, email: null, name: null, role };
-}
-
-export function auditActorId(user: AuthUser): string | null {
-  return user.email === null && user.id.startsWith("demo-") ? null : user.id;
+/** The audit actor is simply the authenticated user's id (session-only auth). */
+export function auditActorId(user: AuthUser): string {
+  return user.id;
 }
 
 /** Parse a single cookie value out of a raw `Cookie` header. */

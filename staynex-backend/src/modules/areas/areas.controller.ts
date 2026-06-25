@@ -25,21 +25,17 @@ export class AdminAreasController {
 
   @Get()
   async list(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-    @Query("city") city?: string,
+    @Headers("cookie") cookie: string | undefined,    @Query("city") city?: string,
   ) {
-    await this.auth.requireAdmin(cookie, userId);
+    await this.auth.requireAdmin(cookie);
     return this.areas.adminList(city);
   }
 
   @Post()
   async create(
     @Body() body: unknown,
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-  ) {
-    const admin = await this.auth.requireAdmin(cookie, userId);
+    @Headers("cookie") cookie: string | undefined,  ) {
+    const admin = await this.auth.requireAdmin(cookie);
     return this.areas.create(admin, parseBody(createAreaSchema, body));
   }
 
@@ -47,10 +43,8 @@ export class AdminAreasController {
   async update(
     @Param("id") id: string,
     @Body() body: unknown,
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-  ) {
-    const admin = await this.auth.requireAdmin(cookie, userId);
+    @Headers("cookie") cookie: string | undefined,  ) {
+    const admin = await this.auth.requireAdmin(cookie);
     return this.areas.update(admin, id, parseBody(updateAreaSchema, body));
   }
 }

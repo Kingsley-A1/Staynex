@@ -13,20 +13,16 @@ export class PropertiesController {
 
   @Get()
   async list(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-  ) {
-    const owner = await this.auth.requireOwner(cookie, userId);
+    @Headers("cookie") cookie: string | undefined,  ) {
+    const owner = await this.auth.requireOwner(cookie);
     return this.properties.listForOwner(owner.id);
   }
 
   @Post()
   async create(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-    @Body() body: unknown,
+    @Headers("cookie") cookie: string | undefined,    @Body() body: unknown,
   ) {
-    const owner = await this.auth.requireOwner(cookie, userId);
+    const owner = await this.auth.requireOwner(cookie);
     return this.properties.createDraft(
       owner.id,
       parseBody(createPropertySchema, body),
@@ -35,22 +31,18 @@ export class PropertiesController {
 
   @Get(":id")
   async get(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-    @Param("id") id: string,
+    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
   ) {
-    const owner = await this.auth.requireOwner(cookie, userId);
+    const owner = await this.auth.requireOwner(cookie);
     return this.properties.getForOwner(owner.id, id);
   }
 
   @Patch(":id")
   async update(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-    @Param("id") id: string,
+    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
     @Body() body: unknown,
   ) {
-    const owner = await this.auth.requireOwner(cookie, userId);
+    const owner = await this.auth.requireOwner(cookie);
     return this.properties.update(
       owner.id,
       id,
@@ -60,11 +52,9 @@ export class PropertiesController {
 
   @Post(":id/submit")
   async submit(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-    @Param("id") id: string,
+    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
   ) {
-    const owner = await this.auth.requireOwner(cookie, userId);
+    const owner = await this.auth.requireOwner(cookie);
     return this.properties.submitForReview(owner.id, id);
   }
 }

@@ -13,20 +13,16 @@ export class OwnerBookingsController {
 
   @Get()
   async list(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-  ) {
-    const owner = await this.auth.requireOwner(cookie, userId);
+    @Headers("cookie") cookie: string | undefined,  ) {
+    const owner = await this.auth.requireOwner(cookie);
     return this.reports.ownerView(owner.id);
   }
 
   @Get(":id")
   async detail(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-    @Param("id") id: string,
+    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
   ) {
-    const owner = await this.auth.requireOwner(cookie, userId);
+    const owner = await this.auth.requireOwner(cookie);
     return this.reports.ownerBooking(owner.id, id);
   }
 }

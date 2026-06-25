@@ -221,17 +221,33 @@ export interface AiLogRow {
   createdAt: string;
 }
 
-// --- Phase 4: AI assistant ---
+// --- Phase 4 / Staynex Agent ---
 
 export interface AssistantReply {
   conversationId: string;
   reply: string;
-  /** True when the assistant declined an unsafe/operational request. */
+  /** True when the agent declined an unsafe/operational request. */
   refused: boolean;
   /** True when the AI provider is not configured/reachable. */
   unavailable: boolean;
   /** Verified facts the answer was grounded in (e.g. room prices). */
   groundedFacts: string[];
+}
+
+export type AgentMessageRole = "USER" | "AGENT";
+
+export interface AgentMessage {
+  id: string;
+  role: AgentMessageRole;
+  content: string;
+  createdAt: string;
+}
+
+export interface AgentConversation {
+  id: string;
+  title: string | null;
+  pinned: boolean;
+  updatedAt: string;
 }
 
 // --- Phase 5: auth, testimonials, areas ---
@@ -242,6 +258,7 @@ export interface AuthUser {
   id: string;
   email: string | null;
   name: string | null;
+  phone: string | null;
   role: AppRole;
 }
 

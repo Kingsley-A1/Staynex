@@ -20,11 +20,9 @@ export class BookingsController {
 
   @Post("bookings/holds")
   async createHold(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-    @Body() body: unknown,
+    @Headers("cookie") cookie: string | undefined,    @Body() body: unknown,
   ) {
-    const user = await this.auth.resolve(cookie, userId);
+    const user = await this.auth.resolve(cookie);
     return this.bookings.createHold(parseBody(createHoldSchema, body), user?.id ?? null);
   }
 
@@ -35,11 +33,9 @@ export class BookingsController {
 
   @Post("checkout")
   async checkout(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-    @Body() body: unknown,
+    @Headers("cookie") cookie: string | undefined,    @Body() body: unknown,
   ) {
-    const user = await this.auth.requireUser(cookie, userId);
+    const user = await this.auth.requireUser(cookie);
     return this.bookings.checkout(parseBody(checkoutSchema, body), user.id);
   }
 

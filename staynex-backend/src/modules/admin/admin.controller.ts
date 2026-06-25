@@ -13,31 +13,25 @@ export class AdminController {
 
   @Get("approvals")
   async queue(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-  ) {
-    await this.auth.requireAdmin(cookie, userId);
+    @Headers("cookie") cookie: string | undefined,  ) {
+    await this.auth.requireAdmin(cookie);
     return this.admin.approvalQueue();
   }
 
   @Get("approvals/:id")
   async review(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-    @Param("id") id: string,
+    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
   ) {
-    await this.auth.requireAdmin(cookie, userId);
+    await this.auth.requireAdmin(cookie);
     return this.admin.getForReview(id);
   }
 
   @Post("approvals/:id/decision")
   async decide(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-    @Param("id") id: string,
+    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
     @Body() body: unknown,
   ) {
-    const admin = await this.auth.requireAdmin(cookie, userId);
+    const admin = await this.auth.requireAdmin(cookie);
     return this.admin.review(
       admin,
       id,
@@ -49,28 +43,22 @@ export class AdminController {
 
   @Get("bookings")
   async bookings(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-  ) {
-    await this.auth.requireAdmin(cookie, userId);
+    @Headers("cookie") cookie: string | undefined,  ) {
+    await this.auth.requireAdmin(cookie);
     return this.admin.bookingsOverview();
   }
 
   @Get("audit-logs")
   async auditLogs(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-  ) {
-    await this.auth.requireAdmin(cookie, userId);
+    @Headers("cookie") cookie: string | undefined,  ) {
+    await this.auth.requireAdmin(cookie);
     return this.admin.auditLogs();
   }
 
   @Get("ai-logs")
   async aiLogs(
-    @Headers("cookie") cookie: string | undefined,
-    @Headers("x-user-id") userId: string | undefined,
-  ) {
-    await this.auth.requireAdmin(cookie, userId);
+    @Headers("cookie") cookie: string | undefined,  ) {
+    await this.auth.requireAdmin(cookie);
     return this.admin.aiLogs();
   }
 }

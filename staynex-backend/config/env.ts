@@ -25,10 +25,22 @@ export const envSchema = z.object({
   // AI assistant (Google Gemini). Optional; AiModule fails gracefully (clear
   // "unavailable" state) when missing.
   GEMINI_API_KEY: z.string().optional(),
-  // 6-digit access code required to register an admin account.
-  ADMIN_ACCESS_CODE: z.string().regex(/^\d{6}$/, "ADMIN_ACCESS_CODE must be 6 digits").optional(),
+  // 6-digit access codes. Backend derives admin privilege from the code;
+  // the client never chooses its own admin role.
+  ADMIN_REVIEWER_ACCESS_CODE: z
+    .string()
+    .regex(/^\d{6}$/, "ADMIN_REVIEWER_ACCESS_CODE must be 6 digits")
+    .optional(),
+  ADMIN_MANAGER_ACCESS_CODE: z
+    .string()
+    .regex(/^\d{6}$/, "ADMIN_MANAGER_ACCESS_CODE must be 6 digits")
+    .optional(),
   // Set in production so session cookies are marked Secure.
   COOKIE_DOMAIN: z.string().optional(),
+  // Google OAuth. The agent verifies the Google ID token's `aud` against this.
+  // GOOGLE_CLIENT_SECRET is only needed for the auth-code flow (not used here).
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -42,8 +54,25 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       .join("\n");
     throw new Error(`Invalid environment variables:\n${issues}`);
   }
-  if (parsed.data.NODE_ENV === "production" && !parsed.data.ADMIN_ACCESS_CODE) {
-    throw new Error("Invalid environment variables:\n  - ADMIN_ACCESS_CODE: required in production");
+  const { ADMIN_REVIEWER_ACCESS_CODE, ADMIN_MANAGER_ACCESS_CODE } = parsed.data;
+  if (parsed.data.NODE_ENV === "production") {
+    const missing: string[] = [];
+    if (!ADMIN_REVIEWER_ACCESS_CODE) missing.push("ADMIN_REVIEWER_ACCESS_CODE");
+    if (!ADMIN_MANAGER_ACCESS_CODE) missing.push("ADMIN_MANAGER_ACCESS_CODE");
+    if (missing.length > 0) {
+      throw new Error(
+        `Invalid environment variables:\n${missing.map((name) => `  - ${name}: required in production`).join("\n")}`,
+      );
+    }
+  }
+  if (
+    ADMIN_REVIEWER_ACCESS_CODE &&
+    ADMIN_MANAGER_ACCESS_CODE &&
+    ADMIN_REVIEWER_ACCESS_CODE === ADMIN_MANAGER_ACCESS_CODE
+  ) {
+    throw new Error(
+      "Invalid environment variables:\n  - ADMIN_MANAGER_ACCESS_CODE: must differ from ADMIN_REVIEWER_ACCESS_CODE",
+    );
   }
   return parsed.data;
 }

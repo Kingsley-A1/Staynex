@@ -34,7 +34,9 @@ Staynex helps guests book trusted stays clearly and gives property owners a reli
 
 Core promise: `Book trusted stays.`
 
-Origin line: `Born in Calabar. Built for the world.`
+Positioning line: `Book trusted stays, Confidently.`
+
+Origin context: launched in Calabar; designed to scale across Nigeria and beyond. Calabar is the launch wedge, not the architectural limit.
 
 Do not design Staynex as a local directory. Calabar is the launch wedge, not the architectural limit.
 
@@ -211,13 +213,13 @@ Representative demo properties:
 - Harbor Nest Apartments
 - Tinapa Grand Resort
 
-## 11. AI Assistant Rules
+## 11. AI Agent Rules
 
-Name: `Staynex Assistant`
+Name: `Staynex Agent`
 
-The assistant may help guests compare stays, understand room differences, read policies, navigate booking steps, and help owners improve listings.
+Staynex Agent is a professional AI agent that helps people find available stays on Staynex and guides them confidently through the booking journey: search, view a stay, check availability, hold, sign in, pay with Paystack, and confirmation. It may compare stays, explain room differences, read policies, navigate booking steps, and help owners improve listings.
 
-The assistant must not:
+The agent must not:
 
 - Invent availability
 - Confirm payment manually
@@ -228,7 +230,7 @@ The assistant must not:
 - Make legal claims
 - Pretend to be human
 
-AI should be tool-first: verify platform state before making operational claims.
+The agent is tool-first: verify platform state before making operational claims. When availability is requested, guide the user to city/date search or the property's availability check rather than inventing it.
 
 ## 12. Quality Gate
 
