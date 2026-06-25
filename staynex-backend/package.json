@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "nest start --watch",
+    "prebuild": "pnpm prisma:generate",
     "build": "nest build",
     "start": "node dist/src/main.js",
     "check": "tsc --noEmit",
