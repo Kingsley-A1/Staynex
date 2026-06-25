@@ -2,7 +2,7 @@
 
 import { type ChangeEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DEMO_OWNER_ID, ownerApi, uploadToTarget } from "@/lib/api";
+import { ownerApi, uploadToTarget } from "@/lib/api";
 
 export function MediaUploader({ propertyId }: { propertyId: string }) {
   const router = useRouter();
@@ -17,7 +17,7 @@ export function MediaUploader({ propertyId }: { propertyId: string }) {
     setError(null);
     setStatus("Requesting upload URL…");
     try {
-      const target = await ownerApi.requestUpload(DEMO_OWNER_ID, {
+      const target = await ownerApi.requestUpload({
         scope: "property",
         filename: file.name,
         contentType: file.type || "application/octet-stream",
@@ -25,7 +25,7 @@ export function MediaUploader({ propertyId }: { propertyId: string }) {
       setStatus("Uploading…");
       await uploadToTarget(target, file);
       setStatus("Attaching…");
-      await ownerApi.attachPropertyMedia(DEMO_OWNER_ID, propertyId, {
+      await ownerApi.attachPropertyMedia(propertyId, {
         publicUrl: target.publicUrl,
       });
       setStatus("Uploaded");

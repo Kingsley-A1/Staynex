@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/ui";
-import { DEMO_OWNER_ID, ownerApi } from "@/lib/api";
+import { ownerApi } from "@/lib/api";
 import type { PropertyStatus } from "@/lib/types";
 
 export function SubmitForReview({
@@ -22,7 +22,7 @@ export function SubmitForReview({
     setPending(true);
     setError(null);
     try {
-      await ownerApi.submitProperty(DEMO_OWNER_ID, propertyId);
+      await ownerApi.submitProperty(propertyId);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submit failed");

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Textarea } from "@/ui";
-import { adminApi, DEMO_ADMIN_ID } from "@/lib/api";
+import { adminApi } from "@/lib/api";
 import type { ApprovalDecision } from "@/lib/types";
 
 export function ApprovalActions({ propertyId }: { propertyId: string }) {
@@ -17,7 +17,7 @@ export function ApprovalActions({ propertyId }: { propertyId: string }) {
     setPending(decision);
     setError(null);
     try {
-      const result = await adminApi.decide(DEMO_ADMIN_ID, propertyId, {
+      const result = await adminApi.decide(propertyId, {
         decision,
         note: note || undefined,
       });

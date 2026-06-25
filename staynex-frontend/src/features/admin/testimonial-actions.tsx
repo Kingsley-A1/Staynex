@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/ui";
-import { adminApi, DEMO_ADMIN_ID } from "@/lib/api";
+import { adminApi } from "@/lib/api";
 
 type Decision = "APPROVE" | "REJECT" | "PENDING";
 
@@ -16,7 +16,7 @@ export function TestimonialActions({ id, status }: { id: string; status: string 
     setPending(decision);
     setError(null);
     try {
-      await adminApi.moderateTestimonial(DEMO_ADMIN_ID, id, decision);
+      await adminApi.moderateTestimonial(id, decision);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");

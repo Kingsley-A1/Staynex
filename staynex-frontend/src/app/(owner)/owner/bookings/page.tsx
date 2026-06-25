@@ -1,15 +1,14 @@
 import Link from "next/link";
 import { KpiCard } from "@/ui";
 import { BookingStatusBadge, PaymentStatusBadge } from "@/components/status-pill";
-import { DEMO_OWNER_ID } from "@/lib/api";
 import { getOwnerBookings } from "@/lib/server-reports";
 import { formatNairaFromKobo, formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function OwnerBookingsPage() {
-  // x-user-id stand-in until AuthModule; the backend scopes every row to this owner.
-  const { data, offline } = await getOwnerBookings(DEMO_OWNER_ID);
+  // Session-only auth: the backend scopes every row to the signed-in owner.
+  const { data, offline } = await getOwnerBookings();
 
   return (
     <div className="space-y-8">

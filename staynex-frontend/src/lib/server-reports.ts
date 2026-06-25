@@ -1,9 +1,11 @@
 // Server-only fetch helpers for owner/admin operational dashboards. These read
 // real platform state (bookings, payments, audit, AI logs) and NEVER fall back
-// to fixtures — operational truth must not be faked. On API failure they return
-// `{ data: null, offline: true }` so pages render an honest "couldn't load"
-// state instead of misleading numbers.
+// to fixtures — operational truth must not be faked. Auth is session-only: the
+// incoming request's cookies are forwarded to the backend, which resolves the
+// owner/admin from the session. On API failure they return
+// `{ data: null, offline: true }` so pages render an honest "couldn't load" state.
 
+import { cookies } from "next/headers";
 import type {
   AdminBookingsView,
   AdminTestimonialRow,
@@ -15,18 +17,24 @@ import type {
 } from "@/lib/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-const DEMO_ADMIN_ID = "demo-admin";
 
 export interface Loaded<T> {
   data: T | null;
   offline: boolean;
 }
 
-async function load<T>(path: string, userId?: string): Promise<Loaded<T>> {
+async function authHeaders(): Promise<HeadersInit | undefined> {
+  const store = await cookies();
+  const all = store.getAll();
+  if (all.length === 0) return undefined;
+  return { cookie: all.map((c) => `${c.name}=${c.value}`).join("; ") };
+}
+
+async function load<T>(path: string): Promise<Loaded<T>> {
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       cache: "no-store",
-      headers: userId ? { "x-user-id": userId } : undefined,
+      headers: await authHeaders(),
     });
     if (!res.ok) return { data: null, offline: false };
     return { data: (await res.json()) as T, offline: false };
@@ -35,23 +43,20 @@ async function load<T>(path: string, userId?: string): Promise<Loaded<T>> {
   }
 }
 
-export const getOwnerBookings = (userId: string) =>
-  load<OwnerBookingsView>("/owner/bookings", userId);
+export const getOwnerBookings = () => load<OwnerBookingsView>("/owner/bookings");
 
-export const getOwnerBooking = (userId: string, id: string) =>
-  load<BookingRow>(`/owner/bookings/${id}`, userId);
+export const getOwnerBooking = (id: string) => load<BookingRow>(`/owner/bookings/${id}`);
 
-export const getAdminBookings = () => load<AdminBookingsView>("/admin/bookings", DEMO_ADMIN_ID);
+export const getAdminBookings = () => load<AdminBookingsView>("/admin/bookings");
 
-export const getAuditLogs = () => load<AuditLogRow[]>("/admin/audit-logs", DEMO_ADMIN_ID);
+export const getAuditLogs = () => load<AuditLogRow[]>("/admin/audit-logs");
 
-export const getAiLogs = () => load<AiLogRow[]>("/admin/ai-logs", DEMO_ADMIN_ID);
+export const getAiLogs = () => load<AiLogRow[]>("/admin/ai-logs");
 
 export const getAdminTestimonials = (status?: string) =>
   load<AdminTestimonialRow[]>(
     `/admin/testimonials${status ? `?status=${encodeURIComponent(status)}` : ""}`,
-    DEMO_ADMIN_ID,
   );
 
 export const getAdminAreas = (city?: string) =>
-  load<AreaOption[]>(`/admin/areas${city ? `?city=${encodeURIComponent(city)}` : ""}`, DEMO_ADMIN_ID);
+  load<AreaOption[]>(`/admin/areas${city ? `?city=${encodeURIComponent(city)}` : ""}`);

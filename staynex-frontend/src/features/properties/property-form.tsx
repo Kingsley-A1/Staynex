@@ -3,7 +3,7 @@
 import { type FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Field, Input, Select, Textarea } from "@/ui";
-import { DEMO_OWNER_ID, ownerApi } from "@/lib/api";
+import { ownerApi } from "@/lib/api";
 import type { PropertyDetail } from "@/lib/types";
 import type { CityOption } from "@/features/properties/fixtures";
 
@@ -32,10 +32,10 @@ export function PropertyForm({
     setError(null);
     try {
       if (editing && property) {
-        await ownerApi.updateProperty(DEMO_OWNER_ID, property.id, { name, cityId, description });
+        await ownerApi.updateProperty(property.id, { name, cityId, description });
         router.refresh();
       } else {
-        const created = await ownerApi.createProperty(DEMO_OWNER_ID, { name, cityId, description });
+        const created = await ownerApi.createProperty({ name, cityId, description });
         router.push(`/owner/properties/${created.id}`);
       }
     } catch (err) {

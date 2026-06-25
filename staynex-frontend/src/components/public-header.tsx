@@ -15,27 +15,30 @@ export function PublicHeader() {
             className="object-cover object-center"
           />
         </Link>
-        <nav className="flex items-center gap-1 text-sm font-medium">
-          <Link href="/search" className="rounded-md px-3 py-2 text-muted-foreground hover:text-ink">
-            Find a stay
-          </Link>
+        <nav className="flex items-center gap-2 text-sm font-medium">
           <Link
             href="/reviews"
-            className="hidden rounded-md px-3 py-2 text-muted-foreground hover:text-ink sm:block"
+            className="hidden whitespace-nowrap rounded-md px-3 py-2 text-muted-foreground hover:text-ink sm:inline-flex"
           >
             Reviews
           </Link>
           <Link
             href="/list-your-property"
-            className="hidden rounded-md px-3 py-2 text-muted-foreground hover:text-ink sm:block"
+            className="hidden whitespace-nowrap rounded-md px-3 py-2 text-muted-foreground hover:text-ink md:inline-flex"
           >
             List your property
           </Link>
           <Link
             href="/sign-in"
-            className="rounded-md px-3 py-2 font-semibold text-primary hover:bg-secondary"
+            className="inline-flex h-10 items-center whitespace-nowrap rounded-md border border-border bg-surface-raised px-3 font-semibold text-foreground transition-colors hover:bg-secondary"
           >
             Sign in
+          </Link>
+          <Link
+            href="/search"
+            className="inline-flex h-10 items-center whitespace-nowrap rounded-md bg-primary px-4 font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover active:bg-primary-active"
+          >
+            Find a stay
           </Link>
         </nav>
       </div>

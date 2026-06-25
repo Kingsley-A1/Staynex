@@ -3,7 +3,7 @@ import { LegalPage, LegalSection } from "@/features/legal/legal-page";
 
 export const metadata: Metadata = {
   title: "About — Staynex",
-  description: "Staynex helps guests book trusted stays. Born in Calabar. Built for the world.",
+  description: "Staynex helps guests book trusted stays, confidently.",
 };
 
 export default function AboutPage() {
@@ -18,7 +18,7 @@ export default function AboutPage() {
           run through Paystack, and a booking is only confirmed after payment is verified.
         </p>
       </LegalSection>
-      <LegalSection heading="Born in Calabar, built for the world">
+      <LegalSection heading="Launched in Calabar, scaling beyond">
         <p>
           We launched in Calabar and are designed to expand across Nigeria and beyond — starting with
           Calabar, Uyo, Port Harcourt, Lagos, and Abuja.

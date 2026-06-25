@@ -15,18 +15,27 @@ export function PropertyCard({
   return (
     <Link
       href={href}
-      className="group surface-card block overflow-hidden transition-shadow hover:shadow-md"
+      className="group surface-card flex h-full flex-col overflow-hidden transition-shadow hover:shadow-md"
     >
-      <div className="relative h-36 bg-gradient-to-br from-indigo-500 to-indigo-800">
-        <div className="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
+      {/* Visual area ≈ 60% of the card height */}
+      <div className="relative aspect-[16/10] bg-gradient-to-br from-indigo-500 to-indigo-800">
+        {property.coverImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={property.coverImageUrl}
+            alt={property.name}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : null}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
         <div className="absolute left-3 top-3">
           <StatusBadge status={property.status} />
         </div>
       </div>
-      <div className="p-4">
+      <div className="flex flex-1 flex-col p-4">
         <h3 className="text-title-sm truncate">{property.name}</h3>
         <p className="text-caption mt-1">{property.cityName}, Nigeria</p>
-        <div className="mt-3 flex items-end justify-between border-t border-border pt-3">
+        <div className="mt-auto flex items-end justify-between border-t border-border pt-3">
           <div>
             <p className="text-ink">
               <span className="text-lg font-bold">

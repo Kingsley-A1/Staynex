@@ -1,6 +1,5 @@
 import { LinkButton } from "@/ui";
 import { BookingStatusBadge, PaymentStatusBadge } from "@/components/status-pill";
-import { DEMO_OWNER_ID } from "@/lib/api";
 import { getOwnerBooking } from "@/lib/server-reports";
 import { formatNairaFromKobo, formatDate } from "@/lib/format";
 
@@ -21,7 +20,7 @@ export default async function OwnerBookingDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { data: booking, offline } = await getOwnerBooking(DEMO_OWNER_ID, id);
+  const { data: booking, offline } = await getOwnerBooking(id);
 
   if (!booking) {
     return (

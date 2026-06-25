@@ -7,7 +7,7 @@ import { TestimonialsSection } from "@/features/reviews/testimonials-section";
 export const metadata: Metadata = {
   title: "Staynex — Book trusted stays",
   description:
-    "Book trusted stays across Nigeria and beyond. Verified properties, secure payments, and real-time availability. Born in Calabar. Built for the world.",
+    "Book trusted stays across Nigeria and beyond. Verified properties, secure payments, and real-time availability.",
 };
 
 /* -----------------------------------------------------------------------------
@@ -142,13 +142,13 @@ function SiteHeader() {
         <div className="flex items-center gap-2">
           <Link
             href="/sign-in"
-            className="hidden h-10 items-center rounded-md px-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary sm:inline-flex"
+            className="inline-flex h-10 items-center whitespace-nowrap rounded-md border border-border bg-surface-raised px-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary"
           >
             Sign in
           </Link>
           <Link
             href="/search"
-            className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover active:bg-primary-active"
+            className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover active:bg-primary-active"
           >
             Find a stay
           </Link>
@@ -171,11 +171,11 @@ function Hero() {
       />
       <div className="layout-container relative py-16 sm:py-20 lg:py-24">
         <div className="mx-auto max-w-3xl text-center">
-          <p className="text-overline mb-4">Born in Calabar · Built for the world</p>
+          <p className="text-overline mb-4">Verified stays · Secure payments</p>
           <h1 className="font-display text-3xl font-bold tracking-tighter text-ink sm:text-4xl lg:text-5xl">
             Book trusted stays,
             <br className="hidden sm:block" />{" "}
-            <span className="text-primary">clearly and confidently.</span>
+            <span className="text-primary">Confidently.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-md leading-relaxed text-muted-foreground">
             Search verified hotels, resorts, and apartments with real-time
@@ -284,12 +284,16 @@ function Destinations() {
             href={`/search?city=${encodeURIComponent(d.city)}`}
             className="group relative block aspect-[4/5] overflow-hidden rounded-lg"
           >
+            {/* Gradient is the fallback behind the real city photo */}
             <div className={`absolute inset-0 bg-gradient-to-br ${d.gradient}`} />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
-            <div
-              aria-hidden
-              className="absolute inset-0 transition-transform duration-300 group-hover:scale-105"
+            <Image
+              src={`/assets/destinations/${slug(d.city)}.jpg`}
+              alt={`${d.city}, Nigeria`}
+              fill
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+              className="object-cover transition-transform duration-300 group-hover:scale-105"
             />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 p-3">
               <p className="font-semibold text-white">{d.city}</p>
               <p className="text-2xs text-white/80">{d.stays} stays</p>
@@ -458,7 +462,7 @@ function SiteFooter() {
               <Brandmark />
             </Link>
             <p className="mt-3 max-w-xs text-body-sm text-muted-foreground">
-              Book trusted stays. Born in Calabar. Built for the world.
+              Book trusted stays, Confidently.
             </p>
           </div>
 

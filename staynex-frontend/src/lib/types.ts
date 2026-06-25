@@ -252,6 +252,22 @@ export interface AssistantReply {
   groundedFacts: string[];
 }
 
+export type AgentMessageRole = "USER" | "AGENT";
+
+export interface AgentMessage {
+  id: string;
+  role: AgentMessageRole;
+  content: string;
+  createdAt: string;
+}
+
+export interface AgentConversation {
+  id: string;
+  title: string | null;
+  pinned: boolean;
+  updatedAt: string;
+}
+
 // --- Phase 5: auth, testimonials, areas ---
 
 export type AppRole = "GUEST" | "OWNER" | "ADMIN_REVIEWER" | "ADMIN_MANAGER";
@@ -260,6 +276,7 @@ export interface AuthUser {
   id: string;
   email: string | null;
   name: string | null;
+  phone: string | null;
   role: AppRole;
 }
 

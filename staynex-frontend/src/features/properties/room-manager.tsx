@@ -3,7 +3,7 @@
 import { type FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Field, Input } from "@/ui";
-import { DEMO_OWNER_ID, ownerApi } from "@/lib/api";
+import { ownerApi } from "@/lib/api";
 import { formatNairaFromKobo } from "@/lib/format";
 import type { RoomTypeDetail } from "@/lib/types";
 
@@ -26,7 +26,7 @@ export function RoomManager({
     setPending(true);
     setError(null);
     try {
-      await ownerApi.createRoomType(DEMO_OWNER_ID, {
+      await ownerApi.createRoomType({
         propertyId,
         name,
         basePriceKobo: Number(priceNaira) * 100,
@@ -46,7 +46,7 @@ export function RoomManager({
   async function addUnit(roomTypeId: string) {
     setError(null);
     try {
-      await ownerApi.addRoomUnit(DEMO_OWNER_ID, { roomTypeId });
+      await ownerApi.addRoomUnit({ roomTypeId });
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add unit");

@@ -5,6 +5,8 @@
 import type {
   AdminBookingsView,
   AdminTestimonialRow,
+  AgentConversation,
+  AgentMessage,
   ApprovalActionResult,
   AreaOption,
   AssistantReply,
@@ -29,21 +31,16 @@ import type {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
-// Temporary identities until AuthModule lands; mirror the backend `x-user-id`.
-export const DEMO_OWNER_ID = "demo-owner";
-export const DEMO_ADMIN_ID = "demo-admin";
-
-type RequestOptions = RequestInit & { userId?: string };
+type RequestOptions = RequestInit;
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { userId, headers, ...rest } = options;
+  const { headers, ...rest } = options;
   const res = await fetch(`${API_BASE}${path}`, {
     ...rest,
     // Send/receive the session cookie so auth-aware endpoints resolve the user.
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(userId ? { "x-user-id": userId } : {}),
       ...headers,
     },
   });
@@ -53,35 +50,23 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return (await res.json()) as T;
 }
 
+// All owner endpoints are authenticated by the session cookie (session-only auth).
 export const ownerApi = {
-  listProperties: (userId: string) =>
-    request<PropertySummary[]>("/owner/properties", { userId }),
+  listProperties: () => request<PropertySummary[]>("/owner/properties"),
   getProperty: (id: string) => request<PropertyDetail>(`/owner/properties/${id}`),
-  createProperty: (
-    userId: string,
-    body: { name: string; cityId: string; description?: string },
-  ) =>
+  createProperty: (body: { name: string; cityId: string; description?: string }) =>
     request<PropertyDetail>("/owner/properties", {
       method: "POST",
-      userId,
       body: JSON.stringify(body),
     }),
-  updateProperty: (
-    userId: string,
-    id: string,
-    body: { name?: string; cityId?: string; description?: string },
-  ) =>
+  updateProperty: (id: string, body: { name?: string; cityId?: string; description?: string }) =>
     request<PropertyDetail>(`/owner/properties/${id}`, {
       method: "PATCH",
-      userId,
       body: JSON.stringify(body),
     }),
-  submitProperty: (userId: string, id: string) =>
-    request<PropertyDetail>(`/owner/properties/${id}/submit`, {
-      method: "POST",
-      userId,
-    }),
-  createRoomType: (userId: string, body: {
+  submitProperty: (id: string) =>
+    request<PropertyDetail>(`/owner/properties/${id}/submit`, { method: "POST" }),
+  createRoomType: (body: {
     propertyId: string;
     name: string;
     basePriceKobo: number;
@@ -90,67 +75,48 @@ export const ownerApi = {
   }) =>
     request<unknown>("/owner/room-types", {
       method: "POST",
-      userId,
       body: JSON.stringify(body),
     }),
-  addRoomUnit: (userId: string, body: { roomTypeId: string; code?: string }) =>
+  addRoomUnit: (body: { roomTypeId: string; code?: string }) =>
     request<unknown>("/owner/room-units", {
       method: "POST",
-      userId,
       body: JSON.stringify(body),
     }),
-  requestUpload: (userId: string, body: {
-    scope: "property" | "room";
-    filename: string;
-    contentType: string;
-  }) =>
+  requestUpload: (body: { scope: "property" | "room"; filename: string; contentType: string }) =>
     request<MediaUploadTarget>("/owner/media/upload-url", {
       method: "POST",
-      userId,
       body: JSON.stringify(body),
     }),
   attachPropertyMedia: (
-    userId: string,
     propertyId: string,
     body: { publicUrl: string; altText?: string; sortOrder?: number },
   ) =>
     request<MediaItem>(`/owner/media/property/${propertyId}`, {
       method: "POST",
-      userId,
       body: JSON.stringify(body),
     }),
-  setCapacity: (userId: string, body: {
-    roomTypeId: string;
-    from: string;
-    to: string;
-    totalUnits: number;
-  }) =>
+  setCapacity: (body: { roomTypeId: string; from: string; to: string; totalUnits: number }) =>
     request<{ updatedDays: number }>("/availability/capacity", {
       method: "PUT",
-      userId,
       body: JSON.stringify(body),
     }),
   getCalendar: (roomTypeId: string, from: string, to: string) =>
     request<AvailabilityDay[]>(
       `/availability/room-types/${roomTypeId}?from=${from}&to=${to}`,
     ),
-  listBookings: (userId: string) =>
-    request<OwnerBookingsView>("/owner/bookings", { userId }),
-  getBooking: (userId: string, id: string) =>
-    request<BookingRow>(`/owner/bookings/${id}`, { userId }),
+  listBookings: () => request<OwnerBookingsView>("/owner/bookings"),
+  getBooking: (id: string) => request<BookingRow>(`/owner/bookings/${id}`),
 };
 
 export const adminApi = {
   queue: () => request<PropertySummary[]>("/admin/approvals"),
   getForReview: (id: string) => request<PropertyDetail>(`/admin/approvals/${id}`),
   decide: (
-    userId: string,
     id: string,
     body: { decision: "APPROVE" | "REJECT" | "REQUEST_CHANGES"; note?: string },
   ) =>
     request<ApprovalActionResult>(`/admin/approvals/${id}/decision`, {
       method: "POST",
-      userId,
       body: JSON.stringify(body),
     }),
   bookings: () => request<AdminBookingsView>("/admin/bookings"),
@@ -160,14 +126,9 @@ export const adminApi = {
     request<AdminTestimonialRow[]>(
       `/admin/testimonials${status ? `?status=${encodeURIComponent(status)}` : ""}`,
     ),
-  moderateTestimonial: (
-    userId: string,
-    id: string,
-    decision: "APPROVE" | "REJECT" | "PENDING",
-  ) =>
+  moderateTestimonial: (id: string, decision: "APPROVE" | "REJECT" | "PENDING") =>
     request<{ id: string; status: string }>(`/admin/testimonials/${id}/decision`, {
       method: "POST",
-      userId,
       body: JSON.stringify({ decision }),
     }),
   areas: (city?: string) =>
@@ -186,11 +147,15 @@ export const authApi = {
     email: string;
     password: string;
     name?: string;
-    role: "ADMIN_REVIEWER" | "ADMIN_MANAGER";
     accessCode: string;
   }) => request<AuthUser>("/auth/admin/register", { method: "POST", body: JSON.stringify(body) }),
   login: (body: { email: string; password: string }) =>
     request<AuthUser>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
+  google: (idToken: string) =>
+    request<AuthUser>("/auth/google", { method: "POST", body: JSON.stringify({ idToken }) }),
+  updateProfile: (body: { name?: string; email?: string; phone?: string | null }) =>
+    request<AuthUser>("/auth/profile", { method: "PATCH", body: JSON.stringify(body) }),
+  deleteAccount: () => request<{ ok: true }>("/auth/profile", { method: "DELETE" }),
   logout: () => request<{ ok: true }>("/auth/logout", { method: "POST" }),
 };
 
@@ -219,16 +184,28 @@ export const areasApi = {
     request<AreaOption[]>(`/areas?city=${encodeURIComponent(city)}`),
 };
 
-export const assistantApi = {
-  ask: (
-    body: { message: string; conversationId?: string; propertySlug?: string },
-    userId?: string,
-  ) =>
-    request<AssistantReply>("/ai/assistant", {
+export const agentApi = {
+  ask: (body: { message: string; conversationId?: string; propertySlug?: string }) =>
+    request<AssistantReply>("/ai/assistant", { method: "POST", body: JSON.stringify(body) }),
+  listConversations: () => request<AgentConversation[]>("/ai/conversations"),
+  createConversation: (title?: string) =>
+    request<AgentConversation>("/ai/conversations", {
       method: "POST",
-      userId,
-      body: JSON.stringify(body),
+      body: JSON.stringify(title ? { title } : {}),
     }),
+  messages: (id: string) => request<AgentMessage[]>(`/ai/conversations/${id}/messages`),
+  rename: (id: string, title: string) =>
+    request<AgentConversation>(`/ai/conversations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    }),
+  setPinned: (id: string, pinned: boolean) =>
+    request<AgentConversation>(`/ai/conversations/${id}/pin`, {
+      method: "POST",
+      body: JSON.stringify({ pinned }),
+    }),
+  remove: (id: string) =>
+    request<{ ok: true }>(`/ai/conversations/${id}`, { method: "DELETE" }),
 };
 
 type BookingDates = {
@@ -244,17 +221,15 @@ export const guestApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  createHold: (body: BookingDates, userId?: string) =>
+  createHold: (body: BookingDates) =>
     request<HoldSummary>("/bookings/holds", {
       method: "POST",
-      userId,
       body: JSON.stringify(body),
     }),
   getHold: (holdId: string) => request<HoldSummary>(`/bookings/holds/${holdId}`),
-  checkout: (body: { holdId: string; email: string }, userId?: string) =>
+  checkout: (body: { holdId: string; email: string }) =>
     request<CheckoutResult>("/checkout", {
       method: "POST",
-      userId,
       body: JSON.stringify(body),
     }),
   getPaymentStatus: (reference: string) =>

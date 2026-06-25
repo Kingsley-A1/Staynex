@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Field, Input, Select } from "@/ui";
+import { GoogleAuthButton } from "@/features/auth/google-auth-button";
 import { authApi } from "@/lib/api";
 import type { AppRole, AuthUser } from "@/lib/types";
 
@@ -32,7 +33,7 @@ export function AuthForm({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState(mode === "admin" ? "ADMIN_REVIEWER" : "GUEST");
+  const [role, setRole] = useState<"GUEST" | "OWNER">("GUEST");
   const [accessCode, setAccessCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +51,6 @@ export function AuthForm({
           email,
           password,
           name: name || undefined,
-          role: role as "ADMIN_REVIEWER" | "ADMIN_MANAGER",
           accessCode,
         });
       } else {
@@ -58,7 +58,7 @@ export function AuthForm({
           email,
           password,
           name: name || undefined,
-          role: role as "GUEST" | "OWNER",
+          role,
         });
       }
       if (onSuccess) onSuccess(user);
@@ -85,6 +85,7 @@ export function AuthForm({
 
   return (
     <form onSubmit={submit} className={compact ? "space-y-4" : "surface-card space-y-4 p-6"}>
+      {mode !== "admin" && <GoogleAuthButton next={next} onSuccess={onSuccess} />}
       {(mode === "register" || mode === "admin") && (
         <Field label="Name" htmlFor="name">
           <Input id="name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
@@ -114,33 +115,34 @@ export function AuthForm({
 
       {mode === "register" && (
         <Field label="I'm registering as" htmlFor="role">
-          <Select id="role" value={role} onChange={(e) => setRole(e.target.value)}>
+          <Select
+            id="role"
+            value={role}
+            onChange={(e) => setRole(e.target.value as "GUEST" | "OWNER")}
+          >
             <option value="GUEST">A guest booking stays</option>
             <option value="OWNER">A property owner</option>
           </Select>
         </Field>
       )}
       {mode === "admin" && (
-        <>
-          <Field label="Admin role" htmlFor="role">
-            <Select id="role" value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="ADMIN_REVIEWER">Reviewer</option>
-              <option value="ADMIN_MANAGER">Manager</option>
-            </Select>
-          </Field>
-          <Field label="6-digit access code" htmlFor="accessCode" required>
-            <Input
-              id="accessCode"
-              inputMode="numeric"
-              pattern="\d{6}"
-              maxLength={6}
-              required
-              value={accessCode}
-              onChange={(e) => setAccessCode(e.target.value.replace(/\D/g, ""))}
-              placeholder="••••••"
-            />
-          </Field>
-        </>
+        <Field
+          label="Admin access code"
+          htmlFor="accessCode"
+          required
+          hint="Your code determines whether this account is Admin or Super Admin."
+        >
+          <Input
+            id="accessCode"
+            inputMode="numeric"
+            pattern="\d{6}"
+            maxLength={6}
+            required
+            value={accessCode}
+            onChange={(e) => setAccessCode(e.target.value.replace(/\D/g, ""))}
+            placeholder="••••••"
+          />
+        </Field>
       )}
 
       {error && (

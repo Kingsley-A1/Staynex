@@ -1,6 +1,5 @@
 import { KpiCard, LinkButton, PropertyCard } from "@/ui";
 import { getOwnerKpis, listOwnerProperties } from "@/features/properties/fixtures";
-import { DEMO_OWNER_ID } from "@/lib/api";
 import { getOwnerBookings } from "@/lib/server-reports";
 import { formatNairaFromKobo } from "@/lib/format";
 
@@ -9,8 +8,8 @@ export const dynamic = "force-dynamic";
 export default async function OwnerDashboardPage() {
   const fallback = getOwnerKpis();
   const properties = listOwnerProperties();
-  // Live booking KPIs when the API is reachable; fixtures keep the page useful offline.
-  const { data: live } = await getOwnerBookings(DEMO_OWNER_ID);
+  // Live booking KPIs for the signed-in owner; fixtures keep the page useful offline.
+  const { data: live } = await getOwnerBookings();
 
   const confirmed = live ? String(live.kpis.confirmedBookings) : "—";
   const pendingPayments = live ? String(live.kpis.pendingPayments) : "—";
