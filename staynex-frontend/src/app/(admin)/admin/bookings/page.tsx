@@ -1,4 +1,8 @@
-import { BookingStatusBadge, PaymentStatusBadge } from "@/components/status-pill";
+import {
+  BookingStatusBadge,
+  PaymentStatusBadge,
+  PayoutStatusBadge,
+} from "@/components/status-pill";
 import { getAdminBookings } from "@/lib/server-reports";
 import { formatNairaFromKobo, formatDate } from "@/lib/format";
 
@@ -70,14 +74,16 @@ export default async function AdminBookingsPage() {
           {data.payments.length === 0 ? (
             <p className="p-6 text-center text-muted-foreground">No payments yet.</p>
           ) : (
-            <table className="w-full min-w-[680px] text-left text-sm">
+            <table className="w-full min-w-[860px] text-left text-sm">
               <thead className="border-b border-border text-caption uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Reference</th>
                   <th className="px-4 py-3 font-semibold">Property</th>
-                  <th className="px-4 py-3 font-semibold">Provider</th>
-                  <th className="px-4 py-3 font-semibold">Amount</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold text-right">Gross</th>
+                  <th className="px-4 py-3 font-semibold text-right">Staynex fee</th>
+                  <th className="px-4 py-3 font-semibold text-right">Owner payout</th>
+                  <th className="px-4 py-3 font-semibold">Payment</th>
+                  <th className="px-4 py-3 font-semibold">Payout</th>
                   <th className="px-4 py-3 font-semibold">Created</th>
                 </tr>
               </thead>
@@ -88,11 +94,17 @@ export default async function AdminBookingsPage() {
                       {p.reference ?? "—"}
                     </td>
                     <td className="px-4 py-3 text-ink">{p.propertyName}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{p.provider ?? "—"}</td>
-                    <td className="px-4 py-3 font-medium text-ink">
-                      {formatNairaFromKobo(p.amountKobo)}
+                    <td className="px-4 py-3 text-right font-medium text-ink">
+                      {formatNairaFromKobo(p.grossAmountKobo)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-muted-foreground">
+                      {formatNairaFromKobo(p.platformFeeKobo)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-ink">
+                      {formatNairaFromKobo(p.ownerPayoutKobo)}
                     </td>
                     <td className="px-4 py-3"><PaymentStatusBadge status={p.status} /></td>
+                    <td className="px-4 py-3"><PayoutStatusBadge status={p.payoutStatus} /></td>
                     <td className="px-4 py-3 text-muted-foreground">{formatDate(p.createdAt)}</td>
                   </tr>
                 ))}

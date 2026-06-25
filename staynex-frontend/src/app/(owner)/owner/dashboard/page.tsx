@@ -14,7 +14,7 @@ export default async function OwnerDashboardPage() {
   const confirmed = live ? String(live.kpis.confirmedBookings) : "—";
   const pendingPayments = live ? String(live.kpis.pendingPayments) : "—";
   const availableRooms = String(live?.kpis.availableRooms ?? fallback.availableRooms);
-  const earnings = live ? formatNairaFromKobo(live.kpis.estimatedEarningsKobo) : "—";
+  const earnings = live ? formatNairaFromKobo(live.kpis.netEarningsKobo) : "—";
 
   return (
     <div className="space-y-8">
@@ -41,10 +41,10 @@ export default async function OwnerDashboardPage() {
         <KpiCard label="Pending payments" value={pendingPayments} href="/owner/bookings" />
         <KpiCard label="Available rooms" value={availableRooms} href="/owner/properties" />
         <KpiCard
-          label="Est. earnings"
+          label="Net earnings"
           value={earnings}
           href="/owner/bookings"
-          hint={live ? "Confirmed payments" : "Connect API for live data"}
+          hint={live ? "After platform fee" : "Connect API for live data"}
         />
       </div>
 

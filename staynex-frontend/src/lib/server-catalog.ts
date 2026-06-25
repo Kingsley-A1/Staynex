@@ -6,6 +6,7 @@ import {
   getApprovedPropertyBySlug,
   listApprovedProperties,
 } from "@/features/properties/fixtures";
+import { API_BASE } from "@/lib/api-base";
 import type {
   AreaOption,
   BookingView,
@@ -13,8 +14,6 @@ import type {
   PropertySummary,
   PublicTestimonial,
 } from "@/lib/types";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export interface SearchParams {
   city: string;

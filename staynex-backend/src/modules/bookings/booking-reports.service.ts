@@ -14,29 +14,38 @@ export class BookingReportsService {
   async ownerView(ownerId: string): Promise<OwnerBookingsView> {
     const ownerScope = { roomUnit: { roomType: { property: { ownerId } } } } as const;
 
-    const [rows, confirmedBookings, pendingPayments, activeUnits, earnings] = await Promise.all([
-      prisma.booking.findMany({
-        where: ownerScope,
-        orderBy: { createdAt: "desc" },
-        take: 100,
-        include: bookingRowInclude,
-      }),
-      prisma.booking.count({ where: { ...ownerScope, status: "CONFIRMED" } }),
-      prisma.booking.count({ where: { ...ownerScope, status: "PENDING_PAYMENT" } }),
-      prisma.roomUnit.count({
-        where: { isActive: true, roomType: { property: { ownerId, status: "APPROVED" } } },
-      }),
-      prisma.payment.aggregate({
-        _sum: { amount: true },
-        where: { status: "SUCCESS", booking: ownerScope },
-      }),
-    ]);
+    const [rows, confirmedBookings, pendingPayments, activeUnits, earnings, pendingPayout] =
+      await Promise.all([
+        prisma.booking.findMany({
+          where: ownerScope,
+          orderBy: { createdAt: "desc" },
+          take: 100,
+          include: bookingRowInclude,
+        }),
+        prisma.booking.count({ where: { ...ownerScope, status: "CONFIRMED" } }),
+        prisma.booking.count({ where: { ...ownerScope, status: "PENDING_PAYMENT" } }),
+        prisma.roomUnit.count({
+          where: { isActive: true, roomType: { property: { ownerId, status: "APPROVED" } } },
+        }),
+        // Net owner earnings = sum of owner payout from successful payments (after
+        // commission), NOT gross revenue (skill.md / Phase A settlement).
+        prisma.payment.aggregate({
+          _sum: { ownerPayoutKobo: true },
+          where: { status: "SUCCESS", booking: ownerScope },
+        }),
+        // Money owed but not yet settled to this owner.
+        prisma.payout.aggregate({
+          _sum: { amount: true },
+          where: { ownerId, status: { in: ["PENDING", "PROCESSING"] } },
+        }),
+      ]);
 
     const kpis: OwnerBookingKpis = {
       confirmedBookings,
       pendingPayments,
       availableRooms: activeUnits,
-      estimatedEarningsKobo: earnings._sum.amount ?? 0,
+      netEarningsKobo: earnings._sum.ownerPayoutKobo ?? 0,
+      pendingPayoutKobo: pendingPayout._sum.amount ?? 0,
       currency: "NGN",
     };
 

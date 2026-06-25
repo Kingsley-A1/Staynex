@@ -1,5 +1,12 @@
 import { Prisma } from "@prisma/client";
-import type { AdminPaymentRow, BookingRow, BookingStatus, PaymentState } from "../../../types";
+import type {
+  AdminPaymentRow,
+  AdminPayoutRow,
+  BookingRow,
+  BookingStatus,
+  PaymentState,
+  PayoutStatusValue,
+} from "../../../types";
 import { iso, nightsOf } from "./util";
 
 // Shared query shapes + mappers for owner/admin booking & payment reporting, so
@@ -7,6 +14,7 @@ import { iso, nightsOf } from "./util";
 
 export const bookingRowInclude = Prisma.validator<Prisma.BookingInclude>()({
   payment: true,
+  payout: { select: { status: true } },
   roomUnit: {
     include: {
       roomType: {
@@ -20,6 +28,20 @@ export type BookingRowData = Prisma.BookingGetPayload<{ include: typeof bookingR
 export function toBookingRow(b: BookingRowData): BookingRow {
   const roomType = b.roomUnit.roomType;
   const nights = nightsOf(iso(b.checkIn), iso(b.checkOut)).length;
+  const payment = b.payment;
+  // Prefer explicit accounting fields; fall back to the compat `amount`/base price
+  // so pre-Phase-A rows still render coherently.
+  const grossAmountKobo = payment
+    ? payment.grossAmountKobo > 0
+      ? payment.grossAmountKobo
+      : payment.amount
+    : roomType.basePriceKobo * nights;
+  const platformFeeKobo = payment?.platformFeeKobo ?? 0;
+  const ownerPayoutKobo = payment
+    ? payment.ownerPayoutKobo > 0
+      ? payment.ownerPayoutKobo
+      : grossAmountKobo - platformFeeKobo
+    : grossAmountKobo;
   return {
     id: b.id,
     status: b.status as BookingStatus,
@@ -30,15 +52,20 @@ export function toBookingRow(b: BookingRowData): BookingRow {
     checkIn: iso(b.checkIn),
     checkOut: iso(b.checkOut),
     nights,
-    amountKobo: b.payment?.amount ?? roomType.basePriceKobo * nights,
-    currency: b.payment?.currency ?? "NGN",
-    paymentStatus: (b.payment?.status ?? "PENDING") as PaymentState,
-    paymentReference: b.payment?.reference ?? null,
+    amountKobo: grossAmountKobo, // COMPAT: gross
+    grossAmountKobo,
+    platformFeeKobo,
+    ownerPayoutKobo,
+    currency: payment?.currency ?? "NGN",
+    paymentStatus: (payment?.status ?? "PENDING") as PaymentState,
+    paymentReference: payment?.reference ?? null,
+    payoutStatus: (b.payout?.status ?? null) as PayoutStatusValue | null,
     createdAt: b.createdAt.toISOString(),
   };
 }
 
 export const paymentRowInclude = Prisma.validator<Prisma.PaymentInclude>()({
+  payout: { select: { status: true } },
   booking: {
     include: {
       roomUnit: { include: { roomType: { include: { property: { select: { name: true } } } } } },
@@ -48,14 +75,57 @@ export const paymentRowInclude = Prisma.validator<Prisma.PaymentInclude>()({
 export type PaymentRowData = Prisma.PaymentGetPayload<{ include: typeof paymentRowInclude }>;
 
 export function toPaymentRow(p: PaymentRowData): AdminPaymentRow {
+  const grossAmountKobo = p.grossAmountKobo > 0 ? p.grossAmountKobo : p.amount;
+  const ownerPayoutKobo = p.ownerPayoutKobo > 0 ? p.ownerPayoutKobo : grossAmountKobo - p.platformFeeKobo;
   return {
     reference: p.reference,
     bookingId: p.bookingId,
     propertyName: p.booking.roomUnit.roomType.property.name,
-    amountKobo: p.amount,
+    amountKobo: grossAmountKobo, // COMPAT: gross
+    grossAmountKobo,
+    platformFeeKobo: p.platformFeeKobo,
+    ownerPayoutKobo,
     currency: p.currency,
     provider: p.provider,
     status: p.status as PaymentState,
+    paidAt: p.paidAt ? p.paidAt.toISOString() : null,
+    payoutStatus: (p.payout?.status ?? null) as PayoutStatusValue | null,
+    createdAt: p.createdAt.toISOString(),
+  };
+}
+
+// --- Phase A: admin payout queue ---
+
+export const payoutRowInclude = Prisma.validator<Prisma.PayoutInclude>()({
+  payment: {
+    select: {
+      reference: true,
+      grossAmountKobo: true,
+      platformFeeKobo: true,
+    },
+  },
+  property: { select: { name: true, city: { select: { name: true } } } },
+  owner: { select: { name: true, email: true } },
+});
+export type PayoutRowData = Prisma.PayoutGetPayload<{ include: typeof payoutRowInclude }>;
+
+export function toPayoutRow(p: PayoutRowData): AdminPayoutRow {
+  return {
+    id: p.id,
+    bookingId: p.bookingId,
+    paymentReference: p.payment.reference,
+    propertyName: p.property.name,
+    cityName: p.property.city.name,
+    ownerName: p.owner.name,
+    ownerEmail: p.owner.email,
+    grossAmountKobo: p.payment.grossAmountKobo,
+    platformFeeKobo: p.payment.platformFeeKobo,
+    ownerPayoutKobo: p.amount,
+    currency: p.currency,
+    status: p.status as PayoutStatusValue,
+    eligibleAt: p.eligibleAt.toISOString(),
+    approvedAt: p.approvedAt ? p.approvedAt.toISOString() : null,
+    paidAt: p.paidAt ? p.paidAt.toISOString() : null,
     createdAt: p.createdAt.toISOString(),
   };
 }

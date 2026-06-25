@@ -48,6 +48,23 @@ export class AdminController {
     return this.admin.bookingsOverview();
   }
 
+  // --- Phase A: owner payout settlement (manual) ---
+
+  @Get("payouts")
+  async payouts(
+    @Headers("cookie") cookie: string | undefined,  ) {
+    await this.auth.requireAdmin(cookie);
+    return this.admin.payoutQueue();
+  }
+
+  @Post("payouts/:id/paid")
+  async markPayoutPaid(
+    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
+  ) {
+    const admin = await this.auth.requireAdmin(cookie);
+    return this.admin.markPayoutPaid(admin, id);
+  }
+
   @Get("audit-logs")
   async auditLogs(
     @Headers("cookie") cookie: string | undefined,  ) {

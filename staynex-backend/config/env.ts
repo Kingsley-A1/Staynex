@@ -27,6 +27,9 @@ export const envSchema = z.object({
   PAYSTACK_PUBLIC_KEY: optionalString,
   // Public base URL of the web app, used for the Paystack payment callback.
   NEXT_PUBLIC_APP_URL: optionalString,
+  // Platform commission in basis points (1 bps = 0.01%; 1000 = 10%). Snapshotted
+  // onto each payment at checkout. Defaults to 10% when unset.
+  PLATFORM_COMMISSION_BPS: z.coerce.number().int().min(0).max(10000).default(1000),
   // Email (Resend). Optional so the API boots without it; NotificationsService
   // degrades to a logged "queued, not sent" state when unconfigured.
   RESEND_API_KEY: optionalString,

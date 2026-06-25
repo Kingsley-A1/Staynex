@@ -19,12 +19,14 @@ import type {
 } from "../../../types";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PaystackService } from "../payments/paystack.service";
+import { resolveCommissionBps, splitPayment } from "../payments/commission";
 import type { CheckoutInput, QuoteInput } from "./dto";
 import { iso, nightsOf } from "./util";
 
 const CURRENCY = "NGN";
 const HOLD_TTL_MS = 15 * 60_000; // booking holds expire after 15 minutes
 const PENDING_BOOKING_TTL_MS = 20 * 60_000; // abandoned pending payments release after 20 minutes
+const PAYOUT_ELIGIBLE_AFTER_MS = 24 * 60 * 60_000; // owner payout becomes eligible 24h after check-in
 
 /**
  * Booking-loop authority: availability, holds, checkout, and the
@@ -148,6 +150,9 @@ export class BookingsService {
       }
 
       const totalKobo = roomType.basePriceKobo * nights.length;
+      // Snapshot the commission split now so historical accounting is immutable
+      // even if the platform rate later changes.
+      const split = splitPayment(totalKobo, resolveCommissionBps());
       const booking = await tx.booking.create({
         data: {
           roomUnitId: hold.roomUnitId,
@@ -161,7 +166,11 @@ export class BookingsService {
       await tx.payment.create({
         data: {
           bookingId: booking.id,
-          amount: totalKobo,
+          amount: totalKobo, // COMPAT mirror of grossAmountKobo
+          grossAmountKobo: split.grossAmountKobo,
+          platformFeeKobo: split.platformFeeKobo,
+          ownerPayoutKobo: split.ownerPayoutKobo,
+          commissionRateBps: split.commissionRateBps,
           currency: CURRENCY,
           provider: "paystack",
           reference,
@@ -193,7 +202,17 @@ export class BookingsService {
     const confirmedBookingId = await prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
         where: { reference },
-        include: { booking: { include: { roomUnit: { select: { roomTypeId: true } } } } },
+        include: {
+          booking: {
+            include: {
+              roomUnit: {
+                include: {
+                  roomType: { select: { id: true, property: { select: { id: true, ownerId: true } } } },
+                },
+              },
+            },
+          },
+        },
       });
       if (!payment) return null; // unknown reference — ignore
       if (payment.status === "SUCCESS") return null; // idempotent
@@ -202,27 +221,58 @@ export class BookingsService {
       const booking = payment.booking;
       if (booking.status !== "PENDING_PAYMENT") return null;
 
+      const roomTypeId = booking.roomUnit.roomType.id;
+      const property = booking.roomUnit.roomType.property;
       const nights = nightsOf(iso(booking.checkIn), iso(booking.checkOut));
-      const underpaid = paidAmountKobo != null && paidAmountKobo < payment.amount;
+      // Prefer the canonical gross; fall back to the compat `amount` for pre-Phase-A rows.
+      const expectedKobo = payment.grossAmountKobo > 0 ? payment.grossAmountKobo : payment.amount;
+      const underpaid = paidAmountKobo != null && paidAmountKobo < expectedKobo;
 
       if (underpaid) {
         if (booking.status === "PENDING_PAYMENT") {
           await tx.availabilityCalendar.updateMany({
-            where: { roomTypeId: booking.roomUnit.roomTypeId, date: { in: nights }, heldUnits: { gt: 0 } },
+            where: { roomTypeId, date: { in: nights }, heldUnits: { gt: 0 } },
             data: { heldUnits: { decrement: 1 } },
           });
           await tx.booking.update({ where: { id: booking.id }, data: { status: "CANCELLED" } });
         }
+        // Underpaid never confirms and never creates a payout.
         await tx.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } });
         return null;
       }
 
       await tx.availabilityCalendar.updateMany({
-        where: { roomTypeId: booking.roomUnit.roomTypeId, date: { in: nights }, heldUnits: { gt: 0 } },
+        where: { roomTypeId, date: { in: nights }, heldUnits: { gt: 0 } },
         data: { heldUnits: { decrement: 1 }, bookedUnits: { increment: 1 } },
       });
-      await tx.payment.update({ where: { id: payment.id }, data: { status: "SUCCESS" } });
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { status: "SUCCESS", paidAt: new Date() },
+      });
       await tx.booking.update({ where: { id: booking.id }, data: { status: "CONFIRMED" } });
+
+      // Owner settlement: one PENDING payout per successful payment. Eligible to
+      // settle 24h after check-in. `upsert` on the unique paymentId keeps this
+      // idempotent under webhook + status-sync double delivery.
+      const ownerPayoutKobo =
+        payment.ownerPayoutKobo > 0
+          ? payment.ownerPayoutKobo
+          : splitPayment(expectedKobo, payment.commissionRateBps || resolveCommissionBps())
+              .ownerPayoutKobo;
+      await tx.payout.upsert({
+        where: { paymentId: payment.id },
+        create: {
+          bookingId: booking.id,
+          paymentId: payment.id,
+          ownerId: property.ownerId,
+          propertyId: property.id,
+          amount: ownerPayoutKobo,
+          currency: payment.currency,
+          status: "PENDING",
+          eligibleAt: new Date(booking.checkIn.getTime() + PAYOUT_ELIGIBLE_AFTER_MS),
+        },
+        update: {},
+      });
       return booking.id;
     });
 

@@ -156,7 +156,15 @@ export interface BookingView {
 
 // --- Phase 4: dashboards, notifications, AI logs ---
 
-/** A booking row for owner/admin lists. Guest fields are nullable (anonymous). */
+/** Payout lifecycle (owner settlement of a successful payment). */
+export type PayoutStatusValue = "PENDING" | "PROCESSING" | "PAID" | "FAILED";
+
+/**
+ * A booking row for owner/admin lists. Guest fields are nullable (anonymous).
+ * Money is split: `grossAmountKobo` (guest charge) = `platformFeeKobo` (Staynex
+ * commission) + `ownerPayoutKobo` (owner net). `amountKobo` is kept as a COMPAT
+ * mirror of gross. `payoutStatus` is null until a payout exists.
+ */
 export interface BookingRow {
   id: string;
   status: BookingStatus;
@@ -168,9 +176,13 @@ export interface BookingRow {
   checkOut: string;
   nights: number;
   amountKobo: number;
+  grossAmountKobo: number;
+  platformFeeKobo: number;
+  ownerPayoutKobo: number;
   currency: string;
   paymentStatus: PaymentState;
   paymentReference: string | null;
+  payoutStatus: PayoutStatusValue | null;
   createdAt: string;
 }
 
@@ -178,7 +190,10 @@ export interface OwnerBookingKpis {
   confirmedBookings: number;
   pendingPayments: number;
   availableRooms: number;
-  estimatedEarningsKobo: number;
+  /** Net owner earnings after commission, from SUCCESS payments (kobo). */
+  netEarningsKobo: number;
+  /** Owed but not yet settled to the owner (PENDING/PROCESSING payouts, kobo). */
+  pendingPayoutKobo: number;
   currency: string;
 }
 
@@ -192,15 +207,55 @@ export interface AdminPaymentRow {
   bookingId: string;
   propertyName: string;
   amountKobo: number;
+  grossAmountKobo: number;
+  platformFeeKobo: number;
+  ownerPayoutKobo: number;
   currency: string;
   provider: string | null;
   status: PaymentState;
+  paidAt: string | null;
+  payoutStatus: PayoutStatusValue | null;
   createdAt: string;
 }
 
 export interface AdminBookingsView {
   bookings: BookingRow[];
   payments: AdminPaymentRow[];
+}
+
+/** A row in the admin payout (owner settlement) queue. */
+export interface AdminPayoutRow {
+  id: string;
+  bookingId: string;
+  paymentReference: string | null;
+  propertyName: string;
+  cityName: string;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  grossAmountKobo: number;
+  platformFeeKobo: number;
+  ownerPayoutKobo: number;
+  currency: string;
+  status: PayoutStatusValue;
+  /** When the payout becomes eligible to settle (checkIn + 24h). */
+  eligibleAt: string;
+  approvedAt: string | null;
+  paidAt: string | null;
+  createdAt: string;
+}
+
+/** Platform-wide settlement totals (kobo). */
+export interface PayoutTotals {
+  grossRevenueKobo: number;
+  platformCommissionKobo: number;
+  ownerPayoutKobo: number;
+  pendingPayoutKobo: number;
+  paidPayoutKobo: number;
+}
+
+export interface AdminPayoutsView {
+  payouts: AdminPayoutRow[];
+  totals: PayoutTotals;
 }
 
 export interface AuditLogRow {

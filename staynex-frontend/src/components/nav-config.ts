@@ -24,6 +24,7 @@ export const OWNER_NAV: NavItem[] = [
 export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/approvals", label: "Approvals" },
   { href: "/admin/bookings", label: "Bookings & payments" },
+  { href: "/admin/payouts", label: "Payouts" },
   { href: "/admin/testimonials", label: "Testimonials" },
   { href: "/admin/audit", label: "Audit log" },
   { href: "/admin/ai-logs", label: "AI logs" },

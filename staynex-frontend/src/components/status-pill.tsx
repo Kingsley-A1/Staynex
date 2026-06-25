@@ -2,8 +2,10 @@ import { Badge } from "@/ui";
 import {
   BOOKING_STATUS_LABELS,
   PAYMENT_STATE_LABELS,
+  PAYOUT_STATUS_LABELS,
   type BookingStatus,
   type PaymentState,
+  type PayoutStatusValue,
 } from "@/lib/types";
 
 const BOOKING_STYLES: Record<BookingStatus, string> = {
@@ -28,4 +30,16 @@ export function BookingStatusBadge({ status }: { status: BookingStatus }) {
 
 export function PaymentStatusBadge({ status }: { status: PaymentState }) {
   return <Badge className={PAYMENT_STYLES[status]}>{PAYMENT_STATE_LABELS[status]}</Badge>;
+}
+
+const PAYOUT_STYLES: Record<PayoutStatusValue, string> = {
+  PENDING: "border-warning-border bg-warning-surface text-warning",
+  PROCESSING: "border-border bg-secondary text-secondary-foreground",
+  PAID: "border-success-border bg-success-surface text-success",
+  FAILED: "border-error-border bg-error-surface text-error",
+};
+
+export function PayoutStatusBadge({ status }: { status: PayoutStatusValue | null }) {
+  if (!status) return <span className="text-muted-foreground">—</span>;
+  return <Badge className={PAYOUT_STYLES[status]}>{PAYOUT_STATUS_LABELS[status]}</Badge>;
 }

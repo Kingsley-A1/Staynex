@@ -1,5 +1,9 @@
 import { LinkButton } from "@/ui";
-import { BookingStatusBadge, PaymentStatusBadge } from "@/components/status-pill";
+import {
+  BookingStatusBadge,
+  PaymentStatusBadge,
+  PayoutStatusBadge,
+} from "@/components/status-pill";
 import { getOwnerBooking } from "@/lib/server-reports";
 import { formatNairaFromKobo, formatDate } from "@/lib/format";
 
@@ -61,10 +65,30 @@ export default async function OwnerBookingDetailPage({
           })`}
         />
         <Row label="Guest" value={booking.guestEmail ?? "—"} />
-        <Row label="Amount" value={formatNairaFromKobo(booking.amountKobo)} />
         <Row label="Reference" value={booking.paymentReference ?? "—"} />
         <Row label="Created" value={formatDate(booking.createdAt)} />
       </div>
+
+      <section className="space-y-2">
+        <h2 className="text-title-sm text-ink">Settlement</h2>
+        <div className="surface-card divide-y divide-border px-5 py-2 text-sm">
+          <Row label="Guest paid (gross)" value={formatNairaFromKobo(booking.grossAmountKobo)} />
+          <Row label="Platform fee" value={`− ${formatNairaFromKobo(booking.platformFeeKobo)}`} />
+          <div className="flex justify-between gap-4 py-2">
+            <span className="font-medium text-ink">Your payout</span>
+            <span className="text-right font-semibold text-ink">
+              {formatNairaFromKobo(booking.ownerPayoutKobo)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-4 py-2">
+            <span className="text-muted-foreground">Payout status</span>
+            <PayoutStatusBadge status={booking.payoutStatus} />
+          </div>
+        </div>
+        <p className="text-caption">
+          Payouts are settled after check-in. Net of the Staynex platform fee.
+        </p>
+      </section>
     </div>
   );
 }

@@ -6,8 +6,10 @@
 // `{ data: null, offline: true }` so pages render an honest "couldn't load" state.
 
 import { cookies } from "next/headers";
+import { API_BASE } from "@/lib/api-base";
 import type {
   AdminBookingsView,
+  AdminPayoutsView,
   AdminTestimonialRow,
   AiLogRow,
   AreaOption,
@@ -15,8 +17,6 @@ import type {
   BookingRow,
   OwnerBookingsView,
 } from "@/lib/types";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export interface Loaded<T> {
   data: T | null;
@@ -48,6 +48,8 @@ export const getOwnerBookings = () => load<OwnerBookingsView>("/owner/bookings")
 export const getOwnerBooking = (id: string) => load<BookingRow>(`/owner/bookings/${id}`);
 
 export const getAdminBookings = () => load<AdminBookingsView>("/admin/bookings");
+
+export const getAdminPayouts = () => load<AdminPayoutsView>("/admin/payouts");
 
 export const getAuditLogs = () => load<AuditLogRow[]>("/admin/audit-logs");
 

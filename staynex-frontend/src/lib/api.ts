@@ -4,6 +4,8 @@
 
 import type {
   AdminBookingsView,
+  AdminPayoutRow,
+  AdminPayoutsView,
   AdminTestimonialRow,
   AgentConversation,
   AgentMessage,
@@ -28,8 +30,7 @@ import type {
   PropertySummary,
   PublicTestimonial,
 } from "@/lib/types";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+import { API_BASE } from "@/lib/api-base";
 
 type RequestOptions = RequestInit;
 
@@ -120,6 +121,9 @@ export const adminApi = {
       body: JSON.stringify(body),
     }),
   bookings: () => request<AdminBookingsView>("/admin/bookings"),
+  payouts: () => request<AdminPayoutsView>("/admin/payouts"),
+  markPayoutPaid: (id: string) =>
+    request<AdminPayoutRow>(`/admin/payouts/${id}/paid`, { method: "POST" }),
   auditLogs: () => request<AuditLogRow[]>("/admin/audit-logs"),
   aiLogs: () => request<AiLogRow[]>("/admin/ai-logs"),
   testimonials: (status?: string) =>

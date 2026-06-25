@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { KpiCard } from "@/ui";
-import { BookingStatusBadge, PaymentStatusBadge } from "@/components/status-pill";
+import { BookingStatusBadge, PaymentStatusBadge, PayoutStatusBadge } from "@/components/status-pill";
 import { getOwnerBookings } from "@/lib/server-reports";
 import { formatNairaFromKobo, formatDate } from "@/lib/format";
 
@@ -28,11 +28,15 @@ export default async function OwnerBookingsPage() {
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <KpiCard label="Confirmed bookings" value={String(data.kpis.confirmedBookings)} />
             <KpiCard label="Pending payments" value={String(data.kpis.pendingPayments)} />
-            <KpiCard label="Available rooms" value={String(data.kpis.availableRooms)} />
             <KpiCard
-              label="Est. earnings"
-              value={formatNairaFromKobo(data.kpis.estimatedEarningsKobo)}
-              hint="Confirmed payments"
+              label="Net earnings"
+              value={formatNairaFromKobo(data.kpis.netEarningsKobo)}
+              hint="Paid, after platform fee"
+            />
+            <KpiCard
+              label="Pending payout"
+              value={formatNairaFromKobo(data.kpis.pendingPayoutKobo)}
+              hint="Awaiting settlement"
             />
           </div>
 
@@ -60,12 +64,16 @@ export default async function OwnerBookingsPage() {
                           {b.guestEmail ? ` · ${b.guestEmail}` : ""}
                         </p>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-ink">
-                          {formatNairaFromKobo(b.amountKobo)}
-                        </span>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="text-right">
+                          <p className="font-semibold text-ink">
+                            {formatNairaFromKobo(b.ownerPayoutKobo)}
+                          </p>
+                          <p className="text-caption">{formatNairaFromKobo(b.grossAmountKobo)} gross</p>
+                        </div>
                         <BookingStatusBadge status={b.status} />
                         <PaymentStatusBadge status={b.paymentStatus} />
+                        <PayoutStatusBadge status={b.payoutStatus} />
                       </div>
                     </Link>
                   </li>

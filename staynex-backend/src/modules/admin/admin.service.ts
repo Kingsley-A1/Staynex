@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { prisma } from "../../../db";
 import type {
   AdminBookingsView,
+  AdminPayoutRow,
+  AdminPayoutsView,
   AuthUser,
   AiLogRow,
   ApprovalActionResult,
@@ -13,8 +15,10 @@ import type {
 import {
   bookingRowInclude,
   paymentRowInclude,
+  payoutRowInclude,
   toBookingRow,
   toPaymentRow,
+  toPayoutRow,
 } from "../bookings/report-mappers";
 import {
   propertyDetailInclude,
@@ -114,6 +118,78 @@ export class AdminService {
       }),
     ]);
     return { bookings: bookings.map(toBookingRow), payments: payments.map(toPaymentRow) };
+  }
+
+  // --- Phase A: owner payout settlement (manual) ---------------------------
+
+  /** Payout queue + platform accounting totals. Read-only view. */
+  async payoutQueue(): Promise<AdminPayoutsView> {
+    const [payouts, paymentTotals, payoutByStatus] = await Promise.all([
+      prisma.payout.findMany({
+        orderBy: [{ status: "asc" }, { eligibleAt: "asc" }],
+        take: 100,
+        include: payoutRowInclude,
+      }),
+      prisma.payment.aggregate({
+        _sum: { grossAmountKobo: true, platformFeeKobo: true, ownerPayoutKobo: true },
+        where: { status: "SUCCESS" },
+      }),
+      prisma.payout.groupBy({ by: ["status"], _sum: { amount: true } }),
+    ]);
+
+    let pendingPayoutKobo = 0;
+    let paidPayoutKobo = 0;
+    for (const group of payoutByStatus) {
+      const sum = group._sum.amount ?? 0;
+      if (group.status === "PENDING" || group.status === "PROCESSING") pendingPayoutKobo += sum;
+      else if (group.status === "PAID") paidPayoutKobo += sum;
+    }
+
+    return {
+      payouts: payouts.map(toPayoutRow),
+      totals: {
+        grossRevenueKobo: paymentTotals._sum.grossAmountKobo ?? 0,
+        platformCommissionKobo: paymentTotals._sum.platformFeeKobo ?? 0,
+        ownerPayoutKobo: paymentTotals._sum.ownerPayoutKobo ?? 0,
+        pendingPayoutKobo,
+        paidPayoutKobo,
+      },
+    };
+  }
+
+  /**
+   * Manually mark a payout as settled (Phase A: paid out-of-band by an admin).
+   * Every settlement is an admin override and is audited (skill.md §9).
+   */
+  async markPayoutPaid(admin: AuthUser, payoutId: string): Promise<AdminPayoutRow> {
+    const existing = await prisma.payout.findUnique({
+      where: { id: payoutId },
+      select: { id: true, status: true, propertyId: true },
+    });
+    if (!existing) throw new NotFoundException("Payout not found");
+    if (existing.status === "PAID") throw new BadRequestException("Payout is already marked paid");
+    if (existing.status === "FAILED") throw new BadRequestException("This payout is marked failed");
+
+    const now = new Date();
+    const updated = await prisma.$transaction(async (tx) => {
+      const next = await tx.payout.update({
+        where: { id: payoutId },
+        data: { status: "PAID", approvedAt: now, paidAt: now, processedByUserId: admin.id },
+        include: payoutRowInclude,
+      });
+      await this.audit.record(
+        {
+          actorUserId: auditActorId(admin),
+          action: "PAYOUT_MARKED_PAID",
+          entityType: "Payout",
+          entityId: payoutId,
+          propertyId: existing.propertyId,
+        },
+        tx,
+      );
+      return next;
+    });
+    return toPayoutRow(updated);
   }
 
   /** Audit trail (admin overrides). */
