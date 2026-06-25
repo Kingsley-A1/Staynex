@@ -1,46 +1,59 @@
 import { z } from "zod";
 
+function normalizeOptionalString(value: unknown) {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+const requiredString = z.preprocess(
+  (value) => (typeof value === "string" ? value.trim() : value),
+  z.string().min(1),
+);
+
+const optionalString = z.preprocess(normalizeOptionalString, z.string().optional());
+
 /**
  * Backend environment contract. Keep this in sync with the root `.env.example`.
  * Validated once at boot via `loadEnv()` so the API fails fast on misconfig.
  */
 export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  DATABASE_URL: requiredString,
   API_PORT: z.coerce.number().int().positive().default(4000),
-  CORS_ORIGIN: z.string().optional(),
+  CORS_ORIGIN: optionalString,
   // Payments (optional so the API boots in dev; PaystackService fails clearly if used unconfigured).
-  PAYSTACK_SECRET_KEY: z.string().optional(),
-  PAYSTACK_PUBLIC_KEY: z.string().optional(),
+  PAYSTACK_SECRET_KEY: optionalString,
+  PAYSTACK_PUBLIC_KEY: optionalString,
   // Public base URL of the web app, used for the Paystack payment callback.
-  NEXT_PUBLIC_APP_URL: z.string().optional(),
+  NEXT_PUBLIC_APP_URL: optionalString,
   // Email (Resend). Optional so the API boots without it; NotificationsService
   // degrades to a logged "queued, not sent" state when unconfigured.
-  RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().optional(),
+  RESEND_API_KEY: optionalString,
+  EMAIL_FROM: optionalString,
   // Push (Firebase Cloud Messaging). Foundation only — push is a documented
   // placeholder until these are provided.
-  FCM_SERVER_KEY: z.string().optional(),
-  FIREBASE_PROJECT_ID: z.string().optional(),
+  FCM_SERVER_KEY: optionalString,
+  FIREBASE_PROJECT_ID: optionalString,
   // AI assistant (Google Gemini). Optional; AiModule fails gracefully (clear
   // "unavailable" state) when missing.
-  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: optionalString,
   // 6-digit access codes. Backend derives admin privilege from the code;
   // the client never chooses its own admin role.
-  ADMIN_REVIEWER_ACCESS_CODE: z
-    .string()
-    .regex(/^\d{6}$/, "ADMIN_REVIEWER_ACCESS_CODE must be 6 digits")
-    .optional(),
-  ADMIN_MANAGER_ACCESS_CODE: z
-    .string()
-    .regex(/^\d{6}$/, "ADMIN_MANAGER_ACCESS_CODE must be 6 digits")
-    .optional(),
+  ADMIN_REVIEWER_ACCESS_CODE: z.preprocess(
+    normalizeOptionalString,
+    z.string().regex(/^\d{6}$/, "ADMIN_REVIEWER_ACCESS_CODE must be 6 digits").optional(),
+  ),
+  ADMIN_MANAGER_ACCESS_CODE: z.preprocess(
+    normalizeOptionalString,
+    z.string().regex(/^\d{6}$/, "ADMIN_MANAGER_ACCESS_CODE must be 6 digits").optional(),
+  ),
   // Set in production so session cookies are marked Secure.
-  COOKIE_DOMAIN: z.string().optional(),
+  COOKIE_DOMAIN: optionalString,
   // Google OAuth. The agent verifies the Google ID token's `aud` against this.
   // GOOGLE_CLIENT_SECRET is only needed for the auth-code flow (not used here).
-  GOOGLE_CLIENT_ID: z.string().optional(),
-  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_CLIENT_ID: optionalString,
+  GOOGLE_CLIENT_SECRET: optionalString,
 });
 
 export type Env = z.infer<typeof envSchema>;
