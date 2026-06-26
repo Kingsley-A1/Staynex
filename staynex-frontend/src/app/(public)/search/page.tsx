@@ -13,10 +13,19 @@ export default async function SearchPage({
     area?: string;
     checkIn?: string;
     checkOut?: string;
+    checkin?: string;
+    checkout?: string;
     guests?: string;
   }>;
 }) {
-  const sp = await searchParams;
+  const raw = await searchParams;
+  const sp = {
+    city: raw.city,
+    area: raw.area,
+    checkIn: raw.checkIn ?? raw.checkin,
+    checkOut: raw.checkOut ?? raw.checkout,
+    guests: raw.guests,
+  };
   const city = (sp.city ?? "").trim();
 
   const detailQs = new URLSearchParams();
@@ -44,7 +53,9 @@ export default async function SearchPage({
       <SearchPanel defaults={sp} />
 
       <header>
-        <h1 className="text-title-lg text-ink">{city ? `Stays in ${city}` : "Search stays"}</h1>
+        <h1 className="text-title-lg text-ink">
+          {city ? `Stays in ${city}` : "Search stays"}
+        </h1>
         <p className="text-muted-foreground">
           {city
             ? `${items.length} result${items.length === 1 ? "" : "s"}`

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { SearchPanel } from "@/features/booking/search-panel";
 import { TestimonialsSection } from "@/features/reviews/testimonials-section";
 
 export const metadata: Metadata = {
@@ -14,13 +14,15 @@ export const metadata: Metadata = {
    Demo data (mock). Kept here for the landing page; promote to a centralized
    fixtures module (per project standard §10) once shared across surfaces.
    --------------------------------------------------------------------------- */
-const LAUNCH_CITIES = ["Calabar", "Uyo", "Port Harcourt", "Lagos", "Abuja"];
-
 const DESTINATIONS = [
   { city: "Calabar", stays: 128, gradient: "from-indigo-500 to-indigo-800" },
   { city: "Lagos", stays: 210, gradient: "from-indigo-600 to-indigo-900" },
   { city: "Abuja", stays: 156, gradient: "from-neutral-600 to-neutral-900" },
-  { city: "Port Harcourt", stays: 92, gradient: "from-indigo-400 to-indigo-700" },
+  {
+    city: "Port Harcourt",
+    stays: 92,
+    gradient: "from-indigo-400 to-indigo-700",
+  },
   { city: "Uyo", stays: 64, gradient: "from-indigo-500 to-neutral-800" },
 ];
 
@@ -92,7 +94,10 @@ const FEATURES = [
 
 const naira = (n: number) => `₦${n.toLocaleString("en-NG")}`;
 const slug = (s: string) =>
-  s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 
 /* ============================================================================
    Page
@@ -134,7 +139,10 @@ function SiteHeader() {
           <Link href="/search" className="transition-colors hover:text-ink">
             Destinations
           </Link>
-          <Link href="/list-your-property" className="transition-colors hover:text-ink">
+          <Link
+            href="/list-your-property"
+            className="transition-colors hover:text-ink"
+          >
             List your property
           </Link>
         </nav>
@@ -183,85 +191,24 @@ function Hero() {
           </p>
         </div>
 
-        <SearchBar />
+        <div className="mx-auto mt-10 max-w-4xl">
+          <SearchPanel />
+        </div>
 
         <ul className="mx-auto mt-6 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-          {["Secure Paystack payments", "Verified properties", "Instant confirmation"].map(
-            (t) => (
-              <li key={t} className="inline-flex items-center gap-1.5">
-                <IconCheck className="size-4 text-success" />
-                {t}
-              </li>
-            ),
-          )}
+          {[
+            "Secure Paystack payments",
+            "Verified properties",
+            "Instant confirmation",
+          ].map((t) => (
+            <li key={t} className="inline-flex items-center gap-1.5">
+              <IconCheck className="size-4 text-success" />
+              {t}
+            </li>
+          ))}
         </ul>
       </div>
     </section>
-  );
-}
-
-function SearchBar() {
-  return (
-    <form
-      action="/search"
-      className="mx-auto mt-10 max-w-4xl rounded-2xl border border-border bg-card p-3 shadow-lg sm:p-4"
-    >
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_0.9fr_auto] lg:items-end">
-        <Field label="Where to">
-          <div className="relative">
-            <IconPin className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <select name="city" defaultValue="" className={`${control} pl-9`}>
-              <option value="" disabled>
-                Select a city
-              </option>
-              {LAUNCH_CITIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-        </Field>
-
-        <Field label="Check in">
-          <input type="date" name="checkin" className={control} aria-label="Check-in date" />
-        </Field>
-
-        <Field label="Check out">
-          <input type="date" name="checkout" className={control} aria-label="Check-out date" />
-        </Field>
-
-        <Field label="Guests">
-          <select name="guests" defaultValue="2" className={control}>
-            {[1, 2, 3, 4, 5, 6].map((n) => (
-              <option key={n} value={n}>
-                {n} {n === 1 ? "guest" : "guests"}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <button
-          type="submit"
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-6 font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover active:bg-primary-active"
-        >
-          <IconSearch className="size-4" />
-          <span>Search</span>
-        </button>
-      </div>
-    </form>
-  );
-}
-
-const control =
-  "h-11 w-full rounded-md border border-input bg-surface-raised px-3 text-sm text-ink transition-colors focus-visible:border-primary";
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-overline">{label}</span>
-      {children}
-    </label>
   );
 }
 
@@ -285,7 +232,9 @@ function Destinations() {
             className="group relative block aspect-[4/5] overflow-hidden rounded-lg"
           >
             {/* Gradient is the fallback behind the real city photo */}
-            <div className={`absolute inset-0 bg-gradient-to-br ${d.gradient}`} />
+            <div
+              className={`absolute inset-0 bg-gradient-to-br ${d.gradient}`}
+            />
             <Image
               src={`/assets/destinations/${slug(d.city)}.jpg`}
               alt={`${d.city}, Nigeria`}
@@ -364,7 +313,9 @@ function StayCard({ stay }: { stay: (typeof STAYS)[number] }) {
         <div className="mt-3 flex items-center gap-1.5 text-sm">
           <IconStar className="size-4 text-warning" />
           <span className="font-semibold text-ink">{stay.rating}</span>
-          <span className="text-muted-foreground">· {stay.reviews} reviews</span>
+          <span className="text-muted-foreground">
+            · {stay.reviews} reviews
+          </span>
         </div>
 
         <div className="mt-4 flex items-end justify-between border-t border-border pt-3">
@@ -391,8 +342,8 @@ function ValueProps() {
       <div className="mx-auto max-w-2xl text-center">
         <h2 className="text-title-lg text-ink">Why book with Staynex</h2>
         <p className="mt-2 text-muted-foreground">
-          A real booking engine built to be secure by default and low-friction by
-          design.
+          A real booking engine built to be secure by default and low-friction
+          by design.
         </p>
       </div>
       <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -448,9 +399,29 @@ function OwnerCta() {
    ========================================================================== */
 function SiteFooter() {
   const cols = [
-    { title: "Explore", links: [["Stays", "/search"], ["Destinations", "/search"], ["Featured", "/search"]] },
-    { title: "Company", links: [["About", "/about"], ["List your property", "/list-your-property"]] },
-    { title: "Legal", links: [["Terms", "/terms"], ["Policies", "/policies"], ["Legal", "/legal"]] },
+    {
+      title: "Explore",
+      links: [
+        ["Stays", "/search"],
+        ["Destinations", "/search"],
+        ["Featured", "/search"],
+      ],
+    },
+    {
+      title: "Company",
+      links: [
+        ["About", "/about"],
+        ["List your property", "/list-your-property"],
+      ],
+    },
+    {
+      title: "Legal",
+      links: [
+        ["Terms", "/terms"],
+        ["Policies", "/policies"],
+        ["Legal", "/legal"],
+      ],
+    },
   ] as const;
 
   return (
@@ -458,7 +429,11 @@ function SiteFooter() {
       <div className="layout-container py-12">
         <div className="grid grid-cols-2 gap-8 sm:grid-cols-2 lg:grid-cols-5">
           <div className="col-span-2 lg:col-span-2">
-            <Link href="/" className="inline-flex items-center" aria-label="Staynex home">
+            <Link
+              href="/"
+              className="inline-flex items-center"
+              aria-label="Staynex home"
+            >
               <Brandmark />
             </Link>
             <p className="mt-3 max-w-xs text-body-sm text-muted-foreground">
@@ -560,14 +535,6 @@ const svg = (className?: string) => ({
   "aria-hidden": true,
 });
 
-function IconSearch({ className }: IconProps) {
-  return (
-    <svg {...svg(className)}>
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-3.5-3.5" />
-    </svg>
-  );
-}
 function IconPin({ className }: IconProps) {
   return (
     <svg {...svg(className)}>
