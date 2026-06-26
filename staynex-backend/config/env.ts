@@ -81,16 +81,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     throw new Error(`Invalid environment variables:\n${issues}`);
   }
   const { ADMIN_REVIEWER_ACCESS_CODE, ADMIN_MANAGER_ACCESS_CODE } = parsed.data;
-  if (parsed.data.NODE_ENV === "production") {
-    const missing: string[] = [];
-    if (!ADMIN_REVIEWER_ACCESS_CODE) missing.push("ADMIN_REVIEWER_ACCESS_CODE");
-    if (!ADMIN_MANAGER_ACCESS_CODE) missing.push("ADMIN_MANAGER_ACCESS_CODE");
-    if (missing.length > 0) {
-      throw new Error(
-        `Invalid environment variables:\n${missing.map((name) => `  - ${name}: required in production`).join("\n")}`,
-      );
-    }
-  }
   if (
     ADMIN_REVIEWER_ACCESS_CODE &&
     ADMIN_MANAGER_ACCESS_CODE &&
