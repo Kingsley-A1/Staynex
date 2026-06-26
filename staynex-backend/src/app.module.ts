@@ -7,6 +7,7 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { AvailabilityModule } from "./modules/availability/availability.module";
 import { BookingsModule } from "./modules/bookings/bookings.module";
 import { CatalogModule } from "./modules/catalog/catalog.module";
+import { HealthModule } from "./modules/health/health.module";
 import { MediaModule } from "./modules/media/media.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { OwnerModule } from "./modules/owner/owner.module";
@@ -19,6 +20,7 @@ import { UsersModule } from "./modules/users/users.module";
 @Module({
   imports: [
     AuthModule,
+    HealthModule,
     UsersModule,
     PropertiesModule,
     RoomsModule,

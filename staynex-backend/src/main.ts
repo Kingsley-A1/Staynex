@@ -2,6 +2,12 @@ import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { loadEnv } from "../config";
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "https://staynex-frontend.vercel.app",
+];
+
 function normalizeOrigin(origin: string): string {
   const trimmed = origin.trim().replace(/\/+$/, "");
   if (!trimmed) return "";
@@ -9,7 +15,7 @@ function normalizeOrigin(origin: string): string {
 }
 
 function allowedOriginsFromEnv(env: ReturnType<typeof loadEnv>): string[] {
-  const raw = [env.CORS_ORIGIN, env.NEXT_PUBLIC_APP_URL, "http://localhost:3000"]
+  const raw = [env.CORS_ORIGIN, env.NEXT_PUBLIC_APP_URL, ...DEFAULT_ALLOWED_ORIGINS]
     .filter(Boolean)
     .join(",");
 
@@ -35,6 +41,9 @@ async function bootstrap() {
       return callback(null, allowedOrigins.includes(normalized));
     },
     credentials: true,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-User-Id"],
+    optionsSuccessStatus: 204,
   });
   await app.listen(env.API_PORT);
 }
