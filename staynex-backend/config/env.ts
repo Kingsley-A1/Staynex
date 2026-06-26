@@ -73,7 +73,13 @@ export type Env = z.infer<typeof envSchema>;
 
 /** Parse and validate process environment. Throws a readable error on failure. */
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
-  const parsed = envSchema.safeParse(source);
+  const normalizedSource = {
+    ...source,
+    // Railway exposes PORT. Keep API_PORT for local/dev ergonomics, but listen on
+    // the platform-assigned port in production when API_PORT is not set.
+    API_PORT: source.API_PORT ?? source.PORT,
+  };
+  const parsed = envSchema.safeParse(normalizedSource);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((issue) => `  - ${issue.path.join(".") || "(root)"}: ${issue.message}`)
