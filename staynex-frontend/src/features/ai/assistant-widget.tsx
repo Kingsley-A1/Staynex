@@ -368,10 +368,7 @@ export function AssistantWidget() {
                         <ArrowUpIcon />
                       </button>
                     </div>
-                    <div className="flex items-center justify-between px-4 pb-3 text-[11px] text-muted-foreground">
-                      <span>Staynex Agent can help you search stays and guide booking.</span>
-                      <span>Enter to send · Shift+Enter for a new line</span>
-                    </div>
+        
                   </form>
                 </div>
               </>
