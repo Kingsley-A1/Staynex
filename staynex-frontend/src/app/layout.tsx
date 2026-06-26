@@ -13,6 +13,14 @@ export const metadata: Metadata = {
   },
   description,
   applicationName: "Staynex",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png", sizes: "256x256" },
+    ],
+    shortcut: ["/favicon.ico"],
+    apple: [{ url: "/apple-icon.png", type: "image/png", sizes: "180x180" }],
+  },
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",

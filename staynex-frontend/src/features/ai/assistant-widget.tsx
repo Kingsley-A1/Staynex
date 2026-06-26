@@ -331,41 +331,49 @@ export function AssistantWidget() {
                   <div ref={endRef} />
                 </div>
 
-                {/* Input bar — textarea that grows with content */}
-                <form
-                  onSubmit={(e: FormEvent) => {
-                    e.preventDefault();
-                    void sendMessage(input);
-                  }}
-                  className="flex items-end gap-2 border-t border-border px-3 py-3"
-                >
-                  <textarea
-                    ref={inputRef}
-                    value={input}
-                    rows={1}
-                    onChange={(e) => {
-                      setInput(e.target.value);
-                      e.target.style.height = "auto";
-                      e.target.style.height = `${e.target.scrollHeight}px`;
+                <div className="border-t border-border px-3 py-3">
+                  <form
+                    onSubmit={(e: FormEvent) => {
+                      e.preventDefault();
+                      void sendMessage(input);
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        void sendMessage(input);
-                      }
-                    }}
-                    placeholder="Ask about stays or booking… (Shift+Enter for new line)"
-                    aria-label="Message Staynex AI"
-                    className="max-h-36 min-h-[44px] flex-1 resize-none overflow-y-auto rounded-md border border-border bg-background px-3 py-2.5 text-sm text-ink outline-none transition-[height] focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                  <button
-                    type="submit"
-                    disabled={busy || !input.trim()}
-                    className="inline-flex h-11 shrink-0 items-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                    className="rounded-[28px] border border-border bg-background/95 shadow-[0_10px_30px_rgba(15,23,42,0.08)] transition-colors focus-within:border-primary/35"
                   >
-                    Send
-                  </button>
-                </form>
+                    <div className="flex items-end gap-2 p-2">
+                      <textarea
+                        ref={inputRef}
+                        value={input}
+                        rows={1}
+                        onChange={(e) => {
+                          setInput(e.target.value);
+                          e.target.style.height = "auto";
+                          e.target.style.height = `${e.target.scrollHeight}px`;
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            void sendMessage(input);
+                          }
+                        }}
+                        placeholder="Message Staynex Agent"
+                        aria-label="Message Staynex AI"
+                        className="max-h-40 min-h-[52px] flex-1 resize-none overflow-y-auto bg-transparent px-3 py-3 text-sm leading-6 text-ink outline-none placeholder:text-muted-foreground"
+                      />
+                      <button
+                        type="submit"
+                        aria-label="Send message"
+                        disabled={busy || !input.trim()}
+                        className="mb-1 mr-1 inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
+                      >
+                        <ArrowUpIcon />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between px-4 pb-3 text-[11px] text-muted-foreground">
+                      <span>Staynex Agent can help you search stays and guide booking.</span>
+                      <span>Enter to send · Shift+Enter for a new line</span>
+                    </div>
+                  </form>
+                </div>
               </>
             )}
           </div>
@@ -450,5 +458,11 @@ const TrashIcon = () => (
 const PinIcon = ({ filled }: { filled: boolean }) => (
   <svg {...svg} fill={filled ? "currentColor" : "none"}>
     <path d="M12 17v5M7 4h10l-1 7 3 3H5l3-3-1-7Z" />
+  </svg>
+);
+const ArrowUpIcon = () => (
+  <svg {...svg}>
+    <path d="M12 19V5" />
+    <path d="m6 11 6-6 6 6" />
   </svg>
 );
