@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button, Field, Input, Select } from "@/ui";
 import { CITIES } from "@/features/properties/fixtures";
 import { areasApi } from "@/lib/api";
-import { AREA_TYPE_LABELS, type AreaOption } from "@/lib/types";
+import { type AreaOption } from "@/lib/types";
 
 interface Defaults {
   city?: string;
@@ -55,7 +55,54 @@ const FALLBACK_AREAS: Record<string, AreaOption[]> = {
     fallbackArea("Wuse", "abuja", "NEIGHBORHOOD"),
     fallbackArea("Garki", "abuja", "NEIGHBORHOOD"),
   ],
+  Enugu: [
+    fallbackArea("Enugu North", "enugu", "LOCAL_GOVERNMENT_AREA", true),
+    fallbackArea("Independence Layout", "enugu", "NEIGHBORHOOD", true),
+    fallbackArea("GRA", "enugu", "NEIGHBORHOOD", true),
+    fallbackArea("New Haven", "enugu", "NEIGHBORHOOD"),
+    fallbackArea("Trans-Ekulu", "enugu", "NEIGHBORHOOD"),
+  ],
+  Owerri: [
+    fallbackArea("Owerri Municipal", "owerri", "LOCAL_GOVERNMENT_AREA", true),
+    fallbackArea("New Owerri", "owerri", "NEIGHBORHOOD", true),
+    fallbackArea("Ikenegbu", "owerri", "NEIGHBORHOOD"),
+    fallbackArea("World Bank", "owerri", "NEIGHBORHOOD"),
+  ],
+  "Benin City": [
+    fallbackArea("Oredo", "benin-city", "LOCAL_GOVERNMENT_AREA", true),
+    fallbackArea("GRA", "benin-city", "NEIGHBORHOOD", true),
+    fallbackArea("Airport Road", "benin-city", "NEIGHBORHOOD"),
+    fallbackArea("Ugbowo", "benin-city", "NEIGHBORHOOD"),
+  ],
+  Ibadan: [
+    fallbackArea("Ibadan North", "ibadan", "LOCAL_GOVERNMENT_AREA", true),
+    fallbackArea("Bodija", "ibadan", "NEIGHBORHOOD", true),
+    fallbackArea("Agodi GRA", "ibadan", "NEIGHBORHOOD"),
+    fallbackArea("Ring Road", "ibadan", "NEIGHBORHOOD"),
+  ],
+  Asaba: [
+    fallbackArea("Oshimili South", "asaba", "LOCAL_GOVERNMENT_AREA", true),
+    fallbackArea("Okpanam", "asaba", "NEIGHBORHOOD", true),
+    fallbackArea("Summit Road", "asaba", "NEIGHBORHOOD"),
+    fallbackArea("GRA", "asaba", "NEIGHBORHOOD"),
+  ],
+  Kano: [
+    fallbackArea("Nassarawa", "kano", "LOCAL_GOVERNMENT_AREA", true),
+    fallbackArea("Tarauni", "kano", "LOCAL_GOVERNMENT_AREA", true),
+    fallbackArea("Sabon Gari", "kano", "NEIGHBORHOOD"),
+    fallbackArea("Bompai", "kano", "NEIGHBORHOOD"),
+  ],
 };
+
+const SEARCH_CITIES = [
+  ...CITIES,
+  { id: "city_enugu", name: "Enugu" },
+  { id: "city_owerri", name: "Owerri" },
+  { id: "city_benin-city", name: "Benin City" },
+  { id: "city_ibadan", name: "Ibadan" },
+  { id: "city_asaba", name: "Asaba" },
+  { id: "city_kano", name: "Kano" },
+];
 
 function slugify(input: string): string {
   return input
@@ -80,6 +127,46 @@ function fallbackArea(
   };
 }
 
+function toDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function dateOffsetInput(days: number): string {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  return toDateInputValue(date);
+}
+
+function nextDateInput(value: string): string {
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return dateOffsetInput(1);
+  date.setDate(date.getDate() + 1);
+  return toDateInputValue(date);
+}
+
+function summaryDate(value: string): string {
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-NG", {
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+function orderedAreas(list: AreaOption[]): AreaOption[] {
+  return [...list].sort((a, b) => {
+    const priorityA = Number(b.notable) - Number(a.notable);
+    if (priorityA !== 0) return priorityA;
+    const withStays = Number(b.hasProperties) - Number(a.hasProperties);
+    if (withStays !== 0) return withStays;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 // Mobile-first search. City + area sit up top; dates/guests live in a collapsible
 // "More options" disclosure so the form stays light on small screens.
 export function SearchPanel({ defaults }: { defaults?: Defaults }) {
@@ -90,8 +177,8 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
   const [area, setArea] = useState(defaults?.area ?? "");
   const [areas, setAreas] = useState<AreaOption[]>([]);
   const [loadingAreas, setLoadingAreas] = useState(false);
-  const [checkIn, setCheckIn] = useState(defaults?.checkIn ?? "");
-  const [checkOut, setCheckOut] = useState(defaults?.checkOut ?? "");
+  const [checkIn, setCheckIn] = useState(() => defaults?.checkIn ?? dateOffsetInput(0));
+  const [checkOut, setCheckOut] = useState(() => defaults?.checkOut ?? dateOffsetInput(1));
   const [guests, setGuests] = useState(defaults?.guests ?? "2");
   const [showMore, setShowMore] = useState(
     Boolean(defaults?.checkIn || defaults?.checkOut || defaults?.guests),
@@ -118,6 +205,12 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
     };
   }, [city]);
 
+  useEffect(() => {
+    if (checkIn && (!checkOut || checkOut <= checkIn)) {
+      setCheckOut(nextDateInput(checkIn));
+    }
+  }, [checkIn, checkOut]);
+
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!city) return;
@@ -129,136 +222,119 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
     router.push(`/search?${qs.toString()}`);
   }
 
-  const notable = areas.filter((a) => a.notable);
-  const withStays = areas.filter((a) => !a.notable && a.hasProperties);
-  const others = areas.filter((a) => !a.notable && !a.hasProperties);
+  const areaOptions = orderedAreas(areas);
   const areaHint = !city
     ? "Choose a city first"
     : loadingAreas
       ? "Loading areas..."
-      : "All areas";
+      : "Choose an area or keep all areas.";
+  const dateSummary = `${summaryDate(checkIn)} - ${summaryDate(checkOut)} · ${guests} ${
+    guests === "1" ? "guest" : "guests"
+  }`;
 
   return (
-    <div className="attention-border rounded-2xl p-0.5 shadow-sm">
-      <form
-        onSubmit={submit}
-        className="space-y-3 rounded-[14px] bg-surface-raised p-4 sm:p-5"
-      >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Where to" htmlFor="city">
-            <Select
-              id="city"
-              value={city}
-              onChange={(e) => {
-                setCity(e.target.value);
-                setArea("");
-              }}
-              required
-            >
-              <option value="" disabled>
-                Select a city
+    <form onSubmit={submit} className="attention-border space-y-4 rounded-2xl p-4 sm:p-5">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Where to" htmlFor="city">
+          <Select
+            id="city"
+            value={city}
+            onChange={(e) => {
+              setCity(e.target.value);
+              setArea("");
+            }}
+            required
+          >
+            <option value="" disabled>
+              Select a city
+            </option>
+            {SEARCH_CITIES.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
               </option>
-              {CITIES.map((c) => (
-                <option key={c.id} value={c.name}>
-                  {c.name}
+            ))}
+          </Select>
+        </Field>
+
+        <Field label="Area" htmlFor="area" hint={areaHint}>
+          <Select
+            id="area"
+            value={area}
+            onChange={(e) => setArea(e.target.value)}
+            disabled={!city || loadingAreas}
+          >
+            <option value="">All areas</option>
+            {areaOptions.map((a) => (
+              <option key={a.id} value={a.slug}>
+                {a.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+
+      {showMore && (
+        <div id={optionsId} className="grid gap-3 sm:grid-cols-3">
+          <Field label="Check in" htmlFor="checkIn">
+            <Input
+              id="checkIn"
+              type="date"
+              value={checkIn}
+              min={dateOffsetInput(0)}
+              onChange={(e) => setCheckIn(e.target.value)}
+            />
+          </Field>
+          <Field label="Check out" htmlFor="checkOut">
+            <Input
+              id="checkOut"
+              type="date"
+              value={checkOut}
+              min={nextDateInput(checkIn)}
+              onChange={(e) => setCheckOut(e.target.value)}
+            />
+          </Field>
+          <Field label="Guests" htmlFor="guests">
+            <Select
+              id="guests"
+              value={guests}
+              onChange={(e) => setGuests(e.target.value)}
+            >
+              {[1, 2, 3, 4, 5, 6].map((n) => (
+                <option key={n} value={n}>
+                  {n} {n === 1 ? "guest" : "guests"}
                 </option>
               ))}
             </Select>
           </Field>
-
-          <Field label="Area" htmlFor="area" hint={areaHint}>
-            <Select
-              id="area"
-              value={area}
-              onChange={(e) => setArea(e.target.value)}
-              disabled={!city || loadingAreas}
-            >
-              <option value="">All areas</option>
-              {notable.length > 0 && (
-                <optgroup label="Notable areas">
-                  {notable.map((a) => (
-                    <option key={a.id} value={a.slug}>
-                      {a.name} - {AREA_TYPE_LABELS[a.type]}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {withStays.length > 0 && (
-                <optgroup label="Areas with stays">
-                  {withStays.map((a) => (
-                    <option key={a.id} value={a.slug}>
-                      {a.name} - {AREA_TYPE_LABELS[a.type]}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {others.length > 0 && (
-                <optgroup label="All areas">
-                  {others.map((a) => (
-                    <option key={a.id} value={a.slug}>
-                      {a.name} - {AREA_TYPE_LABELS[a.type]}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </Select>
-          </Field>
         </div>
+      )}
 
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button
           type="button"
           onClick={() => setShowMore((v) => !v)}
           aria-expanded={showMore}
           aria-controls={optionsId}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-primary"
+          className="inline-flex min-h-11 items-center gap-2 rounded-md px-1 text-left text-sm font-semibold text-primary transition-colors hover:text-primary-hover"
         >
           <span
             aria-hidden
-            className={`transition-transform ${showMore ? "rotate-90" : ""}`}
+            className={`text-lg leading-none transition-transform ${showMore ? "rotate-90" : ""}`}
           >
             ›
           </span>
-          Dates &amp; guests
+          <span>
+            Dates &amp; guests
+            <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+              {dateSummary}
+            </span>
+          </span>
         </button>
 
-        {showMore && (
-          <div id={optionsId} className="grid gap-3 sm:grid-cols-3">
-            <Field label="Check in" htmlFor="checkIn">
-              <Input
-                id="checkIn"
-                type="date"
-                value={checkIn}
-                onChange={(e) => setCheckIn(e.target.value)}
-              />
-            </Field>
-            <Field label="Check out" htmlFor="checkOut">
-              <Input
-                id="checkOut"
-                type="date"
-                value={checkOut}
-                onChange={(e) => setCheckOut(e.target.value)}
-              />
-            </Field>
-            <Field label="Guests" htmlFor="guests">
-              <Select
-                id="guests"
-                value={guests}
-                onChange={(e) => setGuests(e.target.value)}
-              >
-                {[1, 2, 3, 4, 5, 6].map((n) => (
-                  <option key={n} value={n}>
-                    {n} {n === 1 ? "guest" : "guests"}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
-        )}
-
-        <Button type="submit" className="w-full sm:w-auto" disabled={!city}>
+        <Button type="submit" className="w-full sm:w-auto sm:shrink-0" disabled={!city}>
           Search stays
         </Button>
-      </form>
-    </div>
+      </div>
+    </form>
   );
 }

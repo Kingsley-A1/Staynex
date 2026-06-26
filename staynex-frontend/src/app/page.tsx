@@ -15,15 +15,36 @@ export const metadata: Metadata = {
    fixtures module (per project standard §10) once shared across surfaces.
    --------------------------------------------------------------------------- */
 const DESTINATIONS = [
-  { city: "Calabar", stays: 128, gradient: "from-indigo-500 to-indigo-800" },
-  { city: "Lagos", stays: 210, gradient: "from-indigo-600 to-indigo-900" },
-  { city: "Abuja", stays: 156, gradient: "from-neutral-600 to-neutral-900" },
+  {
+    city: "Calabar",
+    stays: 128,
+    gradient: "from-indigo-500 to-teal-800",
+    roomImage: "/assets/destinations/calabar-room.jpg",
+  },
+  {
+    city: "Lagos",
+    stays: 210,
+    gradient: "from-sky-500 to-indigo-900",
+    roomImage: "/assets/destinations/lagos-room.jpg",
+  },
+  {
+    city: "Abuja",
+    stays: 156,
+    gradient: "from-neutral-600 to-indigo-900",
+    roomImage: "/assets/destinations/abuja-room.jpg",
+  },
   {
     city: "Port Harcourt",
     stays: 92,
-    gradient: "from-indigo-400 to-indigo-700",
+    gradient: "from-teal-500 to-indigo-800",
+    roomImage: "/assets/destinations/port-harcourt-room.jpg",
   },
-  { city: "Uyo", stays: 64, gradient: "from-indigo-500 to-neutral-800" },
+  {
+    city: "Uyo",
+    stays: 64,
+    gradient: "from-amber-500 to-indigo-900",
+    roomImage: "/assets/destinations/uyo-room.jpg",
+  },
 ];
 
 const STAYS = [
@@ -177,6 +198,14 @@ function Hero() {
         aria-hidden
         className="pointer-events-none absolute -top-32 left-1/2 h-96 w-[48rem] -translate-x-1/2 rounded-full bg-primary-subtle blur-3xl"
       />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-[-8rem] top-24 size-72 rounded-full bg-teal-200/35 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute right-[-10rem] top-8 size-80 rounded-full bg-amber-200/30 blur-3xl"
+      />
       <div className="layout-container relative py-16 sm:py-20 lg:py-24">
         <div className="mx-auto max-w-3xl text-center">
           <p className="text-overline mb-4">Verified stays · Secure payments</p>
@@ -219,7 +248,7 @@ function Destinations() {
   return (
     <section className="layout-container py-14 sm:py-16">
       <SectionHead
-        title="Popular destinations"
+        title="Launch cities"
         subtitle="Explore stays across our launch cities."
         href="/search"
         linkLabel="View all"
@@ -240,7 +269,15 @@ function Destinations() {
               alt={`${d.city}, Nigeria`}
               fill
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-              className="object-cover transition-transform duration-300 group-hover:scale-105"
+              className="destination-cycle-city object-cover"
+            />
+            <Image
+              src={d.roomImage}
+              alt=""
+              aria-hidden="true"
+              fill
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+              className="destination-cycle-room object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 p-3">

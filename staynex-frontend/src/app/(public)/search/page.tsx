@@ -50,7 +50,7 @@ export default async function SearchPage({
 
   return (
     <main className="layout-container space-y-6 py-8">
-      <SearchPanel defaults={sp} />
+      {!city && <SearchPanel defaults={sp} />}
 
       <header>
         <h1 className="text-title-lg text-ink">
