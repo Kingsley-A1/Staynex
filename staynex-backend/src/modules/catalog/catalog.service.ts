@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { prisma } from "../../../db";
-import type { PropertyDetail, PropertySummary } from "../../../types";
+import type { CityOption, PropertyDetail, PropertySummary } from "../../../types";
 import {
   propertyDetailInclude,
   propertySummaryInclude,
@@ -47,6 +47,15 @@ export class CatalogService {
       include: propertySummaryInclude,
     });
     return rows.map(toPropertySummary);
+  }
+
+  /** Real DB cities for owner location / property forms (id + name + slug). */
+  async cities(): Promise<CityOption[]> {
+    const rows = await prisma.city.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, slug: true },
+    });
+    return rows;
   }
 
   async getPublicProperty(slug: string): Promise<PropertyDetail> {

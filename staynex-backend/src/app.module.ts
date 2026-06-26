@@ -9,6 +9,7 @@ import { BookingsModule } from "./modules/bookings/bookings.module";
 import { CatalogModule } from "./modules/catalog/catalog.module";
 import { MediaModule } from "./modules/media/media.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
+import { OwnerModule } from "./modules/owner/owner.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { PropertiesModule } from "./modules/properties/properties.module";
 import { ReviewsModule } from "./modules/reviews/reviews.module";
@@ -26,6 +27,7 @@ import { UsersModule } from "./modules/users/users.module";
     CatalogModule,
     AreasModule,
     ReviewsModule,
+    OwnerModule,
     PaymentsModule,
     NotificationsModule,
     MediaModule,

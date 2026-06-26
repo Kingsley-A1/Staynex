@@ -3,9 +3,12 @@ import { parseBody } from "../../common/http";
 import { AuthService, SESSION_COOKIE, SESSION_TTL_MS, readCookie } from "./auth.service";
 import {
   adminRegisterSchema,
+  forgotPasswordSchema,
   googleSchema,
   loginSchema,
+  ownerRegisterSchema,
   registerSchema,
+  resetPasswordSchema,
   updateProfileSchema,
 } from "./dto";
 
@@ -45,6 +48,13 @@ export class AuthController {
     return result.user;
   }
 
+  @Post("owner/register")
+  async ownerRegister(@Body() body: unknown, @Res({ passthrough: true }) res: CookieResponse) {
+    const result = await this.auth.registerOwner(parseBody(ownerRegisterSchema, body));
+    res.cookie(SESSION_COOKIE, result.token, cookieOptions());
+    return result.user;
+  }
+
   @Post("admin/register")
   async adminRegister(
     @Body() body: unknown,
@@ -65,9 +75,22 @@ export class AuthController {
 
   @Post("google")
   async google(@Body() body: unknown, @Res({ passthrough: true }) res: CookieResponse) {
-    const result = await this.auth.googleSignIn(parseBody(googleSchema, body).idToken);
+    const input = parseBody(googleSchema, body);
+    const result = await this.auth.googleSignIn(input.idToken, input.intent);
     res.cookie(SESSION_COOKIE, result.token, cookieOptions());
     return result.user;
+  }
+
+  @Post("password/forgot")
+  async forgotPassword(@Body() body: unknown) {
+    // Always returns a generic success (no account enumeration).
+    return this.auth.forgotPassword(parseBody(forgotPasswordSchema, body).email);
+  }
+
+  @Post("password/reset")
+  async resetPassword(@Body() body: unknown) {
+    const input = parseBody(resetPasswordSchema, body);
+    return this.auth.resetPassword(input.token, input.password);
   }
 
   @Patch("profile")

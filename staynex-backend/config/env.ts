@@ -57,6 +57,16 @@ export const envSchema = z.object({
   // GOOGLE_CLIENT_SECRET is only needed for the auth-code flow (not used here).
   GOOGLE_CLIENT_ID: optionalString,
   GOOGLE_CLIENT_SECRET: optionalString,
+  // Owner payout encryption. 64 hex chars (32-byte AES-256-GCM key). When unset,
+  // only masked payout details (bank, name, last 4) are stored — never the full
+  // account number. Validated at use-time in the payout crypto helper.
+  OWNER_PAYOUT_ENCRYPTION_KEY: z.preprocess(
+    normalizeOptionalString,
+    z
+      .string()
+      .regex(/^[0-9a-fA-F]{64}$/, "OWNER_PAYOUT_ENCRYPTION_KEY must be 64 hex characters")
+      .optional(),
+  ),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -184,7 +184,7 @@ async function main() {
     },
   });
 
-  await prisma.user.upsert({
+  const admin = await prisma.user.upsert({
     where: { email: "deblessedking001@gmail.com" },
     update: { role: "ADMIN_MANAGER", name: "De Blessd Admin", passwordHash: hashPassword("staynexadmin") },
     create: {
@@ -194,10 +194,62 @@ async function main() {
       passwordHash: hashPassword("staynexadmin"),
     },
   });
+
+  // Explicit capability grants (forward-compatible source of truth; the `role`
+  // column stays as a compatibility mirror). Idempotent on [userId, capability].
+  await prisma.userCapability.upsert({
+    where: { userId_capability: { userId: owner.id, capability: "OWNER" } },
+    update: {},
+    create: { userId: owner.id, capability: "OWNER" },
+  });
+  await prisma.userCapability.upsert({
+    where: { userId_capability: { userId: admin.id, capability: "ADMIN_MANAGER" } },
+    update: {},
+    create: { userId: admin.id, capability: "ADMIN_MANAGER" },
+  });
+
+  // Owner v1 demo data: completed onboarding + a primary location + payout method
+  // (masked last 4 only; full numbers are encrypted only when a key is configured).
   await prisma.ownerProfile.upsert({
     where: { userId: owner.id },
-    update: { businessName: "Staynex Demo Hospitality" },
-    create: { userId: owner.id, businessName: "Staynex Demo Hospitality" },
+    update: {
+      businessName: "Staynex Demo Hospitality",
+      phone: "+234 800 000 0000",
+      onboardingCompletedAt: new Date(),
+    },
+    create: {
+      userId: owner.id,
+      businessName: "Staynex Demo Hospitality",
+      phone: "+234 800 000 0000",
+      onboardingCompletedAt: new Date(),
+    },
+  });
+  await prisma.ownerLocation.upsert({
+    where: { id: "ownerloc-demo" },
+    update: { cityId: cityBySlug.calabar.id, label: "Marina HQ", isPrimary: true },
+    create: {
+      id: "ownerloc-demo",
+      ownerId: owner.id,
+      cityId: cityBySlug.calabar.id,
+      label: "Marina HQ",
+      isPrimary: true,
+    },
+  });
+  await prisma.ownerPayoutMethod.upsert({
+    where: { ownerId: owner.id },
+    update: {
+      bankName: "Demo Bank",
+      accountName: "Staynex Demo Hospitality",
+      accountNumberLast4: "4321",
+      status: "ACTIVE",
+    },
+    create: {
+      ownerId: owner.id,
+      bankName: "Demo Bank",
+      accountName: "Staynex Demo Hospitality",
+      accountNumberLast4: "4321",
+      status: "ACTIVE",
+    },
   });
 
   // Properties + rooms + units + availability

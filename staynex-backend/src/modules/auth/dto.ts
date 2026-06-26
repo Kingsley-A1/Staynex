@@ -9,18 +9,35 @@ export const registerSchema = z.object({
   password,
   name,
   // Public self-service registration is GUEST or OWNER only. Admins use the
-  // access-code flow.
-  role: z.enum(["GUEST", "OWNER"]).default("GUEST"),
+  // access-code flow. `roleIntent` is accepted as an alias for `role`.
+  role: z.enum(["GUEST", "OWNER"]).optional(),
+  roleIntent: z.enum(["GUEST", "OWNER"]).optional(),
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
+
+// Owner-specific registration. Same backend auth; owner intent is locked on.
+export const ownerRegisterSchema = z.object({ email, password, name });
+export type OwnerRegisterInput = z.infer<typeof ownerRegisterSchema>;
 
 export const loginSchema = z.object({ email, password });
 export type LoginInput = z.infer<typeof loginSchema>;
 
 export const googleSchema = z.object({
   idToken: z.string().min(1, "Google credential is required"),
+  // Owner-intent Google sign-in upgrades the (existing or new) user to owner
+  // rather than creating a duplicate account.
+  intent: z.enum(["GUEST", "OWNER"]).optional(),
 });
 export type GoogleInput = z.infer<typeof googleSchema>;
+
+export const forgotPasswordSchema = z.object({ email });
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  password,
+});
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
 export const updateProfileSchema = z
   .object({

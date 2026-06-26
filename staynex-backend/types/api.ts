@@ -309,12 +309,139 @@ export interface AgentConversation {
 
 export type AppRole = "GUEST" | "OWNER" | "ADMIN_REVIEWER" | "ADMIN_MANAGER";
 
+/**
+ * Additive capability set. GUEST is always present for a signed-in user; owner
+ * and admin privileges are layered on top. `role` is the compatibility mirror.
+ */
+export type AppCapability = "GUEST" | "OWNER" | "ADMIN_REVIEWER" | "ADMIN_MANAGER";
+
 export interface AuthUser {
   id: string;
   email: string | null;
   name: string | null;
   phone: string | null;
+  /** COMPAT primary role. Prefer `capabilities` for access decisions. */
   role: AppRole;
+  /** Always includes "GUEST"; "OWNER"/"ADMIN_*" added when granted. */
+  capabilities: AppCapability[];
+}
+
+// --- Owner v1: onboarding, locations, payout, settings ---
+
+export type PayoutMethodStatusValue = "PENDING_VERIFICATION" | "ACTIVE" | "DISABLED";
+
+export interface OwnerProfileView {
+  /** Display name (User.name). */
+  displayName: string | null;
+  businessName: string | null;
+  phone: string | null;
+  onboardingCompletedAt: string | null;
+}
+
+export interface OwnerLocationView {
+  id: string;
+  cityId: string;
+  cityName: string;
+  areaId: string | null;
+  areaName: string | null;
+  label: string | null;
+  addressLine: string | null;
+  isPrimary: boolean;
+  /** Listings currently linked to this location (blocks naive deletion). */
+  propertyCount: number;
+  createdAt: string;
+}
+
+/** Masked payout method — never includes the full account number. */
+export interface OwnerPayoutMethodView {
+  id: string;
+  bankName: string;
+  accountName: string;
+  accountNumberLast4: string;
+  provider: string | null;
+  status: PayoutMethodStatusValue;
+  /** True when the full number is encrypted at rest and can be revealed by a Super Admin. */
+  hasEncryptedNumber: boolean;
+  updatedAt: string;
+}
+
+/** Resume-safe snapshot the onboarding flow reads to know what's left. */
+export interface OwnerOnboardingState {
+  profile: OwnerProfileView;
+  locations: OwnerLocationView[];
+  payoutMethod: OwnerPayoutMethodView | null;
+  /** Owner explicitly chose to add payout later. */
+  payoutSkipped: boolean;
+  readiness: {
+    hasBusinessName: boolean;
+    hasPhone: boolean;
+    hasLocation: boolean;
+    hasPayoutOrSkipped: boolean;
+    complete: boolean;
+  };
+  propertyCount: number;
+}
+
+export interface OwnerSettingsView {
+  profile: OwnerProfileView;
+  locations: OwnerLocationView[];
+  payoutMethod: OwnerPayoutMethodView | null;
+}
+
+// --- Admin user management ---
+
+export interface AdminUserRow {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: AppRole;
+  capabilities: AppCapability[];
+  isOwner: boolean;
+  isAdmin: boolean;
+  propertyCount: number;
+  bookingCount: number;
+  createdAt: string;
+}
+
+export interface AdminUserDetail {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  role: AppRole;
+  capabilities: AppCapability[];
+  createdAt: string;
+  ownerProfile: OwnerProfileView | null;
+  ownerLocations: OwnerLocationView[];
+  /** Populated only for ADMIN_MANAGER; null + `payoutRestricted` for reviewers. */
+  payoutMethod: OwnerPayoutMethodView | null;
+  payoutRestricted: boolean;
+  counts: {
+    properties: number;
+    bookings: number;
+  };
+  /** Net owner settlement summary (kobo), cheap aggregates. */
+  payoutSummary: {
+    paidKobo: number;
+    pendingKobo: number;
+    currency: string;
+  };
+}
+
+/** Full account number reveal — ADMIN_MANAGER only, always audited. */
+export interface RevealedPayoutMethod {
+  ownerId: string;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  provider: string | null;
+}
+
+/** Public city option for owner location / property forms (real DB ids). */
+export interface CityOption {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 export type TestimonialStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED";

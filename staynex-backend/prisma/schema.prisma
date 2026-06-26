@@ -22,6 +22,21 @@ enum UserRole {
   ADMIN_MANAGER
 }
 
+// Additive capability grants. GUEST is implicit for every signed-in user, so it
+// is not stored here — owner/admin privileges are layered on top via grants.
+// `User.role` is kept as a compatibility mirror (see User model).
+enum AppCapability {
+  OWNER
+  ADMIN_REVIEWER
+  ADMIN_MANAGER
+}
+
+enum PayoutMethodStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  DISABLED
+}
+
 enum AreaType {
   LOCAL_GOVERNMENT_AREA
   NEIGHBORHOOD
@@ -89,12 +104,19 @@ model User {
   phone        String?
   /// scrypt hash as `salt:hash`. Null for seeded/demo users without a password.
   passwordHash String?
+  /// COMPAT: primary role kept so existing role-based guards/UIs keep working.
+  /// Capabilities (below) are the forward-compatible source of truth; this mirror
+  /// stays in sync (a pure-owner registration sets OWNER here and grants OWNER).
   role         UserRole @default(GUEST)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   guestProfile    GuestProfile?
   ownerProfile    OwnerProfile?
+  capabilities    UserCapability[]
+  ownerLocations  OwnerLocation[]  @relation("OwnerLocations")
+  payoutMethod    OwnerPayoutMethod?
+  passwordResets  PasswordResetToken[]
   ownedProperties Property[]       @relation("PropertyOwner")
   bookings        Booking[]
   bookingHolds    BookingHold[]
@@ -107,6 +129,20 @@ model User {
   processedPayouts Payout[]        @relation("PayoutProcessor")
 
   @@index([role])
+}
+
+// Additive privilege grant for a user (owner/admin). Unique per (user, capability).
+// Guest capability is implicit and never stored.
+model UserCapability {
+  id         String        @id @default(cuid())
+  userId     String
+  capability AppCapability
+  grantedAt  DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, capability])
+  @@index([userId])
 }
 
 model Session {
@@ -133,14 +169,76 @@ model GuestProfile {
 }
 
 model OwnerProfile {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  businessName String?
-  phone        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  businessName          String?
+  phone                 String?
+  /// Set once the owner finishes onboarding readiness (profile + ≥1 location +
+  /// payout saved or explicitly skipped). Null while onboarding is incomplete.
+  onboardingCompletedAt DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// An owner's operating/property location. Owners can have several; the canonical
+// per-listing location stays on Property.cityId/areaId. Property.ownerLocationId
+// is an optional link used to detect (and migrate) locations still in use.
+model OwnerLocation {
+  id          String   @id @default(cuid())
+  ownerId     String
+  cityId      String
+  areaId      String?
+  label       String?
+  addressLine String?
+  isPrimary   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner      User       @relation("OwnerLocations", fields: [ownerId], references: [id], onDelete: Cascade)
+  city       City       @relation(fields: [cityId], references: [id])
+  area       Area?      @relation(fields: [areaId], references: [id])
+  properties Property[]
+
+  @@index([ownerId])
+  @@index([cityId])
+}
+
+// Owner payout (manual settlement v1). Never stores raw card data. The full bank
+// account number is encrypted at rest (AES-256-GCM) only when
+// OWNER_PAYOUT_ENCRYPTION_KEY is configured; otherwise only the last 4 are kept.
+// Revealing the full number is ADMIN_MANAGER-only and writes an AuditLog.
+model OwnerPayoutMethod {
+  id                 String             @id @default(cuid())
+  ownerId            String             @unique
+  bankName           String
+  accountName        String
+  accountNumberLast4 String
+  /// `iv:authTag:ciphertext` (all hex) when encryption is configured, else null.
+  accountNumberEnc   String?
+  provider           String?
+  status             PayoutMethodStatus @default(PENDING_VERIFICATION)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+}
+
+// Single-use, hashed, expiring password-reset token. The raw token is only ever
+// emailed to the user; the DB stores its SHA-256 hash.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -181,10 +279,11 @@ model City {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  country    Country    @relation(fields: [countryId], references: [id])
-  region     Region?    @relation(fields: [regionId], references: [id])
-  properties Property[]
-  areas      Area[]
+  country        Country         @relation(fields: [countryId], references: [id])
+  region         Region?         @relation(fields: [regionId], references: [id])
+  properties     Property[]
+  areas          Area[]
+  ownerLocations OwnerLocation[]
 
   @@index([countryId])
   @@index([regionId])
@@ -202,8 +301,9 @@ model Area {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  city       City       @relation(fields: [cityId], references: [id], onDelete: Cascade)
-  properties Property[]
+  city           City            @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  properties     Property[]
+  ownerLocations OwnerLocation[]
 
   @@index([cityId])
   @@index([type])
@@ -214,29 +314,34 @@ model Area {
 // ---------------------------------------------------------------------------
 
 model Property {
-  id          String         @id @default(cuid())
-  ownerId     String
-  cityId      String
-  areaId      String?
-  name        String
-  slug        String         @unique
-  description String?
-  status      PropertyStatus @default(DRAFT)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  ownerId         String
+  cityId          String
+  areaId          String?
+  /// Optional link to the owner's saved location. Canonical listing location stays
+  /// on cityId/areaId; this only records which OwnerLocation a listing belongs to.
+  ownerLocationId String?
+  name            String
+  slug            String         @unique
+  description     String?
+  status          PropertyStatus @default(DRAFT)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-  owner        User            @relation("PropertyOwner", fields: [ownerId], references: [id])
-  city         City            @relation(fields: [cityId], references: [id])
-  area         Area?           @relation(fields: [areaId], references: [id])
-  media        PropertyMedia[]
-  roomTypes    RoomType[]
-  payouts      Payout[]
-  auditLogs    AuditLog[]
-  testimonials Testimonial[]
+  owner         User           @relation("PropertyOwner", fields: [ownerId], references: [id])
+  city          City           @relation(fields: [cityId], references: [id])
+  area          Area?          @relation(fields: [areaId], references: [id])
+  ownerLocation OwnerLocation? @relation(fields: [ownerLocationId], references: [id])
+  media         PropertyMedia[]
+  roomTypes     RoomType[]
+  payouts       Payout[]
+  auditLogs     AuditLog[]
+  testimonials  Testimonial[]
 
   @@index([ownerId])
   @@index([cityId])
   @@index([areaId])
+  @@index([ownerLocationId])
   @@index([status])
 }
 

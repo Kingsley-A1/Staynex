@@ -12,6 +12,11 @@ export class CatalogController {
     return this.catalog.search(parseQuery(searchQuerySchema, query));
   }
 
+  @Get("catalog/cities")
+  cities() {
+    return this.catalog.cities();
+  }
+
   @Get("stays/:slug")
   detail(@Param("slug") slug: string) {
     return this.catalog.getPublicProperty(slug);
