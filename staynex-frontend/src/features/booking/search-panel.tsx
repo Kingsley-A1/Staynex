@@ -59,8 +59,9 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
   const others = areas.filter((a) => !a.notable && !a.hasProperties);
 
   return (
-    <form onSubmit={submit} className="surface-card space-y-3 p-4">
-      <div className="grid gap-3 sm:grid-cols-2">
+    <div className="attention-border rounded-2xl p-0.5 shadow-sm">
+      <form onSubmit={submit} className="space-y-3 rounded-[14px] bg-surface-raised p-4 sm:p-5">
+        <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Where to" htmlFor="city">
           <Select
             id="city"
@@ -155,9 +156,10 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
         </div>
       )}
 
-      <Button type="submit" className="w-full sm:w-auto">
-        Search stays
-      </Button>
-    </form>
+        <Button type="submit" className="w-full sm:w-auto">
+          Search stays
+        </Button>
+      </form>
+    </div>
   );
 }

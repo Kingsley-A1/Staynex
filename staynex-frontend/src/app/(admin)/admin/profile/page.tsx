@@ -1,13 +1,6 @@
-import { ProfileView } from "@/features/profile/profile-view";
+import { redirect } from "next/navigation";
 
-export default function AdminProfilePage() {
-  return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <header>
-        <h1 className="text-title-lg text-ink">Profile</h1>
-        <p className="text-muted-foreground">Your admin account details.</p>
-      </header>
-      <ProfileView />
-    </div>
-  );
+// Admin profile moved into Admin settings. Keep the old route working.
+export default function AdminProfileRedirect() {
+  redirect("/admin/settings");
 }

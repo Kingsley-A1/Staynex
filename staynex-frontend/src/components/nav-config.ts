@@ -10,7 +10,7 @@ export const GUEST_NAV: NavItem[] = [
   { href: "/search", label: "Find a stay" },
   { href: "/reviews", label: "Reviews" },
   { href: "/list-your-property", label: "List your property" },
-  { href: "/profile", label: "Profile" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export const OWNER_NAV: NavItem[] = [
@@ -18,15 +18,16 @@ export const OWNER_NAV: NavItem[] = [
   { href: "/owner/properties", label: "Properties" },
   { href: "/owner/bookings", label: "Bookings" },
   { href: "/owner/onboarding", label: "Onboarding" },
-  { href: "/owner/profile", label: "Profile" },
+  { href: "/owner/settings", label: "Settings" },
 ];
 
 export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/approvals", label: "Approvals" },
+  { href: "/admin/users", label: "Users" },
   { href: "/admin/bookings", label: "Bookings & payments" },
   { href: "/admin/payouts", label: "Payouts" },
   { href: "/admin/testimonials", label: "Testimonials" },
   { href: "/admin/audit", label: "Audit log" },
   { href: "/admin/ai-logs", label: "AI logs" },
-  { href: "/admin/profile", label: "Profile" },
+  { href: "/admin/settings", label: "Settings" },
 ];

@@ -98,6 +98,52 @@
   }
 }
 
+/* -----------------------------------------------------------------------------
+   Attention border — a subtle circulating gradient ring that guides the eye to a
+   primary action (e.g. the search panel). Reusable: wrap any element, give it a
+   matching radius + a little padding, and nest the real surface inside.
+
+     <div class="attention-border rounded-2xl p-0.5">
+       <div class="rounded-[14px] bg-surface-raised …">…</div>
+     </div>
+
+   Uses Staynex blue (--color-primary) plus a related indigo. Honors
+   prefers-reduced-motion (the ring freezes; no looping motion).
+   --------------------------------------------------------------------------- */
+@property --attention-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@layer components {
+  .attention-border {
+    /* A constant faint border (border token) with a brighter arc rotating on top. */
+    background:
+      conic-gradient(
+        from var(--attention-angle),
+        transparent 0deg,
+        var(--color-primary, #27187d) 40deg,
+        #6366f1 75deg,
+        transparent 150deg,
+        transparent 360deg
+      ),
+      linear-gradient(var(--color-border, #e7e5f2), var(--color-border, #e7e5f2));
+    animation: attention-rotate 6s linear infinite;
+  }
+
+  /* Calm down once the user engages with the control. */
+  .attention-border:focus-within {
+    animation-play-state: paused;
+  }
+
+  @keyframes attention-rotate {
+    to {
+      --attention-angle: 360deg;
+    }
+  }
+}
+
 /* =============================================================================
    REDUCED MOTION (WCAG 2.3.3) — respect user preference globally.
    ============================================================================= */
@@ -121,4 +167,6 @@
   }
 
   .skeleton { animation: none; }
+  /* Freeze the circulating ring to a static, non-distracting border. */
+  .attention-border { animation: none; }
 }

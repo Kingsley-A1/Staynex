@@ -7,6 +7,8 @@ import type {
   AdminPayoutRow,
   AdminPayoutsView,
   AdminTestimonialRow,
+  AdminUserDetail,
+  AdminUserRow,
   AgentConversation,
   AgentMessage,
   ApprovalActionResult,
@@ -21,18 +23,48 @@ import type {
   BookingRow,
   BookingView,
   CheckoutResult,
+  CityOption,
   HoldSummary,
   MediaItem,
   MediaUploadTarget,
   OwnerBookingsView,
+  OwnerLocationView,
+  OwnerOnboardingState,
+  OwnerPayoutMethodView,
+  OwnerProfileView,
+  OwnerSettingsView,
   PaymentStatusView,
   PropertyDetail,
   PropertySummary,
   PublicTestimonial,
+  RevealedPayoutMethod,
 } from "@/lib/types";
 import { API_BASE } from "@/lib/api-base";
 
 type RequestOptions = RequestInit;
+
+/**
+ * Error thrown for non-2xx responses. `status` enables precise handling; the
+ * message keeps the `Request failed: <status>` prefix (so existing
+ * `message.includes("409")` checks still work) and appends the backend detail
+ * after " — " when present, for user-facing messages.
+ */
+export class ApiError extends Error {
+  status: number;
+  detail: string | null;
+  constructor(status: number, statusText: string, detail: string | null) {
+    super(`Request failed: ${status} ${statusText}${detail ? ` — ${detail}` : ""}`);
+    this.name = "ApiError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+/** Human-facing message for an error: the backend detail, else a fallback. */
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiError && err.detail) return err.detail;
+  return fallback;
+}
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { headers, ...rest } = options;
@@ -46,7 +78,16 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     },
   });
   if (!res.ok) {
-    throw new Error(`Request failed: ${res.status} ${res.statusText}`);
+    let detail: string | null = null;
+    try {
+      const data = (await res.json()) as { message?: unknown; issues?: Array<{ message?: string }> };
+      if (typeof data.message === "string") detail = data.message;
+      else if (Array.isArray(data.message)) detail = data.message.join(", ");
+      else if (Array.isArray(data.issues)) detail = data.issues.map((i) => i.message).join(", ");
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new ApiError(res.status, res.statusText, detail);
   }
   return (await res.json()) as T;
 }
@@ -147,6 +188,8 @@ export const authApi = {
   me: () => request<AuthUser | null>("/auth/me"),
   register: (body: { email: string; password: string; name?: string; role?: "GUEST" | "OWNER" }) =>
     request<AuthUser>("/auth/register", { method: "POST", body: JSON.stringify(body) }),
+  registerOwner: (body: { email: string; password: string; name?: string }) =>
+    request<AuthUser>("/auth/owner/register", { method: "POST", body: JSON.stringify(body) }),
   adminRegister: (body: {
     email: string;
     password: string;
@@ -155,12 +198,95 @@ export const authApi = {
   }) => request<AuthUser>("/auth/admin/register", { method: "POST", body: JSON.stringify(body) }),
   login: (body: { email: string; password: string }) =>
     request<AuthUser>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
-  google: (idToken: string) =>
-    request<AuthUser>("/auth/google", { method: "POST", body: JSON.stringify({ idToken }) }),
+  google: (idToken: string, intent?: "GUEST" | "OWNER") =>
+    request<AuthUser>("/auth/google", {
+      method: "POST",
+      body: JSON.stringify(intent ? { idToken, intent } : { idToken }),
+    }),
+  forgotPassword: (email: string) =>
+    request<{ ok: true }>("/auth/password/forgot", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  resetPassword: (body: { token: string; password: string }) =>
+    request<{ ok: true }>("/auth/password/reset", { method: "POST", body: JSON.stringify(body) }),
   updateProfile: (body: { name?: string; email?: string; phone?: string | null }) =>
     request<AuthUser>("/auth/profile", { method: "PATCH", body: JSON.stringify(body) }),
   deleteAccount: () => request<{ ok: true }>("/auth/profile", { method: "DELETE" }),
   logout: () => request<{ ok: true }>("/auth/logout", { method: "POST" }),
+  // Upgrade a signed-in guest to owner-capable (no duplicate account).
+  becomeOwner: () => request<AuthUser>("/owner/become", { method: "POST" }),
+};
+
+export const settingsApi = {
+  profile: () => request<AuthUser>("/settings/profile"),
+  updateProfile: (body: { name?: string; email?: string; phone?: string | null }) =>
+    request<AuthUser>("/settings/profile", { method: "PATCH", body: JSON.stringify(body) }),
+};
+
+interface LocationInput {
+  cityId: string;
+  areaId?: string | null;
+  label?: string | null;
+  addressLine?: string | null;
+  isPrimary?: boolean;
+}
+
+interface PayoutMethodInput {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  provider?: string | null;
+}
+
+export const ownerApiSettings = {
+  onboarding: () => request<OwnerOnboardingState>("/owner/onboarding"),
+  completeOnboarding: (skipPayout?: boolean) =>
+    request<OwnerOnboardingState>("/owner/onboarding/complete", {
+      method: "POST",
+      body: JSON.stringify({ skipPayout: skipPayout ?? false }),
+    }),
+  settings: () => request<OwnerSettingsView>("/owner/settings"),
+  updateProfile: (body: { displayName?: string; businessName?: string; phone?: string }) =>
+    request<OwnerProfileView>("/owner/settings/profile", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  listLocations: () => request<OwnerLocationView[]>("/owner/settings/locations"),
+  createLocation: (body: LocationInput) =>
+    request<OwnerLocationView>("/owner/settings/locations", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateLocation: (id: string, body: Partial<LocationInput>) =>
+    request<OwnerLocationView>(`/owner/settings/locations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteLocation: (id: string, replacementLocationId?: string) =>
+    request<OwnerLocationView[]>(
+      `/owner/settings/locations/${id}${
+        replacementLocationId ? `?replacementLocationId=${encodeURIComponent(replacementLocationId)}` : ""
+      }`,
+      { method: "DELETE" },
+    ),
+  getPayoutMethod: () => request<OwnerPayoutMethodView | null>("/owner/settings/payout-method"),
+  savePayoutMethod: (body: PayoutMethodInput) =>
+    request<OwnerPayoutMethodView>("/owner/settings/payout-method", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+};
+
+export const adminUsersApi = {
+  list: () => request<AdminUserRow[]>("/admin/users"),
+  get: (id: string) => request<AdminUserDetail>(`/admin/users/${id}`),
+  revealPayout: (id: string) =>
+    request<RevealedPayoutMethod>(`/admin/users/${id}/payout-method/reveal`, { method: "POST" }),
+};
+
+export const catalogApi = {
+  cities: () => request<CityOption[]>("/catalog/cities"),
 };
 
 export const reviewsApi = {

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { authApi } from "@/lib/api";
-import type { AppRole, AuthUser } from "@/lib/types";
+import { type AuthUser, capabilityHome } from "@/lib/types";
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
@@ -16,21 +16,18 @@ interface GoogleIdentity {
   };
 }
 
-function roleHome(role: AppRole): string {
-  if (role === "OWNER") return "/owner/dashboard";
-  if (role === "ADMIN_REVIEWER" || role === "ADMIN_MANAGER") return "/admin/approvals";
-  return "/";
-}
-
 // Google Identity Services button. The browser obtains a Google ID token; the
 // backend verifies it (POST /auth/google) and sets the existing session cookie.
-// Renders nothing if NEXT_PUBLIC_GOOGLE_CLIENT_ID isn't configured.
+// `intent: "OWNER"` upgrades the account to owner-capable. Renders nothing if
+// NEXT_PUBLIC_GOOGLE_CLIENT_ID isn't configured.
 export function GoogleAuthButton({
   next,
   onSuccess,
+  intent,
 }: {
   next?: string;
   onSuccess?: (user: AuthUser) => void;
+  intent?: "GUEST" | "OWNER";
 }) {
   const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
@@ -41,10 +38,10 @@ export function GoogleAuthButton({
 
     async function handleCredential(idToken: string) {
       try {
-        const user = await authApi.google(idToken);
+        const user = await authApi.google(idToken, intent);
         if (onSuccess) onSuccess(user);
         else {
-          router.push(next || roleHome(user.role));
+          router.push(next || capabilityHome(user));
           router.refresh();
         }
       } catch {
@@ -83,13 +80,13 @@ export function GoogleAuthButton({
     return () => {
       cancelled = true;
     };
-  }, [next, onSuccess, router]);
+  }, [next, onSuccess, router, intent]);
 
   if (!CLIENT_ID) return null;
 
   return (
     <div className="space-y-3">
-      <div ref={ref} className="flex min-h-[40px] justify-center" />
+      <div ref={ref} className="flex min-h-10 justify-center" />
       <div className="flex items-center gap-3 text-caption text-muted-foreground">
         <span className="h-px flex-1 bg-border" />
         or

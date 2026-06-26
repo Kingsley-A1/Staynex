@@ -326,12 +326,159 @@ export interface AgentConversation {
 
 export type AppRole = "GUEST" | "OWNER" | "ADMIN_REVIEWER" | "ADMIN_MANAGER";
 
+/** Additive capabilities. GUEST is always present for a signed-in user. */
+export type AppCapability = "GUEST" | "OWNER" | "ADMIN_REVIEWER" | "ADMIN_MANAGER";
+
 export interface AuthUser {
   id: string;
   email: string | null;
   name: string | null;
   phone: string | null;
+  /** COMPAT primary role. Prefer `capabilities` for access decisions. */
   role: AppRole;
+  capabilities: AppCapability[];
+}
+
+export const ROLE_LABELS: Record<AppRole, string> = {
+  GUEST: "Guest",
+  OWNER: "Property owner",
+  ADMIN_REVIEWER: "Admin",
+  ADMIN_MANAGER: "Super Admin",
+};
+
+export function isOwnerCapable(user: AuthUser | null | undefined): boolean {
+  return Boolean(user?.capabilities.includes("OWNER"));
+}
+
+export function isAdminCapable(user: AuthUser | null | undefined): boolean {
+  return Boolean(
+    user?.capabilities.includes("ADMIN_REVIEWER") || user?.capabilities.includes("ADMIN_MANAGER"),
+  );
+}
+
+export function isAdminManager(user: AuthUser | null | undefined): boolean {
+  return Boolean(user?.capabilities.includes("ADMIN_MANAGER"));
+}
+
+/** Destination after auth, driven by capability (not just the compat role). */
+export function capabilityHome(user: AuthUser): string {
+  if (isAdminCapable(user)) return "/admin/approvals";
+  if (isOwnerCapable(user)) return "/owner/dashboard";
+  return "/";
+}
+
+// --- Owner v1: onboarding, locations, payout, settings ---
+
+export type PayoutMethodStatusValue = "PENDING_VERIFICATION" | "ACTIVE" | "DISABLED";
+
+export const PAYOUT_METHOD_STATUS_LABELS: Record<PayoutMethodStatusValue, string> = {
+  PENDING_VERIFICATION: "Pending verification",
+  ACTIVE: "Active",
+  DISABLED: "Disabled",
+};
+
+export interface OwnerProfileView {
+  displayName: string | null;
+  businessName: string | null;
+  phone: string | null;
+  onboardingCompletedAt: string | null;
+}
+
+export interface OwnerLocationView {
+  id: string;
+  cityId: string;
+  cityName: string;
+  areaId: string | null;
+  areaName: string | null;
+  label: string | null;
+  addressLine: string | null;
+  isPrimary: boolean;
+  propertyCount: number;
+  createdAt: string;
+}
+
+export interface OwnerPayoutMethodView {
+  id: string;
+  bankName: string;
+  accountName: string;
+  accountNumberLast4: string;
+  provider: string | null;
+  status: PayoutMethodStatusValue;
+  hasEncryptedNumber: boolean;
+  updatedAt: string;
+}
+
+export interface OwnerOnboardingState {
+  profile: OwnerProfileView;
+  locations: OwnerLocationView[];
+  payoutMethod: OwnerPayoutMethodView | null;
+  payoutSkipped: boolean;
+  readiness: {
+    hasBusinessName: boolean;
+    hasPhone: boolean;
+    hasLocation: boolean;
+    hasPayoutOrSkipped: boolean;
+    complete: boolean;
+  };
+  propertyCount: number;
+}
+
+export interface OwnerSettingsView {
+  profile: OwnerProfileView;
+  locations: OwnerLocationView[];
+  payoutMethod: OwnerPayoutMethodView | null;
+}
+
+// --- Admin user management ---
+
+export interface AdminUserRow {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: AppRole;
+  capabilities: AppCapability[];
+  isOwner: boolean;
+  isAdmin: boolean;
+  propertyCount: number;
+  bookingCount: number;
+  createdAt: string;
+}
+
+export interface AdminUserDetail {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  role: AppRole;
+  capabilities: AppCapability[];
+  createdAt: string;
+  ownerProfile: OwnerProfileView | null;
+  ownerLocations: OwnerLocationView[];
+  payoutMethod: OwnerPayoutMethodView | null;
+  payoutRestricted: boolean;
+  counts: {
+    properties: number;
+    bookings: number;
+  };
+  payoutSummary: {
+    paidKobo: number;
+    pendingKobo: number;
+    currency: string;
+  };
+}
+
+export interface RevealedPayoutMethod {
+  ownerId: string;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  provider: string | null;
+}
+
+export interface CityOption {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 export type TestimonialStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED";

@@ -42,7 +42,9 @@ export default function ListYourPropertyPage() {
         </ol>
 
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <LinkButton href="/register?next=/owner/onboarding">Get started as an owner</LinkButton>
+          <LinkButton href="/owner/register?next=/owner/onboarding">
+            Get started as an owner
+          </LinkButton>
           <LinkButton href="/owner/dashboard" variant="secondary">
             Owner dashboard
           </LinkButton>
