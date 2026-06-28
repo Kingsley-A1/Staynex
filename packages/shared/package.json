@@ -1,0 +1,24 @@
+{
+  "name": "@staynex/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zero-dependency runtime helpers shared by the Staynex web and mobile clients (money formatter, status labels, brand tokens).",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@staynex/backend": "workspace:*",
+    "typescript": "^5.9.2"
+  }
+}

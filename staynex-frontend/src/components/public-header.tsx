@@ -1,19 +1,16 @@
-import Image from "next/image";
 import Link from "next/link";
+import { Brandmark } from "@/components/brandmark";
 
 export function PublicHeader() {
   return (
     <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-background/80 backdrop-blur-md">
       <div className="layout-container flex h-16 items-center justify-between gap-4">
-        <Link href="/" aria-label="Staynex home" className="relative block h-9 w-32">
-          <Image
-            src="/assets/logo.png"
-            alt="Staynex"
-            fill
-            sizes="128px"
-            priority
-            className="object-cover object-center"
-          />
+        <Link
+          href="/"
+          aria-label="Staynex home"
+          className="inline-flex items-center"
+        >
+          <Brandmark className="h-9 w-32" priority />
         </Link>
         <nav className="flex items-center gap-2 text-sm font-medium">
           <Link

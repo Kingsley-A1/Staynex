@@ -2,6 +2,13 @@
   "name": "@staynex/backend",
   "private": true,
   "version": "0.1.0",
+  "exports": {
+    "./types": {
+      "types": "./types/index.ts",
+      "default": "./types/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "dev": "nest start --watch",
     "prebuild": "pnpm prisma:generate",

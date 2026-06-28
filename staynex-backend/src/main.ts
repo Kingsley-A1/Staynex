@@ -6,6 +6,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:3000",
   "http://localhost:3001",
   "https://staynex-frontend.vercel.app",
+  "https://staynexbookings.ng",
+  "https://www.staynexbookings.ng",
 ];
 
 function normalizeOrigin(origin: string): string {
@@ -15,17 +17,16 @@ function normalizeOrigin(origin: string): string {
 }
 
 function allowedOriginsFromEnv(env: ReturnType<typeof loadEnv>): string[] {
-  const raw = [env.CORS_ORIGIN, env.NEXT_PUBLIC_APP_URL, ...DEFAULT_ALLOWED_ORIGINS]
+  const raw = [
+    env.CORS_ORIGIN,
+    env.NEXT_PUBLIC_APP_URL,
+    ...DEFAULT_ALLOWED_ORIGINS,
+  ]
     .filter(Boolean)
     .join(",");
 
   return Array.from(
-    new Set(
-      raw
-        .split(",")
-        .map(normalizeOrigin)
-        .filter(Boolean),
-    ),
+    new Set(raw.split(",").map(normalizeOrigin).filter(Boolean)),
   );
 }
 
@@ -35,7 +36,10 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   const allowedOrigins = allowedOriginsFromEnv(env);
   app.enableCors({
-    origin(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    origin(
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) {
       if (!origin) return callback(null, true);
       const normalized = normalizeOrigin(origin);
       return callback(null, allowedOrigins.includes(normalized));
@@ -45,7 +49,7 @@ async function bootstrap() {
     allowedHeaders: ["Content-Type", "Authorization", "X-User-Id"],
     optionsSuccessStatus: 204,
   });
-  await app.listen(env.API_PORT);
+  await app.listen(env.API_PORT, "0.0.0.0");
 }
 
 void bootstrap();

@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "declaration": true,
+    "paths": {
+      "@staynex/backend/types": ["../../staynex-backend/types/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

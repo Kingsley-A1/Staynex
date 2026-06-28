@@ -1,36 +1,55 @@
 import type { ReactNode } from "react";
+import { PagesHero } from "@/components/pages-hero";
 
-// Shared chrome for static/legal pages. Concise, readable, mobile-first.
 export function LegalPage({
+  eyebrow,
   title,
+  gradientText,
   intro,
   children,
 }: {
+  eyebrow: string;
   title: string;
-  intro?: string;
+  gradientText?: string;
+  intro: string;
   children: ReactNode;
 }) {
   return (
-    <main className="layout-container py-12">
-      <div className="mx-auto max-w-2xl">
-        <h1 className="text-title-lg text-ink">{title}</h1>
-        {intro && <p className="mt-2 text-muted-foreground">{intro}</p>}
-        <div className="mt-8 space-y-6 text-body-sm leading-relaxed text-muted-foreground">
-          {children}
-        </div>
-        <p className="mt-10 border-t border-border pt-6 text-caption">
-          This is a proof-of-concept. Content here is illustrative and not a binding legal agreement.
-        </p>
-      </div>
+    <main>
+      <PagesHero
+        eyebrow={eyebrow}
+        title={title}
+        gradientText={gradientText}
+        intro={intro}
+      />
+      <section className="layout-container py-12 sm:py-16">
+        <div className="mx-auto max-w-3xl space-y-8">{children}</div>
+      </section>
     </main>
   );
 }
 
-export function LegalSection({ heading, children }: { heading: string; children: ReactNode }) {
+export function LegalSection({
+  heading,
+  children,
+}: {
+  heading: string;
+  children: ReactNode;
+}) {
   return (
-    <section className="space-y-2">
-      <h2 className="text-title-sm text-ink">{heading}</h2>
-      {children}
+    <section className="scroll-mt-24 border-b border-border pb-8 last:border-b-0">
+      <h2 className="text-title-md tracking-normal text-ink">{heading}</h2>
+      <div className="mt-3 space-y-3 text-body-md leading-relaxed text-muted-foreground">
+        {children}
+      </div>
     </section>
+  );
+}
+
+export function GradientText({ children }: { children: ReactNode }) {
+  return (
+    <strong className="bg-gradient-to-r from-primary via-teal-600 to-amber-600 bg-clip-text font-semibold text-transparent">
+      {children}
+    </strong>
   );
 }

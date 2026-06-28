@@ -1,6 +1,8 @@
 packages:
   - "staynex-frontend"
   - "staynex-backend"
+  - "staynex-mobile"
+  - "packages/*"
 allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true

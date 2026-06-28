@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { PublicHeader } from "@/components/public-header";
+import { SiteFooter } from "@/components/site-footer";
 import { AssistantWidget } from "@/features/ai/assistant-widget";
 
 export default function PublicLayout({ children }: { children: ReactNode }) {
@@ -7,6 +8,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
     <div className="min-h-dvh bg-background">
       <PublicHeader />
       {children}
+      <SiteFooter />
       <AssistantWidget />
     </div>
   );

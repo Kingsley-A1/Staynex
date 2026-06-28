@@ -1,18 +1,49 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "../styles/globals.css";
+import { PageLoadingLine } from "@/components/page-loading-line";
+import {
+  DEFAULT_DESCRIPTION,
+  SEO_KEYWORDS,
+  SITE_NAME,
+  getSiteOrigin,
+  getSiteUrl,
+} from "@/lib/seo";
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-const description =
-  "Book trusted stays, Confidently. Verified properties, secure Paystack payments, and real-time availability across Nigeria and beyond.";
+const appUrl = getSiteUrl();
+const appOrigin = getSiteOrigin();
+
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "TravelAgency",
+  name: SITE_NAME,
+  url: appOrigin,
+  logo: `${appOrigin}/assets/logo-main.png`,
+  areaServed: "Nigeria",
+  slogan: "Book trusted stays, confidently.",
+  contactPoint: {
+    "@type": "ContactPoint",
+    email: "support@staynexbookings.ng",
+    contactType: "customer support",
+  },
+};
 
 export const metadata: Metadata = {
-  metadataBase: new URL(appUrl),
+  metadataBase: appUrl,
   title: {
-    default: "Staynex — Book trusted stays, Confidently.",
+    default: "Staynex | Verified stays and secure bookings in Nigeria",
     template: "%s · Staynex",
   },
-  description,
-  applicationName: "Staynex",
+  description: DEFAULT_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: SEO_KEYWORDS,
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: "travel",
+  manifest: "/manifest.webmanifest",
+  formatDetection: {
+    telephone: false,
+  },
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
@@ -24,15 +55,24 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
-    siteName: "Staynex",
-    url: appUrl,
-    title: "Staynex — Book trusted stays, Confidently.",
-    description,
+    siteName: SITE_NAME,
+    url: appOrigin,
+    title: "Staynex | Verified stays and secure bookings in Nigeria",
+    description: DEFAULT_DESCRIPTION,
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "Staynex verified stays and secure bookings",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Staynex — Book trusted stays, Confidently.",
-    description,
+    title: "Staynex | Verified stays and secure bookings in Nigeria",
+    description: DEFAULT_DESCRIPTION,
+    images: ["/opengraph-image"],
   },
 };
 
@@ -41,7 +81,18 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Suspense fallback={null}>
+          <PageLoadingLine />
+        </Suspense>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(organizationJsonLd).replace(/</g, "\\u003c"),
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

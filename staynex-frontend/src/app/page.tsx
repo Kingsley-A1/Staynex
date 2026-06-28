@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { Brandmark } from "@/components/brandmark";
+import { SiteFooter } from "@/components/site-footer";
 import { SearchPanel } from "@/features/booking/search-panel";
 import { TestimonialsSection } from "@/features/reviews/testimonials-section";
 
@@ -432,84 +434,6 @@ function OwnerCta() {
 }
 
 /* ============================================================================
-   Footer
-   ========================================================================== */
-function SiteFooter() {
-  const cols = [
-    {
-      title: "Explore",
-      links: [
-        ["Stays", "/search"],
-        ["Destinations", "/search"],
-        ["Featured", "/search"],
-      ],
-    },
-    {
-      title: "Company",
-      links: [
-        ["About", "/about"],
-        ["List your property", "/list-your-property"],
-      ],
-    },
-    {
-      title: "Legal",
-      links: [
-        ["Terms", "/terms"],
-        ["Policies", "/policies"],
-        ["Legal", "/legal"],
-      ],
-    },
-  ] as const;
-
-  return (
-    <footer className="border-t border-border bg-surface-raised">
-      <div className="layout-container py-12">
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="col-span-2 lg:col-span-2">
-            <Link
-              href="/"
-              className="inline-flex items-center"
-              aria-label="Staynex home"
-            >
-              <Brandmark />
-            </Link>
-            <p className="mt-3 max-w-xs text-body-sm text-muted-foreground">
-              Book trusted stays, Confidently.
-            </p>
-          </div>
-
-          {cols.map((col) => (
-            <nav key={col.title} aria-label={col.title}>
-              <h3 className="text-overline">{col.title}</h3>
-              <ul className="mt-3 space-y-2.5">
-                {col.links.map(([label, href]) => (
-                  <li key={label}>
-                    <Link
-                      href={href}
-                      className="text-sm text-muted-foreground transition-colors hover:text-ink"
-                    >
-                      {label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          ))}
-        </div>
-
-        <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-border pt-6 text-caption sm:flex-row">
-          <p>© {new Date().getFullYear()} Staynex. All rights reserved.</p>
-          <p className="inline-flex items-center gap-1.5">
-            <IconGlobe className="size-4" />
-            Nigeria · Expanding worldwide
-          </p>
-        </div>
-      </div>
-    </footer>
-  );
-}
-
-/* ============================================================================
    Small shared pieces
    ========================================================================== */
 function SectionHead({
@@ -537,23 +461,6 @@ function SectionHead({
         <IconArrowRight className="size-4" />
       </Link>
     </div>
-  );
-}
-
-function Brandmark({ className = "h-10 w-36" }: { className?: string }) {
-  // Source asset is a square lockup with whitespace padding; object-cover crops
-  // the vertical padding to a clean horizontal band (the wordmark stays intact).
-  return (
-    <span className={`relative block ${className}`}>
-      <Image
-        src="/assets/logo.png"
-        alt="Staynex"
-        fill
-        sizes="144px"
-        priority
-        className="object-cover object-center"
-      />
-    </span>
   );
 }
 
@@ -633,14 +540,6 @@ function IconHeadset({ className }: IconProps) {
       <rect x="3" y="13" width="4" height="6" rx="1.5" />
       <rect x="17" y="13" width="4" height="6" rx="1.5" />
       <path d="M21 19a3 3 0 0 1-3 3h-3" />
-    </svg>
-  );
-}
-function IconGlobe({ className }: IconProps) {
-  return (
-    <svg {...svg(className)}>
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M3.5 12h17M12 3.5c2.5 2.3 2.5 14.7 0 17M12 3.5c-2.5 2.3-2.5 14.7 0 17" />
     </svg>
   );
 }

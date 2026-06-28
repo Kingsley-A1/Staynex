@@ -1,30 +1,104 @@
 import type { Metadata } from "next";
-import { LegalPage, LegalSection } from "@/features/legal/legal-page";
+import {
+  GradientText,
+  LegalPage,
+  LegalSection,
+} from "@/features/legal/legal-page";
 
-export const metadata: Metadata = { title: "Terms — Staynex" };
+export const metadata: Metadata = {
+  title: "Terms of Use | Staynex",
+  description:
+    "Read Staynex terms for accounts, bookings, payments, guest responsibilities, owner responsibilities, cancellations, and acceptable use.",
+  alternates: { canonical: "/terms" },
+  openGraph: {
+    title: "Terms of Use | Staynex",
+    description:
+      "The rules for using Staynex as a guest, property owner, or platform user.",
+    url: "/terms",
+  },
+};
 
 export default function TermsPage() {
   return (
     <LegalPage
-      title="Terms of use"
-      intro="A plain-language summary of how Staynex works during this proof-of-concept."
+      eyebrow="Terms"
+      title="The rules for"
+      gradientText="using Staynex"
+      intro="These terms explain the practical agreement between Staynex, guests, property owners, and other users of the platform."
     >
-      <LegalSection heading="Using Staynex">
+      <LegalSection heading="Accepting these terms">
         <p>
-          You may search stays without an account. An account is required at checkout, just before
-          payment, so we can attach your booking and send your confirmation.
+          By creating an account, listing a property, making a booking,
+          submitting a review, or using Staynex, you agree to use the platform
+          lawfully and in line with these terms and any booking-specific policy
+          shown during checkout.
         </p>
       </LegalSection>
+
+      <LegalSection heading="Accounts">
+        <p>
+          You are responsible for the accuracy of your account information and
+          for keeping your sign-in access secure. Staynex may restrict or
+          suspend accounts involved in fraud, abuse, misleading activity,
+          unauthorized access, or repeated policy violations.
+        </p>
+      </LegalSection>
+
       <LegalSection heading="Bookings and payments">
         <p>
-          A booking is held briefly while you pay and is only confirmed after your payment is verified.
-          Holds expire if payment isn't completed in time.
+          Prices, availability, fees, and booking terms are shown before
+          checkout. A booking is not confirmed until payment is completed and
+          verified. Staynex may cancel, reverse, or review transactions affected
+          by payment failure, suspected fraud, duplicate bookings, or inventory
+          conflicts.
+        </p>
+        <p>
+          Payment processing is handled through{" "}
+          <GradientText>secure third-party providers</GradientText>.
         </p>
       </LegalSection>
-      <LegalSection heading="Reviews">
+
+      <LegalSection heading="Guest responsibilities">
+        <ul className="list-disc space-y-2 pl-5">
+          <li>Provide accurate guest, contact, and payment information.</li>
+          <li>
+            Follow property rules, occupancy limits, check-in instructions, and
+            local laws.
+          </li>
+          <li>
+            Report booking or stay issues promptly with relevant evidence.
+          </li>
+          <li>Use reviews honestly and respectfully.</li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection heading="Owner responsibilities">
+        <ul className="list-disc space-y-2 pl-5">
+          <li>
+            Keep listings, prices, amenities, rooms, and availability accurate.
+          </li>
+          <li>
+            Honor confirmed bookings and communicate operational issues quickly.
+          </li>
+          <li>Maintain safe, clean, and lawful accommodation standards.</li>
+          <li>
+            Provide payout and business information that is accurate and
+            authorized.
+          </li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection heading="Changes, limits, and contact">
         <p>
-          You can review a stay only from a confirmed booking. Reviews are checked before they appear
-          publicly.
+          Staynex may update these terms as the product, laws, payment flows, or
+          operating model evolve. For questions about these terms, contact{" "}
+          <a
+            className="font-semibold text-primary"
+            href="mailto:legal@staynexbookings.ng"
+          >
+            legal@staynexbookings.ng
+          </a>
+          .
         </p>
       </LegalSection>
     </LegalPage>

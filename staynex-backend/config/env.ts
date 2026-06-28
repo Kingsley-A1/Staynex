@@ -11,14 +11,19 @@ const requiredString = z.preprocess(
   z.string().min(1),
 );
 
-const optionalString = z.preprocess(normalizeOptionalString, z.string().optional());
+const optionalString = z.preprocess(
+  normalizeOptionalString,
+  z.string().optional(),
+);
 
 /**
  * Backend environment contract. Keep this in sync with the root `.env.example`.
  * Validated once at boot via `loadEnv()` so the API fails fast on misconfig.
  */
 export const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "test", "production"])
+    .default("development"),
   DATABASE_URL: requiredString,
   API_PORT: z.coerce.number().int().positive().default(4000),
   CORS_ORIGIN: optionalString,
@@ -29,7 +34,12 @@ export const envSchema = z.object({
   NEXT_PUBLIC_APP_URL: optionalString,
   // Platform commission in basis points (1 bps = 0.01%; 1000 = 10%). Snapshotted
   // onto each payment at checkout. Defaults to 10% when unset.
-  PLATFORM_COMMISSION_BPS: z.coerce.number().int().min(0).max(10000).default(1000),
+  PLATFORM_COMMISSION_BPS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(10000)
+    .default(1000),
   // Email (Resend). Optional so the API boots without it; NotificationsService
   // degrades to a logged "queued, not sent" state when unconfigured.
   RESEND_API_KEY: optionalString,
@@ -45,11 +55,17 @@ export const envSchema = z.object({
   // the client never chooses its own admin role.
   ADMIN_REVIEWER_ACCESS_CODE: z.preprocess(
     normalizeOptionalString,
-    z.string().regex(/^\d{6}$/, "ADMIN_REVIEWER_ACCESS_CODE must be 6 digits").optional(),
+    z
+      .string()
+      .regex(/^\d{6}$/, "ADMIN_REVIEWER_ACCESS_CODE must be 6 digits")
+      .optional(),
   ),
   ADMIN_MANAGER_ACCESS_CODE: z.preprocess(
     normalizeOptionalString,
-    z.string().regex(/^\d{6}$/, "ADMIN_MANAGER_ACCESS_CODE must be 6 digits").optional(),
+    z
+      .string()
+      .regex(/^\d{6}$/, "ADMIN_MANAGER_ACCESS_CODE must be 6 digits")
+      .optional(),
   ),
   // Set in production so session cookies are marked Secure.
   COOKIE_DOMAIN: optionalString,
@@ -64,7 +80,10 @@ export const envSchema = z.object({
     normalizeOptionalString,
     z
       .string()
-      .regex(/^[0-9a-fA-F]{64}$/, "OWNER_PAYOUT_ENCRYPTION_KEY must be 64 hex characters")
+      .regex(
+        /^[0-9a-fA-F]{64}$/,
+        "OWNER_PAYOUT_ENCRYPTION_KEY must be 64 hex characters",
+      )
       .optional(),
   ),
 });
@@ -73,16 +92,21 @@ export type Env = z.infer<typeof envSchema>;
 
 /** Parse and validate process environment. Throws a readable error on failure. */
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
+  const isProduction = source.NODE_ENV === "production";
   const normalizedSource = {
     ...source,
-    // Railway exposes PORT. Keep API_PORT for local/dev ergonomics, but listen on
-    // the platform-assigned port in production when API_PORT is not set.
-    API_PORT: source.API_PORT ?? source.PORT,
+    // Railway exposes PORT and routes traffic only to that assigned port. Keep
+    // API_PORT for local/dev ergonomics, but never let it override PORT in prod.
+    API_PORT: isProduction
+      ? (source.PORT ?? source.API_PORT)
+      : (source.API_PORT ?? source.PORT),
   };
   const parsed = envSchema.safeParse(normalizedSource);
   if (!parsed.success) {
     const issues = parsed.error.issues
-      .map((issue) => `  - ${issue.path.join(".") || "(root)"}: ${issue.message}`)
+      .map(
+        (issue) => `  - ${issue.path.join(".") || "(root)"}: ${issue.message}`,
+      )
       .join("\n");
     throw new Error(`Invalid environment variables:\n${issues}`);
   }

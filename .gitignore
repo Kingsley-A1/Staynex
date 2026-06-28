@@ -11,3 +11,4 @@ pnpm-debug.log*
 .DS_Store
 *.docx
 skill.zip
+/staynex-mobile
