@@ -4,27 +4,52 @@ import { prisma } from "../../../db";
 import type { AssistantReply, AuthUser } from "../../../types";
 import { CatalogService } from "../catalog/catalog.service";
 import { ConversationsService } from "./conversations.service";
-import { GeminiService, type GeminiTurn } from "./gemini.service";
+import { GeminiRateLimitError, GeminiService, type GeminiTurn } from "./gemini.service";
+import { retrieveKnowledge } from "./staynex-knowledge";
 import type { AssistantInput } from "./dto";
 
-const SYSTEM_PROMPT = `You are "Staynex Agent", a professional AI agent for the Staynex hospitality booking platform. Your job is to help people find available stays on Staynex and guide them confidently through the booking journey.
+/** Server-sent events emitted by the streaming assistant. */
+export type AssistantStreamEvent =
+  | { type: "chunk"; text: string }
+  | {
+      type: "done";
+      conversationId: string;
+      refused: boolean;
+      unavailable: boolean;
+      groundedFacts: string[];
+    };
+
+const SYSTEM_PROMPT = `You are "Staynex AI", a super-intelligent assistant built directly into the Staynex hospitality booking platform. You were engineered by a team of perfectionist engineers at Bespoke Technologies (bespoketech.com.ng), led by Kingsley Maduabuchi, with one goal: to make your booking experience on Staynex stand out. You are an AI — never claim to be human — but you are sharp, warm, and genuinely helpful.
+
+Always address the user personally as "you" and "your". Keep answers short, warm, and practical.
+
+WHO YOU ARE (answer naturally when asked who or what you are, or who built you):
+- You are Staynex AI, the intelligent assistant inside Staynex — a platform for verified stays and secure bookings in Nigeria.
+- Staynex was built by Bespoke Technologies (bespoketech.com.ng); the platform was engineered by a team led by Kingsley Maduabuchi.
 
 You MAY:
-- Help users find stays: suggest searching a city and dates, opening a property, and comparing rooms using ONLY the verified facts provided to you.
-- Explain how booking works end to end: search, view a stay, check availability, place a hold, sign in, pay securely with Paystack, and view confirmation status.
+- Help the user find stays using ONLY the verified, live facts provided to you (real listings, prices, cities, reviews, coverage).
+- Explain how booking works end to end: search, view a stay, check availability, place a hold, sign in, pay securely through our trusted payment provider, and view confirmation status.
 - Explain Staynex policies and guide the next best step.
 
+Never name the underlying payment provider — always refer to it as "a trusted payment provider" or "secure payment".
+
 You MUST NOT, under any circumstances:
-- Invent or guarantee availability for specific dates. Availability is only known after the user checks it on the property page; guide them to search by city and dates instead.
-- Confirm, verify, approve, or process payments. Payment is confirmed only by Staynex after Paystack verification.
+- Invent or guarantee availability for specific dates. Live, date-exact availability is confirmed on the property page; guide the user there.
+- Confirm, verify, approve, or process payments. A booking is confirmed only after Staynex verifies the payment.
 - Promise, approve, or process refunds.
 - Change or claim to change any booking, payment, or financial record.
 - Override booking rules (hold expiry, payment-before-confirmation).
 - Reveal private data about other users, owners, or internal systems.
 - Make legal claims or give legal advice.
-- Pretend to be a human. You are an AI agent.
+- Pretend to be a human.
 
-If asked to do any forbidden thing, briefly decline and point the user to the correct, verified path (search, the property page, checkout, or Staynex support). Keep answers short, warm, and practical. Never state a specific room price or detail unless it appears in the verified facts you were given.`;
+If asked to do any forbidden thing, briefly decline and point the user to the correct, verified path (search, the property page, checkout, or Staynex support).
+
+GROUNDING RULES:
+- Use ONLY the verified facts provided below. Never state a specific price, listing, rating, review, or detail that is not in those facts.
+- If a fact says no listings or no reviews exist, say so honestly — never invent stays or reviews.
+- Prefer pointing the user to a real property page (the /stays/… link) over describing a stay vaguely.`;
 
 interface Canned {
   reply: string;
@@ -72,29 +97,135 @@ export class AssistantService {
     // 3) Provider availability — fail gracefully with a clear state.
     if (!this.gemini.isConfigured()) {
       return respond(
-        "The Staynex Agent is temporarily unavailable. You can still search stays, view rooms, and book directly on the property page.",
+        "Staynex AI is temporarily unavailable. You can still search stays, view rooms, and book directly on the property page.",
         "UNAVAILABLE",
         { unavailable: true },
       );
     }
 
     // 4) Tool-first grounding: pull verified public facts before answering.
-    const groundedFacts = await this.groundFacts(input.propertySlug);
+    const groundedFacts = await this.groundFacts(input.message, input.propertySlug);
     const systemPrompt = groundedFacts.length
       ? `${SYSTEM_PROMPT}\n\nVerified facts you may use (do not contradict or go beyond these):\n- ${groundedFacts.join("\n- ")}`
       : SYSTEM_PROMPT;
 
-    const history: GeminiTurn[] = [{ role: "user", text: input.message }];
-    const reply = await this.gemini.generate(systemPrompt, history);
-    if (!reply) {
-      return respond(
-        "The Staynex Agent couldn't respond right now. Please try again, or continue booking directly on the property page.",
-        "UNAVAILABLE",
-        { unavailable: true, groundedFacts },
-      );
+    // 5) Replay recent conversation history so follow-ups have context. The
+    //    current user message is already persisted, so it's the last turn here.
+    const turns = await this.conversations.recentForModel(conversationId);
+    const history: GeminiTurn[] = turns.map((t) => ({
+      role: t.role === AIMessageRole.AGENT ? "model" : "user",
+      text: t.content,
+    }));
+    if (history.length === 0) history.push({ role: "user", text: input.message });
+
+    const result = await this.gemini.generateResult(systemPrompt, history);
+    if (!result.ok) {
+      const reply =
+        result.reason === "rate_limited"
+          ? "Staynex AI is handling a lot of questions right now. Please try again in a moment — meanwhile you can search stays and book directly on the property page."
+          : "Staynex AI couldn't respond right now. Please try again, or continue booking directly on the property page.";
+      return respond(reply, "UNAVAILABLE", { unavailable: true, groundedFacts });
     }
 
-    return respond(reply, groundedFacts.length ? "AGENT_REPLY_GROUNDED" : "AGENT_REPLY", {
+    return respond(result.text, groundedFacts.length ? "AGENT_REPLY_GROUNDED" : "AGENT_REPLY", {
+      groundedFacts,
+    });
+  }
+
+  /**
+   * Streaming variant of {@link ask}. Same safety-first pipeline, but the model's
+   * reply is emitted as incremental `chunk` events, then a final `done` event with
+   * metadata. Deterministic outcomes (guardrail / canned / unavailable) emit their
+   * full text as a single chunk. The complete reply is persisted once, at the end.
+   */
+  async *askStream(input: AssistantInput, user: AuthUser | null): AsyncGenerator<AssistantStreamEvent> {
+    const conversationId = await this.ensureConversation(input.conversationId, user, input.message);
+    await this.conversations.saveMessage(conversationId, AIMessageRole.USER, input.message);
+    await this.conversations.ensureTitle(conversationId, input.message);
+
+    const summary = summarize(input.message);
+    const finalize = async (
+      reply: string,
+      actionType: string,
+      flags: { refused?: boolean; unavailable?: boolean; groundedFacts?: string[] } = {},
+    ): Promise<AssistantStreamEvent> => {
+      await this.conversations.saveMessage(conversationId, AIMessageRole.AGENT, reply);
+      await this.log(conversationId, actionType, summary);
+      return {
+        type: "done",
+        conversationId,
+        refused: flags.refused ?? false,
+        unavailable: flags.unavailable ?? false,
+        groundedFacts: flags.groundedFacts ?? [],
+      };
+    };
+
+    // 1) Deterministic safety gate.
+    const blocked = this.guardrail(input.message);
+    if (blocked) {
+      yield { type: "chunk", text: blocked.reply };
+      yield await finalize(blocked.reply, blocked.summary, { refused: true });
+      return;
+    }
+
+    // 2) Trained, deterministic answers.
+    const trained = this.trainedAnswer(input.message);
+    if (trained) {
+      yield { type: "chunk", text: trained.reply };
+      yield await finalize(trained.reply, "TRAINED_ANSWER");
+      return;
+    }
+
+    // 3) Provider availability.
+    if (!this.gemini.isConfigured()) {
+      const reply =
+        "Staynex AI is temporarily unavailable. You can still search stays, view rooms, and book directly on the property page.";
+      yield { type: "chunk", text: reply };
+      yield await finalize(reply, "UNAVAILABLE", { unavailable: true });
+      return;
+    }
+
+    // 4) Grounding + history.
+    const groundedFacts = await this.groundFacts(input.message, input.propertySlug);
+    const systemPrompt = groundedFacts.length
+      ? `${SYSTEM_PROMPT}\n\nVerified facts you may use (do not contradict or go beyond these):\n- ${groundedFacts.join("\n- ")}`
+      : SYSTEM_PROMPT;
+    const turns = await this.conversations.recentForModel(conversationId);
+    const history: GeminiTurn[] = turns.map((t) => ({
+      role: t.role === AIMessageRole.AGENT ? "model" : "user",
+      text: t.content,
+    }));
+    if (history.length === 0) history.push({ role: "user", text: input.message });
+
+    // 5) Stream the model reply; accumulate to persist once at the end.
+    let full = "";
+    try {
+      for await (const delta of this.gemini.streamText(systemPrompt, history)) {
+        full += delta;
+        yield { type: "chunk", text: delta };
+      }
+    } catch (err) {
+      if (full.length === 0) {
+        const reply =
+          err instanceof GeminiRateLimitError
+            ? "Staynex AI is handling a lot of questions right now. Please try again in a moment — meanwhile you can search stays and book directly on the property page."
+            : "Staynex AI couldn't respond right now. Please try again, or continue booking directly on the property page.";
+        yield { type: "chunk", text: reply };
+        yield await finalize(reply, "UNAVAILABLE", { unavailable: true, groundedFacts });
+        return;
+      }
+      // Partial reply already streamed — finalize what we have below.
+    }
+
+    if (full.trim().length === 0) {
+      const reply =
+        "Staynex AI couldn't respond right now. Please try again, or continue booking directly on the property page.";
+      yield { type: "chunk", text: reply };
+      yield await finalize(reply, "UNAVAILABLE", { unavailable: true, groundedFacts });
+      return;
+    }
+
+    yield await finalize(full, groundedFacts.length ? "AGENT_REPLY_GROUNDED" : "AGENT_REPLY", {
       groundedFacts,
     });
   }
@@ -115,7 +246,7 @@ export class AssistantService {
       return {
         summary: "Refused: manual payment confirmation",
         reply:
-          "I can't confirm or verify payments. A booking is only confirmed after Staynex verifies your Paystack payment. Check your payment status page for the live result.",
+          "I can't confirm or verify payments. A booking is only confirmed after Staynex verifies your payment. Check your payment status page for the live result.",
       };
     }
     if (/\b(guarantee|promise)\b[^.?!]{0,24}\b(availab|room|book|date)/.test(m)) {
@@ -149,7 +280,7 @@ export class AssistantService {
       return {
         summary: "Explained booking & payment flow",
         reply:
-          "Here's how booking works on Staynex:\n1. Search a city and your dates.\n2. Open a stay and pick a room.\n3. Check availability for those exact dates.\n4. Place a short hold to lock it.\n5. Sign in (or register) and pay securely with Paystack.\n6. Your booking is confirmed only after Staynex verifies the payment — you'll see the status on your confirmation page.\nI can't confirm payments myself, but I can guide you to each step.",
+          "Here's how booking works on Staynex:\n1. Search a city and your dates.\n2. Open a stay and pick a room.\n3. Check availability for those exact dates.\n4. Place a short hold to lock it.\n5. Sign in (or register) and pay securely through our trusted payment provider.\n6. Your booking is confirmed only after Staynex verifies the payment — you'll see the status on your confirmation page.\nI can't confirm payments myself, but I can guide you to each step.",
       };
     }
     if (/\bwhat\b[^?]*\b(check|look for|consider|know)\b/.test(m)) {
@@ -159,29 +290,139 @@ export class AssistantService {
           "Before you book, it helps to check:\n• Room type and how many guests it fits\n• The nightly price and total for your dates\n• The property's city and area/location\n• Photos, description, and amenities\n• Guest reviews\nThen confirm your exact dates are available on the property page before paying.",
       };
     }
-    if (/\b(find|show|see|available|availability|browse|looking for)\b[^?]*\b(stay|stays|hotel|hotels|room|rooms|place|apartment|accommodation)\b/.test(m)) {
-      return {
-        summary: "Guided to availability search",
-        reply:
-          "I can't confirm live availability from chat, but here's the fastest way to find stays that are actually available:\n1. Open Search.\n2. Choose your city (for example Calabar, Uyo, Port Harcourt, Lagos, or Abuja).\n3. Add your check-in and check-out dates.\nThe results will show approved stays you can book for those dates. Tell me your city and dates and I'll explain what to do next.",
-      };
-    }
+    // Note: "find stays in <city>" intentionally falls through to the grounded
+    // model path so it can surface real, live listings (see cityListingFacts).
     return null;
   }
 
-  /** Pull verified, public, APPROVED-only facts for grounding (never private data). */
-  private async groundFacts(propertySlug?: string): Promise<string[]> {
-    if (!propertySlug) return [];
+  /**
+   * Retrieve verified, live, public facts to ground the answer. Pulls fresh from
+   * the DB every turn (never cached static knowledge), then layers curated policy
+   * facts. Sources, most specific first:
+   *  1. Open property page → that property's rooms + live review summary.
+   *  2. A named Staynex city → real approved listings (live count).
+   *  3. Coverage questions → live cities served + approved-stay count.
+   *  4. Policy / company / FAQ → curated knowledge base.
+   * Never returns private data, and never asserts date-exact availability.
+   */
+  private async groundFacts(message: string, propertySlug?: string): Promise<string[]> {
+    const facts: string[] = [];
+
+    if (propertySlug) {
+      facts.push(...(await this.propertyFacts(propertySlug)));
+      facts.push(...(await this.reviewFacts(propertySlug)));
+    } else {
+      facts.push(...(await this.cityListingFacts(message)));
+    }
+
+    facts.push(...(await this.platformOverviewFacts(message)));
+    facts.push(...retrieveKnowledge(message));
+
+    // De-duplicate and cap so the prompt stays tight.
+    return [...new Set(facts)].slice(0, 16);
+  }
+
+  /** Facts for a single open property page (room types + prices). */
+  private async propertyFacts(propertySlug: string): Promise<string[]> {
     try {
       const property = await this.catalog.getPublicProperty(propertySlug);
       const facts: string[] = [`Property: ${property.name} in ${property.cityName}.`];
       if (property.description) facts.push(`About: ${property.description}`);
       for (const rt of property.roomTypes) {
-        const price = `₦${Math.round(rt.basePriceKobo / 100).toLocaleString("en-NG")}`;
-        facts.push(`Room "${rt.name}": ${price}/night, up to ${rt.maxGuests} guests.`);
+        facts.push(
+          `Room "${rt.name}": ${formatNaira(rt.basePriceKobo)}/night, up to ${rt.maxGuests} guests.`,
+        );
       }
       facts.push(
         "Live date-by-date availability is NOT included here; the user must check it on the property page.",
+      );
+      return facts;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Live, approved-only review summary for a property. Only cited when reviews
+   * actually exist (never fabricated when there are none).
+   */
+  private async reviewFacts(propertySlug: string): Promise<string[]> {
+    try {
+      const agg = await prisma.testimonial.aggregate({
+        where: { status: "APPROVED", property: { slug: propertySlug } },
+        _avg: { rating: true },
+        _count: { _all: true },
+      });
+      const count = agg._count._all;
+      if (count === 0 || agg._avg.rating == null) return [];
+      const avg = Math.round(agg._avg.rating * 10) / 10;
+      return [
+        `Verified guest reviews for this stay: ${avg}/5 from ${count} approved review${count === 1 ? "" : "s"}.`,
+      ];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Live platform coverage — cities served and how many approved stays are live
+   * right now. Only when the user asks about coverage / scope.
+   */
+  private async platformOverviewFacts(message: string): Promise<string[]> {
+    if (
+      !/\b(cities|towns|locations|coverage|cover|serve|operate|how many (stays|properties|listings|places)|where .*(book|stay|available)|launch cit)/i.test(
+        message,
+      )
+    ) {
+      return [];
+    }
+    try {
+      const [cities, approvedCount] = await Promise.all([
+        this.catalog.cities(),
+        prisma.property.count({ where: { status: "APPROVED" } }),
+      ]);
+      if (cities.length === 0) return [];
+      return [
+        `Staynex currently serves these cities: ${cities.map((c) => c.name).join(", ")}.`,
+        `There ${approvedCount === 1 ? "is" : "are"} ${approvedCount} approved stay${approvedCount === 1 ? "" : "s"} live on Staynex right now.`,
+      ];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * If the message names a Staynex city, ground the answer in that city's real
+   * approved listings (name, from-price, page path) so the AI points to bookable
+   * stays instead of inventing them. Returns an explicit "no listings" fact when
+   * the city has none, so the model can't fill the gap with a hallucination.
+   */
+  private async cityListingFacts(message: string): Promise<string[]> {
+    try {
+      const cities = await this.catalog.cities();
+      const lower = message.toLowerCase();
+      const city = cities.find(
+        (c) => lower.includes(c.name.toLowerCase()) || lower.includes(c.slug.toLowerCase()),
+      );
+      if (!city) return [];
+
+      const results = await this.catalog.search({ city: city.name });
+      if (results.length === 0) {
+        return [
+          `No approved stays are currently listed in ${city.name} on Staynex. Suggest checking another city or trying again later.`,
+        ];
+      }
+
+      const top = results.slice(0, 5);
+      const facts: string[] = [
+        `Approved Staynex stays in ${city.name} (suggest these; the user opens a page to check live availability):`,
+      ];
+      for (const p of top) {
+        const price = p.fromPriceKobo != null ? `from ${formatNaira(p.fromPriceKobo)}/night` : "price on request";
+        facts.push(`• ${p.name} — ${price} (page: /stays/${p.slug})`);
+      }
+      facts.push(
+        "These are listings only; exact date availability must be confirmed on each property page.",
       );
       return facts;
     } catch {
@@ -218,4 +459,9 @@ export class AssistantService {
 function summarize(message: string): string {
   const clean = message.replace(/\s+/g, " ").trim();
   return clean.length > 80 ? `${clean.slice(0, 77)}…` : clean;
+}
+
+/** Kobo → NGN for grounded facts (display only; never used for math). */
+function formatNaira(kobo: number): string {
+  return `₦${Math.round(kobo / 100).toLocaleString("en-NG")}`;
 }

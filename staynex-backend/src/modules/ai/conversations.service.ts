@@ -84,6 +84,42 @@ export class ConversationsService {
     });
   }
 
+  /**
+   * Recent turns to replay to the model for conversational memory. Returns
+   * chronological (oldest→newest) messages, windowed by both a message count and
+   * a character budget (token-budget proxy), and guaranteed to start on a USER
+   * turn — Gemini expects history to begin with `user` and alternate.
+   */
+  async recentForModel(
+    conversationId: string,
+    maxMessages = 12,
+    maxChars = 6000,
+  ): Promise<{ role: AIMessageRole; content: string }[]> {
+    // Newest-first so we keep the most recent context when the budget is tight.
+    const rows = await prisma.aIMessage.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: "desc" },
+      take: maxMessages,
+      select: { role: true, content: true },
+    });
+
+    const picked: { role: AIMessageRole; content: string }[] = [];
+    let chars = 0;
+    for (const row of rows) {
+      chars += row.content.length;
+      // Always keep at least the latest turn, even if it alone exceeds the budget.
+      if (chars > maxChars && picked.length > 0) break;
+      picked.push(row);
+    }
+
+    picked.reverse(); // back to chronological order
+    // Drop any leading AGENT turns so the window starts on a USER turn.
+    while (picked.length > 0 && picked[0].role !== AIMessageRole.USER) {
+      picked.shift();
+    }
+    return picked;
+  }
+
   /** Set a title from the first user message if one isn't set yet. */
   async ensureTitle(conversationId: string, fromMessage: string): Promise<void> {
     const convo = await prisma.aIConversation.findUnique({
