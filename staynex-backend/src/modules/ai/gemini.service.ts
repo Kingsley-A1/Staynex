@@ -87,7 +87,7 @@ export class GeminiService {
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: systemPrompt }] },
             contents: history.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
-            generationConfig: { temperature: 0.3, maxOutputTokens: 512 },
+            generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
           }),
         });
 
@@ -153,7 +153,7 @@ export class GeminiService {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: history.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
-        generationConfig: { temperature: 0.3, maxOutputTokens: 512 },
+        generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
       }),
     });
 

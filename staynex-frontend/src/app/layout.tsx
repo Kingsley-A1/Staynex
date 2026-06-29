@@ -58,7 +58,7 @@ export const metadata: Metadata = {
     type: "website",
     siteName: SITE_NAME,
     url: appOrigin,
-    title: "Staynex | Verified stays and secure bookings in Nigeria",
+    title: "Staynex | Book trusted stays, confidently",
     description: DEFAULT_DESCRIPTION,
     images: [
       {
@@ -71,7 +71,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Staynex | Verified stays and secure bookings in Nigeria",
+    title: "Staynex | Book Trusted Stays, Confidently",
     description: DEFAULT_DESCRIPTION,
     images: ["/opengraph-image"],
   },

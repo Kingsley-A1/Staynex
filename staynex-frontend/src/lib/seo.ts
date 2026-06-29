@@ -1,11 +1,14 @@
-export const SITE_NAME = "Staynex";
+export const SITE_NAME = "Staynex Bookings";
 export const DEFAULT_SITE_URL = "https://staynexbookings.ng";
 
 export const DEFAULT_DESCRIPTION =
-  "Book verified hotels, apartments, and short-let stays across Nigeria with secure Paystack payments, real-time availability, and trusted guest support.";
+  "Book verified hotels, apartments, and short-let stays across Nigeria with secure payments, real-time availability, and trusted guest support.";
 
 export const SEO_KEYWORDS = [
-  "Staynex",
+  "Staynex Bookings",
+  "Booking",
+  "Hotel Booking",
+  "Book a hotel",
   "hotel booking Nigeria",
   "verified stays Nigeria",
   "shortlet booking Nigeria",
