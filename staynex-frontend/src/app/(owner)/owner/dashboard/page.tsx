@@ -1,15 +1,18 @@
 import { KpiCard, LinkButton, PropertyCard } from "@/ui";
-import { getOwnerKpis, listOwnerProperties } from "@/features/properties/fixtures";
+import { getOwnerKpis } from "@/features/properties/fixtures";
 import { getOwnerBookings } from "@/lib/server-reports";
+import { getOwnerProperties } from "@/lib/server-owner";
 import { formatNairaFromKobo } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function OwnerDashboardPage() {
   const fallback = getOwnerKpis();
-  const properties = listOwnerProperties();
-  // Live booking KPIs for the signed-in owner; fixtures keep the page useful offline.
-  const { data: live } = await getOwnerBookings();
+  // Live booking KPIs + the owner's own listings for the signed-in owner.
+  const [{ data: live }, properties] = await Promise.all([
+    getOwnerBookings(),
+    getOwnerProperties(),
+  ]);
 
   const confirmed = live ? String(live.kpis.confirmedBookings) : "—";
   const pendingPayments = live ? String(live.kpis.pendingPayments) : "—";
@@ -50,11 +53,22 @@ export default async function OwnerDashboardPage() {
 
       <section className="space-y-4">
         <h2 className="text-title-sm text-ink">Your properties</h2>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {properties.map((p) => (
-            <PropertyCard key={p.id} property={p} href={`/owner/properties/${p.id}`} />
-          ))}
-        </div>
+        {properties && properties.length > 0 ? (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {properties.map((p) => (
+              <PropertyCard key={p.id} property={p} href={`/owner/properties/${p.id}`} />
+            ))}
+          </div>
+        ) : (
+          <div className="surface-card p-8 text-center">
+            <p className="text-muted-foreground">
+              {properties ? "No properties yet." : "Couldn't load your properties."}
+            </p>
+            <LinkButton href="/owner/properties/new" className="mt-4">
+              {properties ? "Create your first property" : "Add a property"}
+            </LinkButton>
+          </div>
+        )}
       </section>
     </div>
   );

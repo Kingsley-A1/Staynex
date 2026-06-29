@@ -1,7 +1,10 @@
 import { PropertyForm } from "@/features/properties/property-form";
-import { CITIES } from "@/features/properties/fixtures";
+import { getCities } from "@/lib/server-owner";
 
-export default function NewPropertyPage() {
+export const dynamic = "force-dynamic";
+
+export default async function NewPropertyPage() {
+  const cities = await getCities();
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <header className="space-y-1">
@@ -10,7 +13,7 @@ export default function NewPropertyPage() {
           Start with a draft. You can add room types and photos next.
         </p>
       </header>
-      <PropertyForm cities={CITIES} />
+      <PropertyForm cities={cities} />
     </div>
   );
 }
