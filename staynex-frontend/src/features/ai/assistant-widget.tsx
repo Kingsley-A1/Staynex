@@ -2,8 +2,9 @@
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { agentApi } from "@/lib/api";
+import { ApiError, agentApi } from "@/lib/api";
 import type { AgentConversation, AgentMessage } from "@/lib/types";
+import { FormattedMessage } from "@/features/ai/formatted-message";
 
 const SUGGESTIONS = [
   "Find me available stays in Calabar",
@@ -12,6 +13,10 @@ const SUGGESTIONS = [
 ];
 
 type Msg = { role: "USER" | "AGENT"; content: string; note?: "refused" | "unavailable" };
+
+// Remembers the active conversation across reloads so the panel reopens where the
+// user left off (server is the source of truth — this only stores the id).
+const ACTIVE_KEY = "staynex_ai_active_conversation";
 
 export function AssistantWidget() {
   const pathname = usePathname();
@@ -27,6 +32,7 @@ export function AssistantWidget() {
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const restoredRef = useRef(false);
 
   const refreshConversations = useCallback(async () => {
     try {
@@ -42,6 +48,13 @@ export function AssistantWidget() {
       void refreshConversations();
     }
   }, [open, refreshConversations]);
+
+  // Persist the active id only when set, so a closed panel (activeId null on
+  // mount) never wipes a stored id before the restore effect can read it.
+  // Clearing is explicit in newChat() and the failed-restore path.
+  useEffect(() => {
+    if (activeId) window.localStorage.setItem(ACTIVE_KEY, activeId);
+  }, [activeId]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -62,6 +75,20 @@ export function AssistantWidget() {
     }
   }
 
+  // Append a text delta to the in-flight agent message (created on first chunk).
+  function appendToAgent(text: string) {
+    setMessages((m) => {
+      const copy = [...m];
+      const last = copy[copy.length - 1];
+      if (last && last.role === "AGENT") {
+        copy[copy.length - 1] = { ...last, content: last.content + text };
+      } else {
+        copy.push({ role: "AGENT", content: text });
+      }
+      return copy;
+    });
+  }
+
   async function sendMessage(text: string) {
     const message = text.trim();
     if (!message || busy) return;
@@ -70,30 +97,45 @@ export function AssistantWidget() {
     setBusy(true);
     try {
       const slug = pathname.match(/^\/stays\/([^/?#]+)/)?.[1];
-      const reply = await agentApi.ask({
-        message,
-        conversationId: activeId ?? undefined,
-        ...(slug ? { propertySlug: decodeURIComponent(slug) } : {}),
+      await agentApi.askStream(
+        {
+          message,
+          conversationId: activeId ?? undefined,
+          ...(slug ? { propertySlug: decodeURIComponent(slug) } : {}),
+        },
+        {
+          onChunk: (t) => appendToAgent(t),
+          onDone: (meta) => {
+            setActiveId(meta.conversationId);
+            // Tag the just-streamed agent message with its final state, if any.
+            const note = meta.refused ? "refused" : meta.unavailable ? "unavailable" : undefined;
+            if (note) {
+              setMessages((m) => {
+                const copy = [...m];
+                const last = copy[copy.length - 1];
+                if (last && last.role === "AGENT") copy[copy.length - 1] = { ...last, note };
+                return copy;
+              });
+            }
+            void refreshConversations();
+          },
+        },
+      );
+    } catch (err) {
+      const rateLimited = err instanceof ApiError && err.status === 429;
+      const content = rateLimited
+        ? "You're sending messages quickly — please wait a few seconds and try again."
+        : "Staynex AI is unavailable right now. You can still search and book directly.";
+      setMessages((m) => {
+        const copy = [...m];
+        const last = copy[copy.length - 1];
+        // Mark a partially-streamed reply, else add a fresh notice.
+        if (last && last.role === "AGENT" && last.content.length > 0) {
+          copy[copy.length - 1] = { ...last, note: "unavailable" };
+          return copy;
+        }
+        return [...copy, { role: "AGENT", content, note: "unavailable" }];
       });
-      setActiveId(reply.conversationId);
-      setMessages((m) => [
-        ...m,
-        {
-          role: "AGENT",
-          content: reply.reply,
-          note: reply.refused ? "refused" : reply.unavailable ? "unavailable" : undefined,
-        },
-      ]);
-      void refreshConversations();
-    } catch {
-      setMessages((m) => [
-        ...m,
-        {
-          role: "AGENT",
-          content: "Staynex AI is unavailable right now. You can still search and book directly.",
-          note: "unavailable",
-        },
-      ]);
     } finally {
       setBusy(false);
     }
@@ -103,19 +145,31 @@ export function AssistantWidget() {
     setActiveId(null);
     setMessages([]);
     setHistoryOpen(false);
+    window.localStorage.removeItem(ACTIVE_KEY);
     inputRef.current?.focus();
   }
 
-  async function openConversation(id: string) {
-    setActiveId(id);
+  const openConversation = useCallback(async (id: string) => {
     setHistoryOpen(false);
     try {
       const msgs: AgentMessage[] = await agentApi.messages(id);
+      setActiveId(id);
       setMessages(msgs.map((m) => ({ role: m.role, content: m.content })));
     } catch {
+      // Stored/clicked conversation is gone or no longer ours — reset cleanly.
+      setActiveId(null);
       setMessages([]);
+      window.localStorage.removeItem(ACTIVE_KEY);
     }
-  }
+  }, []);
+
+  // Restore the last conversation the first time the panel opens this session.
+  useEffect(() => {
+    if (!open || restoredRef.current) return;
+    restoredRef.current = true;
+    const stored = window.localStorage.getItem(ACTIVE_KEY);
+    if (stored) void openConversation(stored);
+  }, [open, openConversation]);
 
   async function togglePin(c: AgentConversation) {
     await agentApi.setPinned(c.id, !c.pinned).catch(() => {});
@@ -305,10 +359,10 @@ export function AssistantWidget() {
                         key={i}
                         className={t.role === "USER" ? "flex justify-end" : "flex justify-start"}
                       >
-                        <p
-                          className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${
+                        <div
+                          className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
                             t.role === "USER"
-                              ? "rounded-br-sm bg-primary text-primary-foreground"
+                              ? "whitespace-pre-wrap rounded-br-sm bg-primary text-primary-foreground"
                               : t.note === "refused"
                                 ? "rounded-bl-sm border border-warning-border bg-warning-surface text-warning"
                                 : t.note === "unavailable"
@@ -316,12 +370,16 @@ export function AssistantWidget() {
                                   : "rounded-bl-sm bg-secondary text-ink"
                           }`}
                         >
-                          {t.content}
-                        </p>
+                          {t.role === "USER" ? (
+                            t.content
+                          ) : (
+                            <FormattedMessage content={t.content} onNavigate={() => setOpen(false)} />
+                          )}
+                        </div>
                       </div>
                     ))
                   )}
-                  {busy && (
+                  {busy && messages[messages.length - 1]?.role === "USER" && (
                     <div className="flex justify-start" aria-live="polite">
                       <p className="rounded-2xl rounded-bl-sm bg-secondary px-3 py-2 text-sm text-muted-foreground">
                         Thinking…
@@ -355,7 +413,7 @@ export function AssistantWidget() {
                             void sendMessage(input);
                           }
                         }}
-                        placeholder="Message Staynex Agent"
+                        placeholder="Message Staynex AI"
                         aria-label="Message Staynex AI"
                         className="max-h-40 min-h-[52px] flex-1 resize-none overflow-y-auto bg-transparent px-3 py-3 text-sm leading-6 text-ink outline-none placeholder:text-muted-foreground"
                       />
@@ -368,8 +426,12 @@ export function AssistantWidget() {
                         <ArrowUpIcon />
                       </button>
                     </div>
-        
                   </form>
+                  {/* Persistent transparency line — under the input, not atop the panel. */}
+                  <p className="mt-2 px-2 text-center text-caption text-muted-foreground">
+                    Staynex AI can make mistakes — confirm availability and prices on the
+                    property page.
+                  </p>
                 </div>
               </>
             )}

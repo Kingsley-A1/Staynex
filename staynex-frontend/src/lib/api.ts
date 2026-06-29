@@ -314,9 +314,81 @@ export const areasApi = {
     request<AreaOption[]>(`/areas?city=${encodeURIComponent(city)}`),
 };
 
+/** Metadata delivered by the final `done` event of a streamed reply. */
+export interface AgentStreamMeta {
+  conversationId: string;
+  refused: boolean;
+  unavailable: boolean;
+  groundedFacts: string[];
+}
+
+/**
+ * Streams an assistant reply over Server-Sent Events. `onChunk` fires for each
+ * incremental text delta; `onDone` fires once with the final metadata. Throws
+ * `ApiError` (e.g. 429) before any streaming begins.
+ */
+export async function askAgentStream(
+  body: { message: string; conversationId?: string; propertySlug?: string },
+  handlers: { onChunk: (text: string) => void; onDone: (meta: AgentStreamMeta) => void },
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/ai/assistant/stream`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok || !res.body) {
+    let detail: string | null = null;
+    try {
+      const data = (await res.json()) as { message?: string };
+      if (typeof data.message === "string") detail = data.message;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new ApiError(res.status, res.statusText, detail);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let doneMeta: AgentStreamMeta | null = null;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      const block = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      const line = block.split("\n").find((l) => l.startsWith("data:"));
+      if (!line) continue;
+      let event: { type?: string; text?: string } & Partial<AgentStreamMeta>;
+      try {
+        event = JSON.parse(line.slice(5).trim());
+      } catch {
+        continue;
+      }
+      if (event.type === "chunk" && typeof event.text === "string") {
+        handlers.onChunk(event.text);
+      } else if (event.type === "done") {
+        doneMeta = {
+          conversationId: event.conversationId ?? body.conversationId ?? "",
+          refused: Boolean(event.refused),
+          unavailable: Boolean(event.unavailable),
+          groundedFacts: event.groundedFacts ?? [],
+        };
+      }
+    }
+  }
+
+  if (doneMeta) handlers.onDone(doneMeta);
+}
+
 export const agentApi = {
   ask: (body: { message: string; conversationId?: string; propertySlug?: string }) =>
     request<AssistantReply>("/ai/assistant", { method: "POST", body: JSON.stringify(body) }),
+  askStream: askAgentStream,
   listConversations: () => request<AgentConversation[]>("/ai/conversations"),
   createConversation: (title?: string) =>
     request<AgentConversation>("/ai/conversations", {
