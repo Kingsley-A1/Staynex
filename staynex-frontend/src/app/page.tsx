@@ -127,7 +127,7 @@ const slug = (s: string) =>
    ========================================================================== */
 export default function HomePage() {
   return (
-    <>
+    <div className="bg-white">
       <SiteHeader />
 
       <main id="main">
@@ -140,7 +140,7 @@ export default function HomePage() {
       </main>
 
       <SiteFooter />
-    </>
+    </div>
   );
 }
 
@@ -149,7 +149,7 @@ export default function HomePage() {
    ========================================================================== */
 function SiteHeader() {
   return (
-    <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-background/80 backdrop-blur-md">
+    <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-white">
       <div className="layout-container flex h-16 items-center justify-between gap-4">
         <Link href="/" className="flex items-center" aria-label="Staynex home">
           <Brandmark />
@@ -195,7 +195,8 @@ function SiteHeader() {
 function Hero() {
   return (
     <section className="relative overflow-hidden">
-      {/* Decorative brand wash */}
+      {/* Brand gradient wash — soft colour over a pure-white base reads as premium,
+          not cloudy (the haze came from the off-white base + blurred header, now fixed). */}
       <div
         aria-hidden
         className="pointer-events-none absolute -top-32 left-1/2 h-96 w-[48rem] -translate-x-1/2 rounded-full bg-primary-subtle blur-3xl"
@@ -298,7 +299,7 @@ function Destinations() {
    ========================================================================== */
 function FeaturedStays() {
   return (
-    <section className="bg-surface-sunken py-14 sm:py-16">
+    <section className="border-y border-border/60 py-14 sm:py-16">
       <div className="layout-container">
         <SectionHead
           title="Featured stays"

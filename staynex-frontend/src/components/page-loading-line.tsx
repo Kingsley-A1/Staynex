@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
-const MIN_VISIBLE_MS = 260;
+// Hold the bar visible long enough to read as a calm, deliberate indicator
+// rather than a fast flicker on quick navigations.
+const MIN_VISIBLE_MS = 450;
 const NAV_FALLBACK_MS = 6000;
 
 export function PageLoadingLine() {
