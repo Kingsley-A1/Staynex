@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { Suspense } from "react";
 import "../styles/globals.css";
 import { PageLoadingLine } from "@/components/page-loading-line";
@@ -84,6 +85,7 @@ export default function RootLayout({
       <body>
         <Suspense fallback={null}>
           <PageLoadingLine />
+          <Analytics/>
         </Suspense>
         <script
           type="application/ld+json"
