@@ -4,7 +4,7 @@ import { ADMIN_NAV } from "@/components/nav-config";
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
-    <DashboardShell workspace="Admin console" nav={ADMIN_NAV}>
+    <DashboardShell workspace="Admin console" nav={ADMIN_NAV} accountHref="/admin/settings">
       {children}
     </DashboardShell>
   );

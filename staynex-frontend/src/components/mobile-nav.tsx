@@ -4,9 +4,20 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import type { NavItem } from "@/components/nav-config";
+import { NAV_ICONS, IconClose } from "@/components/icons";
+import { IconMenu } from "@/components/icons";
+import type { WorkspaceNavItem } from "@/components/nav-config";
+import type { AccountSummary } from "@/components/dashboard-chrome";
 
-export function MobileNav({ items, workspace }: { items: NavItem[]; workspace: string }) {
+export function MobileNav({
+  items,
+  workspace,
+  account,
+}: {
+  items: WorkspaceNavItem[];
+  workspace: string;
+  account?: AccountSummary | null;
+}) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -25,6 +36,8 @@ export function MobileNav({ items, workspace }: { items: NavItem[]; workspace: s
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  let lastSection: string | undefined;
+
   return (
     <>
       <button
@@ -35,7 +48,7 @@ export function MobileNav({ items, workspace }: { items: NavItem[]; workspace: s
         onClick={() => setOpen(true)}
         className="grid size-9 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <MenuIcon />
+        <IconMenu />
       </button>
 
       {/* Backdrop */}
@@ -64,60 +77,66 @@ export function MobileNav({ items, workspace }: { items: NavItem[]; workspace: s
             onClick={() => setOpen(false)}
             className="grid size-9 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <CloseIcon />
+            <IconClose />
           </button>
         </div>
 
         <nav aria-label="Workspace sections" className="flex-1 overflow-y-auto p-3">
-          <div className="flex flex-col gap-0.5">
+          <ul className="flex flex-col gap-0.5">
             {items.map((item) => {
-              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const Icon = NAV_ICONS[item.icon];
+              const active =
+                pathname === item.href ||
+                (item.href !== "/admin" && pathname.startsWith(`${item.href}/`));
+              const showHeading = item.section && item.section !== lastSection;
+              lastSection = item.section;
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
-                    active
-                      ? "bg-primary-subtle text-primary"
-                      : "text-muted-foreground hover:bg-secondary hover:text-ink",
+                <li key={item.href}>
+                  {showHeading && (
+                    <p className="px-3 pb-1 pt-3 text-overline text-muted-foreground">
+                      {item.section}
+                    </p>
                   )}
-                >
-                  {item.label}
-                </Link>
+                  <Link
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+                      active
+                        ? "bg-primary-subtle text-primary"
+                        : "text-muted-foreground hover:bg-secondary hover:text-ink",
+                    )}
+                  >
+                    <Icon className="size-5 shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                </li>
               );
             })}
-          </div>
+          </ul>
         </nav>
+
+        {account && (
+          <div className="shrink-0 border-t border-border p-3">
+            <Link
+              href={account.href}
+              className="flex items-center gap-3 rounded-md p-2 transition-colors hover:bg-secondary"
+            >
+              <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                {(account.name?.trim() || account.email || "?").charAt(0).toUpperCase()}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-ink">{account.name}</span>
+                {account.email && (
+                  <span className="block truncate text-caption text-muted-foreground">
+                    {account.email}
+                  </span>
+                )}
+              </span>
+            </Link>
+          </div>
+        )}
       </aside>
     </>
-  );
-}
-
-const svg = {
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.7,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-  className: "size-5",
-  "aria-hidden": true as const,
-};
-
-function MenuIcon() {
-  return (
-    <svg {...svg}>
-      <path d="M4 6h16M4 12h16M4 18h16" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg {...svg}>
-      <path d="M6 6l12 12M18 6 6 18" />
-    </svg>
   );
 }

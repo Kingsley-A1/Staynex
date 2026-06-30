@@ -1,9 +1,19 @@
 // Central role navigation data — reused by the owner/admin dashboard shells and
-// the guest nav so navigation isn't duplicated per layout.
+// the guest nav so navigation isn't duplicated per layout. Workspace items carry
+// an icon (drawn from components/icons.tsx) and an optional section label so the
+// collapsible sidebar can group + show an icon rail when collapsed.
+
+import type { IconName } from "@/components/icons";
 
 export interface NavItem {
   href: string;
   label: string;
+}
+
+export interface WorkspaceNavItem extends NavItem {
+  icon: IconName;
+  /** Group heading shown above the item in the expanded sidebar. */
+  section?: string;
 }
 
 export const GUEST_NAV: NavItem[] = [
@@ -13,21 +23,22 @@ export const GUEST_NAV: NavItem[] = [
   { href: "/settings", label: "Settings" },
 ];
 
-export const OWNER_NAV: NavItem[] = [
-  { href: "/owner/dashboard", label: "Dashboard" },
-  { href: "/owner/properties", label: "Properties" },
-  { href: "/owner/bookings", label: "Bookings" },
-  { href: "/owner/onboarding", label: "Onboarding" },
-  { href: "/owner/settings", label: "Settings" },
+export const OWNER_NAV: WorkspaceNavItem[] = [
+  { href: "/owner/dashboard", label: "Dashboard", icon: "overview", section: "Workspace" },
+  { href: "/owner/properties", label: "Properties", icon: "properties", section: "Workspace" },
+  { href: "/owner/bookings", label: "Bookings", icon: "bookings", section: "Workspace" },
+  { href: "/owner/onboarding", label: "Onboarding", icon: "onboarding", section: "Account" },
+  { href: "/owner/settings", label: "Settings", icon: "settings", section: "Account" },
 ];
 
-export const ADMIN_NAV: NavItem[] = [
-  { href: "/admin/approvals", label: "Approvals" },
-  { href: "/admin/users", label: "Users" },
-  { href: "/admin/bookings", label: "Bookings & payments" },
-  { href: "/admin/payouts", label: "Payouts" },
-  { href: "/admin/testimonials", label: "Testimonials" },
-  { href: "/admin/audit", label: "Audit log" },
-  { href: "/admin/ai-logs", label: "AI logs" },
-  { href: "/admin/settings", label: "Settings" },
+export const ADMIN_NAV: WorkspaceNavItem[] = [
+  { href: "/admin", label: "Overview", icon: "overview", section: "Workspace" },
+  { href: "/admin/approvals", label: "Approvals", icon: "approvals", section: "Operations" },
+  { href: "/admin/bookings", label: "Bookings & payments", icon: "bookings", section: "Operations" },
+  { href: "/admin/payouts", label: "Payouts", icon: "payouts", section: "Operations" },
+  { href: "/admin/users", label: "Users", icon: "users", section: "People" },
+  { href: "/admin/testimonials", label: "Testimonials", icon: "testimonials", section: "Trust" },
+  { href: "/admin/audit", label: "Audit log", icon: "audit", section: "Trust" },
+  { href: "/admin/ai-logs", label: "AI logs", icon: "ai", section: "Trust" },
+  { href: "/admin/settings", label: "Settings", icon: "settings", section: "System" },
 ];

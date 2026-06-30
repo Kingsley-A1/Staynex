@@ -4,7 +4,7 @@ import { OWNER_NAV } from "@/components/nav-config";
 
 export default function OwnerLayout({ children }: { children: ReactNode }) {
   return (
-    <DashboardShell workspace="Owner workspace" nav={OWNER_NAV}>
+    <DashboardShell workspace="Owner workspace" nav={OWNER_NAV} accountHref="/owner/settings">
       {children}
     </DashboardShell>
   );
