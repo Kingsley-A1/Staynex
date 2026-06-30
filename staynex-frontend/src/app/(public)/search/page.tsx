@@ -15,6 +15,9 @@ export default async function SearchPage({
     checkOut?: string;
     checkin?: string;
     checkout?: string;
+    adults?: string;
+    children?: string;
+    infants?: string;
     guests?: string;
   }>;
 }) {
@@ -24,14 +27,21 @@ export default async function SearchPage({
     area: raw.area,
     checkIn: raw.checkIn ?? raw.checkin,
     checkOut: raw.checkOut ?? raw.checkout,
-    guests: raw.guests,
+    // Legacy `guests` links map onto adults so older URLs keep working.
+    adults: raw.adults ?? raw.guests,
+    children: raw.children,
+    infants: raw.infants,
   };
   const city = (sp.city ?? "").trim();
+  const occupants =
+    Math.max(1, Number(sp.adults) || 1) + Math.max(0, Number(sp.children) || 0);
 
   const detailQs = new URLSearchParams();
   if (sp.checkIn) detailQs.set("checkIn", sp.checkIn);
   if (sp.checkOut) detailQs.set("checkOut", sp.checkOut);
-  if (sp.guests) detailQs.set("guests", sp.guests);
+  if (sp.adults) detailQs.set("adults", sp.adults);
+  if (sp.children) detailQs.set("children", sp.children);
+  if (sp.infants) detailQs.set("infants", sp.infants);
   const qs = detailQs.toString();
 
   let items: PropertySummary[] = [];
@@ -42,7 +52,7 @@ export default async function SearchPage({
       area: sp.area,
       checkIn: sp.checkIn,
       checkOut: sp.checkOut,
-      guests: sp.guests ? Number(sp.guests) : undefined,
+      guests: occupants,
     });
     items = res.items;
     live = res.live;

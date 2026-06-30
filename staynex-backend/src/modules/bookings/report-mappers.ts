@@ -52,6 +52,9 @@ export function toBookingRow(b: BookingRowData): BookingRow {
     checkIn: iso(b.checkIn),
     checkOut: iso(b.checkOut),
     nights,
+    adults: b.adults,
+    children: b.children,
+    infants: b.infants,
     amountKobo: grossAmountKobo, // COMPAT: gross
     grossAmountKobo,
     platformFeeKobo,

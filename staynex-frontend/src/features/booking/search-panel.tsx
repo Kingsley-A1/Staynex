@@ -2,7 +2,7 @@
 
 import { type FormEvent, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Field, Input, Select } from "@/ui";
+import { Button, Field, Input, Select, GuestSelector, guestSummary, type GuestCounts } from "@/ui";
 import { CITIES } from "@/features/properties/fixtures";
 import { areasApi } from "@/lib/api";
 import { type AreaOption } from "@/lib/types";
@@ -12,7 +12,14 @@ interface Defaults {
   area?: string;
   checkIn?: string;
   checkOut?: string;
-  guests?: string;
+  adults?: string;
+  children?: string;
+  infants?: string;
+}
+
+function toCount(value: string | undefined, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
 const FALLBACK_AREAS: Record<string, AreaOption[]> = {
@@ -132,9 +139,19 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
   const [loadingAreas, setLoadingAreas] = useState(false);
   const [checkIn, setCheckIn] = useState(() => defaults?.checkIn ?? dateOffsetInput(0));
   const [checkOut, setCheckOut] = useState(() => defaults?.checkOut ?? dateOffsetInput(1));
-  const [guests, setGuests] = useState(defaults?.guests ?? "2");
+  const [guests, setGuests] = useState<GuestCounts>(() => ({
+    adults: Math.max(1, toCount(defaults?.adults, 2)),
+    children: toCount(defaults?.children, 0),
+    infants: toCount(defaults?.infants, 0),
+  }));
   const [showMore, setShowMore] = useState(
-    Boolean(defaults?.checkIn || defaults?.checkOut || defaults?.guests),
+    Boolean(
+      defaults?.checkIn ||
+        defaults?.checkOut ||
+        defaults?.adults ||
+        defaults?.children ||
+        defaults?.infants,
+    ),
   );
 
   useEffect(() => {
@@ -171,7 +188,9 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
     if (area) qs.set("area", area);
     if (checkIn) qs.set("checkIn", checkIn);
     if (checkOut) qs.set("checkOut", checkOut);
-    if (guests) qs.set("guests", guests);
+    qs.set("adults", String(guests.adults));
+    if (guests.children > 0) qs.set("children", String(guests.children));
+    if (guests.infants > 0) qs.set("infants", String(guests.infants));
     router.push(`/search?${qs.toString()}`);
   }
 
@@ -181,9 +200,7 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
     : loadingAreas
       ? "Loading areas..."
       : "Choose an area or keep all areas.";
-  const dateSummary = `${summaryDate(checkIn)} - ${summaryDate(checkOut)} · ${guests} ${
-    guests === "1" ? "guest" : "guests"
-  }`;
+  const dateSummary = `${summaryDate(checkIn)} - ${summaryDate(checkOut)} · ${guestSummary(guests)}`;
 
   return (
     <form onSubmit={submit} className="attention-border space-y-4 rounded-md p-4 sm:p-5">
@@ -247,17 +264,7 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
             />
           </Field>
           <Field label="Guests" htmlFor="guests">
-            <Select
-              id="guests"
-              value={guests}
-              onChange={(e) => setGuests(e.target.value)}
-            >
-              {[1, 2, 3, 4, 5, 6].map((n) => (
-                <option key={n} value={n}>
-                  {n} {n === 1 ? "guest" : "guests"}
-                </option>
-              ))}
-            </Select>
+            <GuestSelector id="guests" value={guests} onChange={setGuests} />
           </Field>
         </div>
       )}

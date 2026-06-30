@@ -2,7 +2,7 @@ import Link from "next/link";
 import { KpiCard } from "@/ui";
 import { BookingStatusBadge, PaymentStatusBadge, PayoutStatusBadge } from "@/components/status-pill";
 import { getOwnerBookings } from "@/lib/server-reports";
-import { formatNairaFromKobo, formatDate } from "@/lib/format";
+import { formatNairaFromKobo, formatDate, formatOccupancy } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +60,7 @@ export default async function OwnerBookingsPage() {
                         </p>
                         <p className="text-caption">
                           {formatDate(b.checkIn)} → {formatDate(b.checkOut)} · {b.nights} night
-                          {b.nights === 1 ? "" : "s"}
+                          {b.nights === 1 ? "" : "s"} · {formatOccupancy(b)}
                           {b.guestEmail ? ` · ${b.guestEmail}` : ""}
                         </p>
                       </div>

@@ -175,6 +175,10 @@ export interface BookingRow {
   checkIn: string;
   checkOut: string;
   nights: number;
+  /** Occupancy split. Capacity = adults + children; infants are free. */
+  adults: number;
+  children: number;
+  infants: number;
   amountKobo: number;
   grossAmountKobo: number;
   platformFeeKobo: number;

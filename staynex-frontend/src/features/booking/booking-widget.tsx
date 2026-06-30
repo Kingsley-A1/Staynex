@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Field, Input, Select } from "@/ui";
+import { Button, Field, Input, Select, GuestSelector, type GuestCounts } from "@/ui";
 import { guestApi } from "@/lib/api";
 import { formatNairaFromKobo } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -15,22 +15,49 @@ export interface RoomOption {
   maxGuests: number;
 }
 
+function toCount(value: string | undefined, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+/** Shrink occupancy (children first, then adults to a floor of 1) to fit a room. */
+function clampGuests(g: GuestCounts, max: number): GuestCounts {
+  let { adults, children } = g;
+  while (adults + children > max) {
+    if (children > 0) children -= 1;
+    else if (adults > 1) adults -= 1;
+    else break;
+  }
+  return { ...g, adults, children };
+}
+
 export function BookingWidget({
   rooms,
   defaults,
 }: {
   rooms: RoomOption[];
-  defaults?: { checkIn?: string; checkOut?: string; guests?: string };
+  defaults?: {
+    checkIn?: string;
+    checkOut?: string;
+    adults?: string;
+    children?: string;
+    infants?: string;
+  };
 }) {
   const router = useRouter();
   const [roomTypeId, setRoomTypeId] = useState(rooms[0]?.id ?? "");
   const [checkIn, setCheckIn] = useState(defaults?.checkIn ?? "");
   const [checkOut, setCheckOut] = useState(defaults?.checkOut ?? "");
-  const [guests, setGuests] = useState(defaults?.guests ?? "2");
+  const [guests, setGuests] = useState<GuestCounts>(() => ({
+    adults: Math.max(1, toCount(defaults?.adults, 2)),
+    children: toCount(defaults?.children, 0),
+    infants: toCount(defaults?.infants, 0),
+  }));
   const [quote, setQuote] = useState<AvailabilityQuote | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const maxGuests = rooms.find((r) => r.id === roomTypeId)?.maxGuests ?? 16;
   const canCheck = Boolean(roomTypeId && checkIn && checkOut && checkIn < checkOut);
   const resetQuote = () => setQuote(null);
 
@@ -40,7 +67,14 @@ export function BookingWidget({
     setQuote(null);
     try {
       setQuote(
-        await guestApi.quote({ roomTypeId, checkIn, checkOut, guests: Number(guests) }),
+        await guestApi.quote({
+          roomTypeId,
+          checkIn,
+          checkOut,
+          adults: guests.adults,
+          children: guests.children,
+          infants: guests.infants,
+        }),
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not check availability");
@@ -57,7 +91,9 @@ export function BookingWidget({
         roomTypeId,
         checkIn,
         checkOut,
-        guests: Number(guests),
+        adults: guests.adults,
+        children: guests.children,
+        infants: guests.infants,
       });
       router.push(`/checkout?hold=${hold.holdId}`);
     } catch (err) {
@@ -75,7 +111,10 @@ export function BookingWidget({
           id="bw-room"
           value={roomTypeId}
           onChange={(e) => {
-            setRoomTypeId(e.target.value);
+            const id = e.target.value;
+            setRoomTypeId(id);
+            const nextMax = rooms.find((r) => r.id === id)?.maxGuests ?? 16;
+            setGuests((g) => clampGuests(g, nextMax));
             resetQuote();
           }}
         >
@@ -113,13 +152,15 @@ export function BookingWidget({
       </div>
 
       <Field label="Guests" htmlFor="bw-guests">
-        <Select id="bw-guests" value={guests} onChange={(e) => setGuests(e.target.value)}>
-          {[1, 2, 3, 4, 5, 6].map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </Select>
+        <GuestSelector
+          id="bw-guests"
+          value={guests}
+          maxGuests={maxGuests}
+          onChange={(next) => {
+            setGuests(next);
+            resetQuote();
+          }}
+        />
       </Field>
 
       {error && (

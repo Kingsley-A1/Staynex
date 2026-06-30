@@ -435,6 +435,11 @@ model BookingHold {
   roomUnitId String
   checkIn    DateTime
   checkOut   DateTime
+  /// Occupancy split. Capacity is checked against adults + children; infants are
+  /// free and excluded from the room's maxGuests check.
+  adults     Int      @default(1)
+  children   Int      @default(0)
+  infants    Int      @default(0)
   expiresAt  DateTime
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -457,6 +462,11 @@ model Booking {
   status     BookingStatus @default(HOLD)
   checkIn    DateTime
   checkOut   DateTime
+  /// Occupancy split carried over from the hold. Capacity = adults + children;
+  /// infants are excluded from the room's maxGuests check.
+  adults     Int           @default(1)
+  children   Int           @default(0)
+  infants    Int           @default(0)
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 

@@ -85,6 +85,9 @@ export class BookingsService {
             userId: guestUserId,
             checkIn: new Date(`${input.checkIn}T00:00:00.000Z`),
             checkOut: new Date(`${input.checkOut}T00:00:00.000Z`),
+            adults: input.adults,
+            children: input.children,
+            infants: input.infants,
             expiresAt,
           },
         });
@@ -161,6 +164,9 @@ export class BookingsService {
           status: "PENDING_PAYMENT",
           checkIn: hold.checkIn,
           checkOut: hold.checkOut,
+          adults: hold.adults,
+          children: hold.children,
+          infants: hold.infants,
         },
       });
       await tx.payment.create({

@@ -12,7 +12,13 @@ export default async function StayPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ checkIn?: string; checkOut?: string; guests?: string }>;
+  searchParams: Promise<{
+    checkIn?: string;
+    checkOut?: string;
+    adults?: string;
+    children?: string;
+    infants?: string;
+  }>;
 }) {
   const { slug } = await params;
   const sp = await searchParams;
