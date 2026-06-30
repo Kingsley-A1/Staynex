@@ -1,0 +1,9 @@
+-- AlterTable
+ALTER TABLE "Booking" ADD COLUMN     "adults" INT4 NOT NULL DEFAULT 1;
+ALTER TABLE "Booking" ADD COLUMN     "children" INT4 NOT NULL DEFAULT 0;
+ALTER TABLE "Booking" ADD COLUMN     "infants" INT4 NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "BookingHold" ADD COLUMN     "adults" INT4 NOT NULL DEFAULT 1;
+ALTER TABLE "BookingHold" ADD COLUMN     "children" INT4 NOT NULL DEFAULT 0;
+ALTER TABLE "BookingHold" ADD COLUMN     "infants" INT4 NOT NULL DEFAULT 0;
