@@ -55,54 +55,7 @@ const FALLBACK_AREAS: Record<string, AreaOption[]> = {
     fallbackArea("Wuse", "abuja", "NEIGHBORHOOD"),
     fallbackArea("Garki", "abuja", "NEIGHBORHOOD"),
   ],
-  Enugu: [
-    fallbackArea("Enugu North", "enugu", "LOCAL_GOVERNMENT_AREA", true),
-    fallbackArea("Independence Layout", "enugu", "NEIGHBORHOOD", true),
-    fallbackArea("GRA", "enugu", "NEIGHBORHOOD", true),
-    fallbackArea("New Haven", "enugu", "NEIGHBORHOOD"),
-    fallbackArea("Trans-Ekulu", "enugu", "NEIGHBORHOOD"),
-  ],
-  Owerri: [
-    fallbackArea("Owerri Municipal", "owerri", "LOCAL_GOVERNMENT_AREA", true),
-    fallbackArea("New Owerri", "owerri", "NEIGHBORHOOD", true),
-    fallbackArea("Ikenegbu", "owerri", "NEIGHBORHOOD"),
-    fallbackArea("World Bank", "owerri", "NEIGHBORHOOD"),
-  ],
-  "Benin City": [
-    fallbackArea("Oredo", "benin-city", "LOCAL_GOVERNMENT_AREA", true),
-    fallbackArea("GRA", "benin-city", "NEIGHBORHOOD", true),
-    fallbackArea("Airport Road", "benin-city", "NEIGHBORHOOD"),
-    fallbackArea("Ugbowo", "benin-city", "NEIGHBORHOOD"),
-  ],
-  Ibadan: [
-    fallbackArea("Ibadan North", "ibadan", "LOCAL_GOVERNMENT_AREA", true),
-    fallbackArea("Bodija", "ibadan", "NEIGHBORHOOD", true),
-    fallbackArea("Agodi GRA", "ibadan", "NEIGHBORHOOD"),
-    fallbackArea("Ring Road", "ibadan", "NEIGHBORHOOD"),
-  ],
-  Asaba: [
-    fallbackArea("Oshimili South", "asaba", "LOCAL_GOVERNMENT_AREA", true),
-    fallbackArea("Okpanam", "asaba", "NEIGHBORHOOD", true),
-    fallbackArea("Summit Road", "asaba", "NEIGHBORHOOD"),
-    fallbackArea("GRA", "asaba", "NEIGHBORHOOD"),
-  ],
-  Kano: [
-    fallbackArea("Nassarawa", "kano", "LOCAL_GOVERNMENT_AREA", true),
-    fallbackArea("Tarauni", "kano", "LOCAL_GOVERNMENT_AREA", true),
-    fallbackArea("Sabon Gari", "kano", "NEIGHBORHOOD"),
-    fallbackArea("Bompai", "kano", "NEIGHBORHOOD"),
-  ],
 };
-
-const SEARCH_CITIES = [
-  ...CITIES,
-  { id: "city_enugu", name: "Enugu" },
-  { id: "city_owerri", name: "Owerri" },
-  { id: "city_benin-city", name: "Benin City" },
-  { id: "city_ibadan", name: "Ibadan" },
-  { id: "city_asaba", name: "Asaba" },
-  { id: "city_kano", name: "Kano" },
-];
 
 function slugify(input: string): string {
   return input
@@ -248,7 +201,7 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
             <option value="" disabled>
               Select a city
             </option>
-            {SEARCH_CITIES.map((c) => (
+            {CITIES.map((c) => (
               <option key={c.id} value={c.name}>
                 {c.name}
               </option>
