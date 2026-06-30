@@ -5,6 +5,9 @@ import { Brandmark } from "@/components/brandmark";
 import { SiteFooter } from "@/components/site-footer";
 import { SearchPanel } from "@/features/booking/search-panel";
 import { TestimonialsSection } from "@/features/reviews/testimonials-section";
+import { HeaderAuthControls } from "@/features/auth/header-auth-controls";
+import { getServerUser } from "@/lib/server-auth";
+import type { AuthUser } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Staynex — Book trusted stays",
@@ -125,10 +128,11 @@ const slug = (s: string) =>
 /* ============================================================================
    Page
    ========================================================================== */
-export default function HomePage() {
+export default async function HomePage() {
+  const user = await getServerUser();
   return (
     <div className="bg-white">
-      <SiteHeader />
+      <SiteHeader user={user} />
 
       <main id="main">
         <Hero />
@@ -147,7 +151,7 @@ export default function HomePage() {
 /* ============================================================================
    Header
    ========================================================================== */
-function SiteHeader() {
+function SiteHeader({ user }: { user: AuthUser | null }) {
   return (
     <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-white">
       <div className="layout-container flex h-16 items-center justify-between gap-4">
@@ -170,20 +174,7 @@ function SiteHeader() {
           </Link>
         </nav>
 
-        <div className="flex items-center gap-2">
-          <Link
-            href="/sign-in"
-            className="inline-flex h-10 items-center whitespace-nowrap rounded-md border border-border bg-surface-raised px-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary"
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/search"
-            className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover active:bg-primary-active"
-          >
-            Find a stay
-          </Link>
-        </div>
+        <HeaderAuthControls user={user} />
       </div>
     </header>
   );

@@ -38,6 +38,7 @@ export function AuthForm({
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [registered, setRegistered] = useState<AuthUser | null>(null);
 
   function clearErrors() {
     setError(null);
@@ -45,11 +46,23 @@ export function AuthForm({
     setPasswordError(null);
   }
 
+  function goHome(user: AuthUser) {
+    // router.refresh() re-renders server components (e.g. the auth-aware header)
+    // so the now-signed-in state is reflected immediately.
+    router.push(next || capabilityHome(user));
+    router.refresh();
+  }
+
   function handleSuccess(user: AuthUser) {
-    if (onSuccess) onSuccess(user);
-    else {
-      router.push(next || capabilityHome(user));
-      router.refresh();
+    if (onSuccess) {
+      onSuccess(user);
+    } else if (mode === "register") {
+      // Confirm the account was created before sending the guest onward —
+      // otherwise a guest (whose home is the welcome page) gets no signal that
+      // registration worked.
+      setRegistered(user);
+    } else {
+      goHome(user);
     }
   }
 
@@ -96,6 +109,21 @@ export function AuthForm({
         : ownerIntent
           ? "Create owner account"
           : "Create account";
+
+  if (registered) {
+    const goesToWorkspace = capabilityHome(registered) !== "/";
+    return (
+      <RegistrationSuccess
+        user={registered}
+        busy={busy}
+        continueLabel={goesToWorkspace ? "Go to your dashboard" : "Start exploring stays"}
+        onContinue={() => {
+          setBusy(true);
+          goHome(registered);
+        }}
+      />
+    );
+  }
 
   return (
     <form onSubmit={submit} className={compact ? "space-y-4" : "surface-card space-y-4 p-6"}>
@@ -198,5 +226,55 @@ export function AuthForm({
         </p>
       )}
     </form>
+  );
+}
+
+/** Post-registration confirmation. Gives the guest an unambiguous success signal
+ *  before they continue (a guest's destination is the public welcome page, which
+ *  otherwise looks identical to a failed attempt). */
+function RegistrationSuccess({
+  user,
+  busy,
+  continueLabel,
+  onContinue,
+}: {
+  user: AuthUser;
+  busy: boolean;
+  continueLabel: string;
+  onContinue: () => void;
+}) {
+  const firstName = user.name?.trim().split(/\s+/)[0];
+  return (
+    <div
+      className="surface-card space-y-5 p-6 text-center"
+      role="status"
+      aria-live="polite"
+    >
+      <span className="mx-auto inline-flex size-14 items-center justify-center rounded-full bg-success-surface text-success">
+        <svg
+          viewBox="0 0 24 24"
+          className="size-7"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <path d="m20 6-11 11-5-5" />
+        </svg>
+      </span>
+      <div className="space-y-1">
+        <h2 className="text-title-sm text-ink">
+          {firstName ? `Welcome to Staynex, ${firstName}!` : "Welcome to Staynex!"}
+        </h2>
+        <p className="text-muted-foreground">
+          Your account is ready{user.email ? ` for ${user.email}` : ""}. You&apos;re now signed in.
+        </p>
+      </div>
+      <Button type="button" onClick={onContinue} disabled={busy} className="w-full">
+        {busy ? "Please wait…" : continueLabel}
+      </Button>
+    </div>
   );
 }

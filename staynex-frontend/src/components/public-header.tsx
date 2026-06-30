@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { Brandmark } from "@/components/brandmark";
+import { HeaderAuthControls } from "@/features/auth/header-auth-controls";
+import { getServerUser } from "@/lib/server-auth";
 
-export function PublicHeader() {
+export async function PublicHeader() {
+  const user = await getServerUser();
   return (
     <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-background/80 backdrop-blur-md">
       <div className="layout-container flex h-16 items-center justify-between gap-4">
@@ -25,18 +28,7 @@ export function PublicHeader() {
           >
             List your property
           </Link>
-          <Link
-            href="/sign-in"
-            className="inline-flex h-10 items-center whitespace-nowrap rounded-md border border-border bg-surface-raised px-3 font-semibold text-foreground transition-colors hover:bg-secondary"
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/search"
-            className="inline-flex h-10 items-center whitespace-nowrap rounded-md bg-primary px-4 font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover active:bg-primary-active"
-          >
-            Find a stay
-          </Link>
+          <HeaderAuthControls user={user} />
         </nav>
       </div>
     </header>

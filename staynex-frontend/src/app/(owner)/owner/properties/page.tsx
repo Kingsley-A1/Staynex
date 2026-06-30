@@ -1,8 +1,10 @@
 import { LinkButton, PropertyCard } from "@/ui";
-import { listOwnerProperties } from "@/features/properties/fixtures";
+import { getOwnerProperties } from "@/lib/server-owner";
 
-export default function OwnerPropertiesPage() {
-  const properties = listOwnerProperties();
+export const dynamic = "force-dynamic";
+
+export default async function OwnerPropertiesPage() {
+  const properties = (await getOwnerProperties()) ?? [];
 
   return (
     <div className="space-y-6">

@@ -4,7 +4,9 @@ import { PropertyForm } from "@/features/properties/property-form";
 import { RoomManager } from "@/features/properties/room-manager";
 import { SubmitForReview } from "@/features/properties/submit-for-review";
 import { MediaUploader } from "@/features/media/media-uploader";
-import { CITIES, getPropertyDetail } from "@/features/properties/fixtures";
+import { getCities, getOwnerProperty } from "@/lib/server-owner";
+
+export const dynamic = "force-dynamic";
 
 export default async function EditPropertyPage({
   params,
@@ -12,7 +14,7 @@ export default async function EditPropertyPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const property = getPropertyDetail(id);
+  const [property, cities] = await Promise.all([getOwnerProperty(id), getCities()]);
   if (!property) notFound();
 
   const slides = [
@@ -36,7 +38,7 @@ export default async function EditPropertyPage({
         <div className="space-y-6">
           <section className="space-y-3">
             <h2 className="text-title-sm text-ink">Details</h2>
-            <PropertyForm cities={CITIES} property={property} />
+            <PropertyForm cities={cities} property={property} />
           </section>
 
           <section className="space-y-3">
