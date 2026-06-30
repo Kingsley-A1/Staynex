@@ -197,6 +197,10 @@ export interface BookingRow {
   checkIn: string;
   checkOut: string;
   nights: number;
+  /** Occupancy split. Capacity = adults + children; infants are free. */
+  adults: number;
+  children: number;
+  infants: number;
   amountKobo: number;
   grossAmountKobo: number;
   platformFeeKobo: number;
@@ -362,9 +366,9 @@ export function isAdminManager(user: AuthUser | null | undefined): boolean {
 
 /** Destination after auth, driven by capability (not just the compat role). */
 export function capabilityHome(user: AuthUser): string {
-  if (isAdminCapable(user)) return "/admin/approvals";
+  if (isAdminCapable(user)) return "/admin";
   if (isOwnerCapable(user)) return "/owner/dashboard";
-  return "/";
+  return "/stays";
 }
 
 // --- Owner v1: onboarding, locations, payout, settings ---

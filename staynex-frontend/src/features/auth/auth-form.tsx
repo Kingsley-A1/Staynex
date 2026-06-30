@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button, Field, Input, PasswordInput, Select } from "@/ui";
 import { GoogleAuthButton } from "@/features/auth/google-auth-button";
 import { authApi } from "@/lib/api";
-import { type AuthUser, capabilityHome } from "@/lib/types";
+import { type AuthUser, capabilityHome, isAdminCapable, isOwnerCapable } from "@/lib/types";
 
 type Mode = "login" | "register" | "admin";
 
@@ -111,7 +111,7 @@ export function AuthForm({
           : "Create account";
 
   if (registered) {
-    const goesToWorkspace = capabilityHome(registered) !== "/";
+    const goesToWorkspace = isOwnerCapable(registered) || isAdminCapable(registered);
     return (
       <RegistrationSuccess
         user={registered}
