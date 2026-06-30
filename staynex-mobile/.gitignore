@@ -1,0 +1,20 @@
+# Expo / React Native
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+
+# Native
+ios/
+android/
+
+# Secrets / local env
+.env
+.env.local
+
+# Metro
+.metro-health-check*
+
+# OS
+.DS_Store
