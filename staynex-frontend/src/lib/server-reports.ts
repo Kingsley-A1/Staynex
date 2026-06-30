@@ -16,6 +16,7 @@ import type {
   AuditLogRow,
   BookingRow,
   OwnerBookingsView,
+  PropertySummary,
 } from "@/lib/types";
 
 export interface Loaded<T> {
@@ -46,6 +47,8 @@ async function load<T>(path: string): Promise<Loaded<T>> {
 export const getOwnerBookings = () => load<OwnerBookingsView>("/owner/bookings");
 
 export const getOwnerBooking = (id: string) => load<BookingRow>(`/owner/bookings/${id}`);
+
+export const getAdminApprovals = () => load<PropertySummary[]>("/admin/approvals");
 
 export const getAdminBookings = () => load<AdminBookingsView>("/admin/bookings");
 

@@ -4,7 +4,7 @@ import {
   PayoutStatusBadge,
 } from "@/components/status-pill";
 import { getAdminBookings } from "@/lib/server-reports";
-import { formatNairaFromKobo, formatDate } from "@/lib/format";
+import { formatNairaFromKobo, formatDate, formatOccupancy } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +51,10 @@ export default async function AdminBookingsPage() {
                       <div className="font-medium text-ink">{b.propertyName}</div>
                       <div className="text-caption">{b.roomName} · {b.cityName}</div>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{b.guestEmail ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      <div className="text-muted-foreground">{b.guestEmail ?? "—"}</div>
+                      <div className="text-caption">{formatOccupancy(b)}</div>
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {formatDate(b.checkIn)} → {formatDate(b.checkOut)}
                     </td>
