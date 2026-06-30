@@ -50,7 +50,23 @@ export function PageLoadingLine() {
   useEffect(() => {
     const originalFetch = window.fetch.bind(window);
 
+    // The AI assistant streams its reply over a long-lived fetch and shows its
+    // own in-panel "Thinking…" indicator. Driving the global page loader from it
+    // reads as a stuck page load, so skip the loader for AI/agent requests.
+    const isAiRequest = (input: RequestInfo | URL): boolean => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input instanceof Request
+              ? input.url
+              : "";
+      return /\/ai\//.test(url);
+    };
+
     window.fetch = async (...args) => {
+      if (isAiRequest(args[0])) return originalFetch(...args);
       pendingFetches.current += 1;
       show();
       try {

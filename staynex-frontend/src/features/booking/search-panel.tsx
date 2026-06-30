@@ -186,7 +186,7 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
   }`;
 
   return (
-    <form onSubmit={submit} className="attention-border space-y-4 rounded-2xl p-4 sm:p-5">
+    <form onSubmit={submit} className="attention-border space-y-4 rounded-md p-4 sm:p-5">
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Where to" htmlFor="city">
           <Select

@@ -49,43 +49,52 @@ export default async function SearchPage({
   }
 
   return (
-    <main className="layout-container space-y-6 py-8">
-      {!city && <SearchPanel defaults={sp} />}
-
-      <header>
-        <h1 className="text-title-lg text-ink">
-          {city ? `Stays in ${city}` : "Search stays"}
-        </h1>
-        <p className="text-muted-foreground">
-          {city
-            ? `${items.length} result${items.length === 1 ? "" : "s"}`
-            : "Choose a city and dates to begin."}
-        </p>
-      </header>
-
-      {city && items.length === 0 && (
-        <div className="surface-card p-10 text-center text-muted-foreground">
-          No approved stays found for {city}.
+    <main className="layout-container py-8">
+      {!city ? (
+        // Empty state: a focused, centered search box with the heading on top.
+        <div className="mx-auto max-w-2xl space-y-6">
+          <header className="text-center">
+            <h1 className="text-title-lg text-ink">Search stays</h1>
+            <p className="text-muted-foreground">
+              Choose a city and dates to begin.
+            </p>
+          </header>
+          <SearchPanel defaults={sp} />
         </div>
-      )}
+      ) : (
+        <div className="space-y-6">
+          <header>
+            <h1 className="text-title-lg text-ink">Stays in {city}</h1>
+            <p className="text-muted-foreground">
+              {items.length} result{items.length === 1 ? "" : "s"}
+            </p>
+          </header>
 
-      {items.length > 0 && (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((p) => (
-            <PropertyCard
-              key={p.id}
-              property={p}
-              href={`/stays/${p.slug}${qs ? `?${qs}` : ""}`}
-              actionLabel="View"
-            />
-          ))}
+          {items.length === 0 && (
+            <div className="surface-card p-10 text-center text-muted-foreground">
+              No approved stays found for {city}.
+            </div>
+          )}
+
+          {items.length > 0 && (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {items.map((p) => (
+                <PropertyCard
+                  key={p.id}
+                  property={p}
+                  href={`/stays/${p.slug}${qs ? `?${qs}` : ""}`}
+                  actionLabel="View"
+                />
+              ))}
+            </div>
+          )}
+
+          {!live && (
+            <p className="text-caption">
+              Showing sample data — live results appear when the API is connected.
+            </p>
+          )}
         </div>
-      )}
-
-      {city && !live && (
-        <p className="text-caption">
-          Showing sample data — live results appear when the API is connected.
-        </p>
       )}
     </main>
   );
