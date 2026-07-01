@@ -1,5 +1,5 @@
 export { Button, LinkButton, type ButtonProps, type LinkButtonProps } from "./button";
-export { Badge, StatusBadge } from "./badge";
+export { Badge, ReviewStatusBadge, StatusBadge } from "./badge";
 export { Field, Input, Textarea, Select } from "./field";
 export { PasswordInput } from "./password-input";
 export { Stepper, type Step } from "./stepper";

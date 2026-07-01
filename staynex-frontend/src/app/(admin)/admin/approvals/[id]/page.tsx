@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { RoomGalleryCarousel, StatusBadge } from "@/ui";
 import { ApprovalActions } from "@/features/admin/approval-actions";
-import { getPropertyDetail } from "@/features/properties/fixtures";
+import { ReviewStatusPanel } from "@/features/properties/review-status-panel";
 import { formatNairaFromKobo } from "@/lib/format";
+import { getAdminApproval } from "@/lib/server-reports";
 
 export default async function ReviewPropertyPage({
   params,
@@ -10,8 +11,17 @@ export default async function ReviewPropertyPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const property = getPropertyDetail(id);
-  if (!property) notFound();
+  const { data: property, offline } = await getAdminApproval(id);
+  if (!property) {
+    if (offline) {
+      return (
+        <div className="surface-card p-8 text-center text-muted-foreground" role="status">
+          We couldn't reach the approvals service. Start the API to review this submission.
+        </div>
+      );
+    }
+    notFound();
+  }
 
   const slides = property.media.map((m) => ({ id: m.id, url: m.url, altText: m.altText }));
 
@@ -62,6 +72,7 @@ export default async function ReviewPropertyPage({
         </div>
 
         <aside className="space-y-4">
+          <ReviewStatusPanel property={property} />
           <ApprovalActions propertyId={property.id} />
         </aside>
       </div>

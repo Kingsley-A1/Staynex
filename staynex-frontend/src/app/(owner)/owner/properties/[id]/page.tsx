@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { RoomGalleryCarousel, StatusBadge } from "@/ui";
 import { PropertyForm } from "@/features/properties/property-form";
+import { ReviewStatusPanel } from "@/features/properties/review-status-panel";
 import { RoomManager } from "@/features/properties/room-manager";
 import { SubmitForReview } from "@/features/properties/submit-for-review";
 import { MediaUploader } from "@/features/media/media-uploader";
@@ -48,6 +49,7 @@ export default async function EditPropertyPage({
         </div>
 
         <aside className="space-y-6">
+          <ReviewStatusPanel property={property} />
           <section className="space-y-3">
             <h2 className="text-title-sm text-ink">Gallery preview</h2>
             <RoomGalleryCarousel slides={slides} label={`${property.name} gallery`} />

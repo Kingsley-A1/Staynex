@@ -34,7 +34,9 @@ export function SubmitForReview({
   return (
     <div className="surface-card space-y-2 p-4">
       <h3 className="text-title-sm">Submit for review</h3>
-      <p className="text-caption">Admins review submitted properties before they go live.</p>
+      <p className="text-caption">
+        Staynex checks the listing immediately. If it passes, it is scheduled to go live.
+      </p>
       <Button onClick={submit} disabled={pending || alreadySubmitted}>
         {pending ? "Submitting…" : alreadySubmitted ? "Already submitted" : "Submit for review"}
       </Button>

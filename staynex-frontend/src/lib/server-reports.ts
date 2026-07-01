@@ -16,6 +16,7 @@ import type {
   AuditLogRow,
   BookingRow,
   OwnerBookingsView,
+  PropertyDetail,
   PropertySummary,
 } from "@/lib/types";
 
@@ -49,6 +50,8 @@ export const getOwnerBookings = () => load<OwnerBookingsView>("/owner/bookings")
 export const getOwnerBooking = (id: string) => load<BookingRow>(`/owner/bookings/${id}`);
 
 export const getAdminApprovals = () => load<PropertySummary[]>("/admin/approvals");
+
+export const getAdminApproval = (id: string) => load<PropertyDetail>(`/admin/approvals/${id}`);
 
 export const getAdminBookings = () => load<AdminBookingsView>("/admin/bookings");
 
