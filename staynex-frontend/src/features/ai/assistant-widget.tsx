@@ -106,7 +106,7 @@ export function AssistantWidget() {
         {
           onChunk: (t) => appendToAgent(t),
           onDone: (meta) => {
-            setActiveId(meta.conversationId);
+            if (meta.conversationId) setActiveId(meta.conversationId);
             // Tag the just-streamed agent message with its final state, if any.
             const note = meta.refused ? "refused" : meta.unavailable ? "unavailable" : undefined;
             if (note) {

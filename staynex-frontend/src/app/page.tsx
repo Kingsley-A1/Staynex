@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { Brandmark } from "@/components/brandmark";
 import { SiteFooter } from "@/components/site-footer";
 import { SearchPanel } from "@/features/booking/search-panel";
 import { TestimonialsSection } from "@/features/reviews/testimonials-section";
 import { HeaderAuthControls } from "@/features/auth/header-auth-controls";
+import { DestinationImageCycle } from "@/features/landing/destination-image-cycle";
+import { formatNairaFromKobo } from "@/lib/format";
+import { getHomeCatalog } from "@/lib/server-catalog";
 import { getServerUser } from "@/lib/server-auth";
-import type { AuthUser } from "@/lib/types";
+import type { AuthUser, DestinationShowcase, PropertySummary } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Staynex — Book trusted stays",
@@ -15,83 +17,33 @@ export const metadata: Metadata = {
     "Book trusted stays across Nigeria and beyond. Verified properties, secure payments, and real-time availability.",
 };
 
-/* -----------------------------------------------------------------------------
-   Demo data (mock). Kept here for the landing page; promote to a centralized
-   fixtures module (per project standard §10) once shared across surfaces.
-   --------------------------------------------------------------------------- */
+export const dynamic = "force-dynamic";
+
 const DESTINATIONS = [
   {
     city: "Calabar",
-    stays: 128,
     gradient: "from-indigo-500 to-teal-800",
-    roomImage: "/assets/destinations/calabar-room.jpg",
+    fallbackImageUrl: "/assets/destinations/calabar.jpg",
   },
   {
     city: "Lagos",
-    stays: 210,
     gradient: "from-sky-500 to-indigo-900",
-    roomImage: "/assets/destinations/lagos-room.jpg",
+    fallbackImageUrl: "/assets/destinations/lagos.jpg",
   },
   {
     city: "Abuja",
-    stays: 156,
     gradient: "from-neutral-600 to-indigo-900",
-    roomImage: "/assets/destinations/abuja-room.jpg",
+    fallbackImageUrl: "/assets/destinations/abuja.jpg",
   },
   {
     city: "Port Harcourt",
-    stays: 92,
     gradient: "from-teal-500 to-indigo-800",
-    roomImage: "/assets/destinations/port-harcourt-room.jpg",
+    fallbackImageUrl: "/assets/destinations/port-harcourt.jpg",
   },
   {
     city: "Uyo",
-    stays: 64,
     gradient: "from-amber-500 to-indigo-900",
-    roomImage: "/assets/destinations/uyo-room.jpg",
-  },
-];
-
-const STAYS = [
-  {
-    name: "Marina Crest Hotel",
-    city: "Calabar",
-    type: "Hotel",
-    price: 48000,
-    rating: 4.8,
-    reviews: 214,
-    status: "Available",
-    gradient: "from-indigo-500 to-indigo-800",
-  },
-  {
-    name: "Tinapa Grand Resort",
-    city: "Calabar",
-    type: "Resort",
-    price: 72000,
-    rating: 4.9,
-    reviews: 312,
-    status: "Available",
-    gradient: "from-indigo-600 to-indigo-900",
-  },
-  {
-    name: "Duke Town Suites",
-    city: "Calabar",
-    type: "Apartment",
-    price: 36000,
-    rating: 4.7,
-    reviews: 168,
-    status: "Available",
-    gradient: "from-neutral-600 to-neutral-900",
-  },
-  {
-    name: "Harbor Nest Apartments",
-    city: "Uyo",
-    type: "Apartment",
-    price: 29500,
-    rating: 4.6,
-    reviews: 97,
-    status: "2 left",
-    gradient: "from-indigo-400 to-indigo-700",
+    fallbackImageUrl: "/assets/destinations/uyo.jpg",
   },
 ];
 
@@ -118,26 +70,23 @@ const FEATURES = [
   },
 ];
 
-const naira = (n: number) => `₦${n.toLocaleString("en-NG")}`;
-const slug = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-
 /* ============================================================================
    Page
    ========================================================================== */
 export default async function HomePage() {
-  const user = await getServerUser();
+  const [user, home] = await Promise.all([getServerUser(), getHomeCatalog()]);
   return (
     <div className="bg-white">
       <SiteHeader user={user} />
 
       <main id="main">
         <Hero />
-        <Destinations />
-        <FeaturedStays />
+        <Destinations destinations={home.catalog.destinations} />
+        <FeaturedStays
+          latest={home.catalog.latestProperties}
+          mostBooked={home.catalog.mostBookedProperties}
+          live={home.live}
+        />
         <TestimonialsSection />
         <ValueProps />
         <OwnerCta />
@@ -238,7 +187,18 @@ function Hero() {
 /* ============================================================================
    Destinations
    ========================================================================== */
-function Destinations() {
+function Destinations({
+  destinations,
+}: {
+  destinations: DestinationShowcase[];
+}) {
+  const liveByCity = new Map(
+    destinations.map((destination) => [
+      destination.cityName.toLowerCase(),
+      destination,
+    ]),
+  );
+
   return (
     <section className="layout-container py-14 sm:py-16">
       <SectionHead
@@ -248,38 +208,35 @@ function Destinations() {
         linkLabel="View all"
       />
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        {DESTINATIONS.map((d) => (
-          <Link
-            key={d.city}
-            href={`/search?city=${encodeURIComponent(d.city)}`}
-            className="group relative block aspect-[4/5] overflow-hidden rounded-lg"
-          >
-            {/* Gradient is the fallback behind the real city photo */}
-            <div
-              className={`absolute inset-0 bg-gradient-to-br ${d.gradient}`}
-            />
-            <Image
-              src={`/assets/destinations/${slug(d.city)}.jpg`}
-              alt={`${d.city}, Nigeria`}
-              fill
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-              className="destination-cycle-city object-cover"
-            />
-            <Image
-              src={d.roomImage}
-              alt=""
-              aria-hidden="true"
-              fill
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-              className="destination-cycle-room object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 p-3">
-              <p className="font-semibold text-white">{d.city}</p>
-              <p className="text-2xs text-white/80">{d.stays} stays</p>
-            </div>
-          </Link>
-        ))}
+        {DESTINATIONS.map((d) => {
+          const live = liveByCity.get(d.city.toLowerCase());
+          const stayCount = live?.stayCount ?? 0;
+          return (
+            <Link
+              key={d.city}
+              href={`/search?city=${encodeURIComponent(d.city)}`}
+              className="group relative block aspect-[4/5] overflow-hidden rounded-lg"
+            >
+              <div
+                className={`absolute inset-0 bg-gradient-to-br ${d.gradient}`}
+              />
+              <DestinationImageCycle
+                city={d.city}
+                fallbackImageUrl={d.fallbackImageUrl}
+                propertyImageUrls={live?.propertyImageUrls ?? []}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 p-3">
+                <p className="font-semibold text-white">{d.city}</p>
+                <p className="text-2xs text-white/80">
+                  {stayCount > 0
+                    ? `${stayCount} live ${stayCount === 1 ? "stay" : "stays"}`
+                    : "Coming soon"}
+                </p>
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </section>
   );
@@ -288,70 +245,146 @@ function Destinations() {
 /* ============================================================================
    Featured stays
    ========================================================================== */
-function FeaturedStays() {
+function FeaturedStays({
+  latest,
+  mostBooked,
+  live,
+}: {
+  latest: PropertySummary[];
+  mostBooked: PropertySummary[];
+  live: boolean;
+}) {
+  const hasLatest = latest.length > 0;
+  const hasMostBooked = mostBooked.length > 0;
+
   return (
     <section className="border-y border-border/60 py-14 sm:py-16">
       <div className="layout-container">
-        <SectionHead
-          title="Featured stays"
-          subtitle="Hand-picked properties travellers love."
-          href="/search"
-          linkLabel="Browse all stays"
-        />
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {STAYS.map((stay) => (
-            <StayCard key={stay.name} stay={stay} />
-          ))}
+        <div className="space-y-10">
+          <LiveStaySection
+            title="Latest stays"
+            subtitle="Recently approved properties uploaded by owners."
+            href="/search"
+            linkLabel="Browse all stays"
+            items={latest.slice(0, 4)}
+            tag="New"
+          />
+          {hasMostBooked && (
+            <LiveStaySection
+              title="Most booked"
+              subtitle="Properties with confirmed booking activity."
+              href="/search"
+              linkLabel="See popular stays"
+              items={mostBooked.slice(0, 4)}
+              tag="Popular"
+            />
+          )}
+          {!hasLatest && (
+            <div className="surface-card p-8 text-center">
+              <h3 className="text-title-sm text-ink">
+                Live stays will appear here.
+              </h3>
+              <p className="mx-auto mt-2 max-w-md text-body-sm text-muted-foreground">
+                Once approved properties are uploaded, this section will show the
+                newest stays and booking-driven popular stays automatically.
+              </p>
+              {!live && (
+                <p className="mt-3 text-caption">
+                  The live catalog API is not reachable right now.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </section>
   );
 }
 
-function StayCard({ stay }: { stay: (typeof STAYS)[number] }) {
-  const available = stay.status === "Available";
+function LiveStaySection({
+  title,
+  subtitle,
+  href,
+  linkLabel,
+  items,
+  tag,
+}: {
+  title: string;
+  subtitle: string;
+  href: string;
+  linkLabel: string;
+  items: PropertySummary[];
+  tag: string;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <section>
+      <SectionHead
+        title={title}
+        subtitle={subtitle}
+        href={href}
+        linkLabel={linkLabel}
+      />
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {items.map((property) => (
+          <StayCard key={property.id} property={property} tag={tag} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function StayCard({
+  property,
+  tag,
+}: {
+  property: PropertySummary;
+  tag: string;
+}) {
   return (
     <Link
-      href={`/stays/${slug(stay.name)}`}
+      href={`/stays/${property.slug}`}
       className="group surface-card block overflow-hidden transition-shadow hover:shadow-md"
     >
-      <div className={`relative h-44 bg-gradient-to-br ${stay.gradient}`}>
+      <div className="relative h-44 bg-gradient-to-br from-indigo-500 to-indigo-800">
+        {property.coverImageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={property.coverImageUrl}
+            alt={property.name}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
         <span
-          className={`absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-semibold ${
-            available
-              ? "border-success-border bg-success-surface text-success"
-              : "border-warning-border bg-warning-surface text-warning"
-          }`}
+          className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-success-border bg-success-surface px-2.5 py-1 text-2xs font-semibold text-success"
         >
-          <span
-            className={`size-1.5 rounded-full ${available ? "bg-success" : "bg-warning"}`}
-          />
-          {stay.status}
+          <span className="size-1.5 rounded-full bg-success" />
+          Verified
         </span>
         <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-2xs font-medium text-ink">
-          {stay.type}
+          {tag}
         </span>
       </div>
 
       <div className="p-4">
-        <h3 className="text-title-sm truncate">{stay.name}</h3>
+        <h3 className="text-title-sm truncate">{property.name}</h3>
         <p className="mt-1 inline-flex items-center gap-1.5 text-muted-foreground">
           <IconPin className="size-4" />
-          <span className="text-caption">{stay.city}, Nigeria</span>
+          <span className="text-caption">{property.cityName}, Nigeria</span>
         </p>
 
-        <div className="mt-3 flex items-center gap-1.5 text-sm">
-          <IconStar className="size-4 text-warning" />
-          <span className="font-semibold text-ink">{stay.rating}</span>
-          <span className="text-muted-foreground">
-            · {stay.reviews} reviews
-          </span>
-        </div>
+        <p className="mt-3 text-caption">
+          {property.roomTypeCount} room type
+          {property.roomTypeCount === 1 ? "" : "s"}
+        </p>
 
         <div className="mt-4 flex items-end justify-between border-t border-border pt-3">
           <p className="text-ink">
-            <span className="text-lg font-bold">{naira(stay.price)}</span>
+            <span className="text-lg font-bold">
+              {formatNairaFromKobo(property.fromPriceKobo)}
+            </span>
             <span className="text-caption"> / night</span>
           </p>
           <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary transition-all group-hover:gap-2">
@@ -476,13 +509,6 @@ function IconPin({ className }: IconProps) {
     <svg {...svg(className)}>
       <path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Z" />
       <circle cx="12" cy="10" r="2.5" />
-    </svg>
-  );
-}
-function IconStar({ className }: IconProps) {
-  return (
-    <svg {...svg(className)} fill="currentColor" stroke="none">
-      <path d="M12 3.5l2.6 5.27 5.82.85-4.21 4.1.99 5.78L12 17.77l-5.2 2.73.99-5.78-4.21-4.1 5.82-.85L12 3.5Z" />
     </svg>
   );
 }

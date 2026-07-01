@@ -86,6 +86,19 @@ export interface PropertyDetail extends PropertySummary {
   latestReview: PropertyReviewRunView | null;
 }
 
+export interface DestinationShowcase {
+  cityName: string;
+  citySlug: string;
+  stayCount: number;
+  propertyImageUrls: string[];
+}
+
+export interface HomeCatalogView {
+  latestProperties: PropertySummary[];
+  mostBookedProperties: PropertySummary[];
+  destinations: DestinationShowcase[];
+}
+
 export interface MediaUploadTarget {
   key: string;
   uploadUrl: string;
