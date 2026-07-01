@@ -15,6 +15,7 @@ import type {
   AreaOption,
   AssistantReply,
   AuditLogRow,
+  AuthResponse,
   AuthUser,
   AiLogRow,
   AvailabilityDay,
@@ -38,10 +39,65 @@ import type {
   PropertySummary,
   PublicTestimonial,
   RevealedPayoutMethod,
+  SessionSummary,
 } from "@/lib/types";
 import { API_BASE } from "@/lib/api-base";
 
 type RequestOptions = RequestInit;
+const CSRF_COOKIE = "staynex_csrf";
+const CSRF_HEADER = "X-CSRF-Token";
+let csrfTokenCache: string | null = null;
+let csrfTokenRequest: Promise<string | null> | null = null;
+
+function unsafeMethod(method: string | undefined): boolean {
+  return !["GET", "HEAD", "OPTIONS"].includes((method ?? "GET").toUpperCase());
+}
+
+function readBrowserCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const prefix = `${name}=`;
+  for (const part of document.cookie.split(";")) {
+    const trimmed = part.trim();
+    if (trimmed.startsWith(prefix))
+      return decodeURIComponent(trimmed.slice(prefix.length));
+  }
+  return null;
+}
+
+async function csrfHeaderFor(
+  method: string | undefined,
+): Promise<Record<string, string>> {
+  if (!unsafeMethod(method) || typeof window === "undefined") return {};
+
+  let token = csrfTokenCache ?? readBrowserCookie(CSRF_COOKIE);
+  if (!token) {
+    csrfTokenRequest ??= fetch(`${API_BASE}/auth/csrf`, {
+      cache: "no-store",
+      credentials: "include",
+    })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const body = (await res.json().catch(() => null)) as {
+          csrfToken?: unknown;
+        } | null;
+        return typeof body?.csrfToken === "string"
+          ? body.csrfToken
+          : readBrowserCookie(CSRF_COOKIE);
+      })
+      .finally(() => {
+        csrfTokenRequest = null;
+      });
+    token = await csrfTokenRequest;
+  }
+
+  csrfTokenCache = token;
+  return token ? { [CSRF_HEADER]: token } : {};
+}
+
+function clearCsrfCache(path: string): void {
+  if (path === "/auth/logout" || path === "/auth/profile")
+    csrfTokenCache = null;
+}
 
 /**
  * Error thrown for non-2xx responses. `status` enables precise handling; the
@@ -53,7 +109,9 @@ export class ApiError extends Error {
   status: number;
   detail: string | null;
   constructor(status: number, statusText: string, detail: string | null) {
-    super(`Request failed: ${status} ${statusText}${detail ? ` — ${detail}` : ""}`);
+    super(
+      `Request failed: ${status} ${statusText}${detail ? ` — ${detail}` : ""}`,
+    );
     this.name = "ApiError";
     this.status = status;
     this.detail = detail;
@@ -66,48 +124,69 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<T> {
   const { headers, ...rest } = options;
+  const csrfHeaders = await csrfHeaderFor(rest.method);
   const res = await fetch(`${API_BASE}${path}`, {
     ...rest,
     // Send/receive the session cookie so auth-aware endpoints resolve the user.
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...csrfHeaders,
       ...headers,
     },
   });
   if (!res.ok) {
+    if (res.status === 403) csrfTokenCache = null;
     let detail: string | null = null;
     try {
-      const data = (await res.json()) as { message?: unknown; issues?: Array<{ message?: string }> };
+      const data = (await res.json()) as {
+        message?: unknown;
+        issues?: Array<{ message?: string }>;
+      };
       if (typeof data.message === "string") detail = data.message;
       else if (Array.isArray(data.message)) detail = data.message.join(", ");
-      else if (Array.isArray(data.issues)) detail = data.issues.map((i) => i.message).join(", ");
+      else if (Array.isArray(data.issues))
+        detail = data.issues.map((i) => i.message).join(", ");
     } catch {
       /* non-JSON error body */
     }
     throw new ApiError(res.status, res.statusText, detail);
   }
+  clearCsrfCache(path);
   return (await res.json()) as T;
 }
 
 // All owner endpoints are authenticated by the session cookie (session-only auth).
 export const ownerApi = {
   listProperties: () => request<PropertySummary[]>("/owner/properties"),
-  getProperty: (id: string) => request<PropertyDetail>(`/owner/properties/${id}`),
-  createProperty: (body: { name: string; cityId: string; description?: string }) =>
+  getProperty: (id: string) =>
+    request<PropertyDetail>(`/owner/properties/${id}`),
+  createProperty: (body: {
+    name: string;
+    cityId: string;
+    description?: string;
+  }) =>
     request<PropertyDetail>("/owner/properties", {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  updateProperty: (id: string, body: { name?: string; cityId?: string; description?: string }) =>
+  updateProperty: (
+    id: string,
+    body: { name?: string; cityId?: string; description?: string },
+  ) =>
     request<PropertyDetail>(`/owner/properties/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   submitProperty: (id: string) =>
-    request<PropertyDetail>(`/owner/properties/${id}/submit`, { method: "POST" }),
+    request<PropertyDetail>(`/owner/properties/${id}/submit`, {
+      method: "POST",
+    }),
   createRoomType: (body: {
     propertyId: string;
     name: string;
@@ -124,7 +203,11 @@ export const ownerApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  requestUpload: (body: { scope: "property" | "room"; filename: string; contentType: string }) =>
+  requestUpload: (body: {
+    scope: "property" | "room";
+    filename: string;
+    contentType: string;
+  }) =>
     request<MediaUploadTarget>("/owner/media/upload-url", {
       method: "POST",
       body: JSON.stringify(body),
@@ -137,7 +220,12 @@ export const ownerApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  setCapacity: (body: { roomTypeId: string; from: string; to: string; totalUnits: number }) =>
+  setCapacity: (body: {
+    roomTypeId: string;
+    from: string;
+    to: string;
+    totalUnits: number;
+  }) =>
     request<{ updatedDays: number }>("/availability/capacity", {
       method: "PUT",
       body: JSON.stringify(body),
@@ -152,7 +240,8 @@ export const ownerApi = {
 
 export const adminApi = {
   queue: () => request<PropertySummary[]>("/admin/approvals"),
-  getForReview: (id: string) => request<PropertyDetail>(`/admin/approvals/${id}`),
+  getForReview: (id: string) =>
+    request<PropertyDetail>(`/admin/approvals/${id}`),
   decide: (
     id: string,
     body: { decision: "APPROVE" | "REJECT" | "REQUEST_CHANGES"; note?: string },
@@ -171,33 +260,78 @@ export const adminApi = {
     request<AdminTestimonialRow[]>(
       `/admin/testimonials${status ? `?status=${encodeURIComponent(status)}` : ""}`,
     ),
-  moderateTestimonial: (id: string, decision: "APPROVE" | "REJECT" | "PENDING") =>
-    request<{ id: string; status: string }>(`/admin/testimonials/${id}/decision`, {
-      method: "POST",
-      body: JSON.stringify({ decision }),
-    }),
+  moderateTestimonial: (
+    id: string,
+    decision: "APPROVE" | "REJECT" | "PENDING",
+  ) =>
+    request<{ id: string; status: string }>(
+      `/admin/testimonials/${id}/decision`,
+      {
+        method: "POST",
+        body: JSON.stringify({ decision }),
+      },
+    ),
   areas: (city?: string) =>
-    request<AreaOption[]>(`/admin/areas${city ? `?city=${encodeURIComponent(city)}` : ""}`),
-  createArea: (body: { cityId: string; name: string; type: string; notable?: boolean }) =>
-    request<AreaOption>("/admin/areas", { method: "POST", body: JSON.stringify(body) }),
-  updateArea: (id: string, body: { name?: string; type?: string; notable?: boolean }) =>
-    request<AreaOption>(`/admin/areas/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    request<AreaOption[]>(
+      `/admin/areas${city ? `?city=${encodeURIComponent(city)}` : ""}`,
+    ),
+  createArea: (body: {
+    cityId: string;
+    name: string;
+    type: string;
+    notable?: boolean;
+  }) =>
+    request<AreaOption>("/admin/areas", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateArea: (
+    id: string,
+    body: { name?: string; type?: string; notable?: boolean },
+  ) =>
+    request<AreaOption>(`/admin/areas/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
 };
 
 export const authApi = {
   me: () => request<AuthUser | null>("/auth/me"),
-  register: (body: { email: string; password: string; name?: string; role?: "GUEST" | "OWNER" }) =>
-    request<AuthUser>("/auth/register", { method: "POST", body: JSON.stringify(body) }),
+  register: (body: {
+    email: string;
+    password: string;
+    name?: string;
+    role?: "GUEST" | "OWNER";
+  }) =>
+    request<AuthUser>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   registerOwner: (body: { email: string; password: string; name?: string }) =>
-    request<AuthUser>("/auth/owner/register", { method: "POST", body: JSON.stringify(body) }),
+    request<AuthUser>("/auth/owner/register", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   adminRegister: (body: {
     email: string;
     password: string;
     name?: string;
     accessCode: string;
-  }) => request<AuthUser>("/auth/admin/register", { method: "POST", body: JSON.stringify(body) }),
+  }) =>
+    request<AuthResponse>("/auth/admin/register", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   login: (body: { email: string; password: string }) =>
-    request<AuthUser>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
+    request<AuthResponse>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  completeMfa: (body: { challengeId: string; code: string }) =>
+    request<AuthUser>("/auth/mfa/complete", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   google: (idToken: string, intent?: "GUEST" | "OWNER") =>
     request<AuthUser>("/auth/google", {
       method: "POST",
@@ -209,19 +343,42 @@ export const authApi = {
       body: JSON.stringify({ email }),
     }),
   resetPassword: (body: { token: string; password: string }) =>
-    request<{ ok: true }>("/auth/password/reset", { method: "POST", body: JSON.stringify(body) }),
-  updateProfile: (body: { name?: string; email?: string; phone?: string | null }) =>
-    request<AuthUser>("/auth/profile", { method: "PATCH", body: JSON.stringify(body) }),
-  deleteAccount: () => request<{ ok: true }>("/auth/profile", { method: "DELETE" }),
+    request<{ ok: true }>("/auth/password/reset", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateProfile: (body: {
+    name?: string;
+    email?: string;
+    phone?: string | null;
+  }) =>
+    request<AuthUser>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteAccount: () =>
+    request<{ ok: true }>("/auth/profile", { method: "DELETE" }),
   logout: () => request<{ ok: true }>("/auth/logout", { method: "POST" }),
+  sessions: () => request<SessionSummary[]>("/auth/sessions"),
+  revokeOtherSessions: () =>
+    request<{ revoked: number }>("/auth/sessions/revoke-others", {
+      method: "POST",
+    }),
   // Upgrade a signed-in guest to owner-capable (no duplicate account).
   becomeOwner: () => request<AuthUser>("/owner/become", { method: "POST" }),
 };
 
 export const settingsApi = {
   profile: () => request<AuthUser>("/settings/profile"),
-  updateProfile: (body: { name?: string; email?: string; phone?: string | null }) =>
-    request<AuthUser>("/settings/profile", { method: "PATCH", body: JSON.stringify(body) }),
+  updateProfile: (body: {
+    name?: string;
+    email?: string;
+    phone?: string | null;
+  }) =>
+    request<AuthUser>("/settings/profile", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
 };
 
 interface LocationInput {
@@ -247,12 +404,17 @@ export const ownerApiSettings = {
       body: JSON.stringify({ skipPayout: skipPayout ?? false }),
     }),
   settings: () => request<OwnerSettingsView>("/owner/settings"),
-  updateProfile: (body: { displayName?: string; businessName?: string; phone?: string }) =>
+  updateProfile: (body: {
+    displayName?: string;
+    businessName?: string;
+    phone?: string;
+  }) =>
     request<OwnerProfileView>("/owner/settings/profile", {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
-  listLocations: () => request<OwnerLocationView[]>("/owner/settings/locations"),
+  listLocations: () =>
+    request<OwnerLocationView[]>("/owner/settings/locations"),
   createLocation: (body: LocationInput) =>
     request<OwnerLocationView>("/owner/settings/locations", {
       method: "POST",
@@ -266,11 +428,14 @@ export const ownerApiSettings = {
   deleteLocation: (id: string, replacementLocationId?: string) =>
     request<OwnerLocationView[]>(
       `/owner/settings/locations/${id}${
-        replacementLocationId ? `?replacementLocationId=${encodeURIComponent(replacementLocationId)}` : ""
+        replacementLocationId
+          ? `?replacementLocationId=${encodeURIComponent(replacementLocationId)}`
+          : ""
       }`,
       { method: "DELETE" },
     ),
-  getPayoutMethod: () => request<OwnerPayoutMethodView | null>("/owner/settings/payout-method"),
+  getPayoutMethod: () =>
+    request<OwnerPayoutMethodView | null>("/owner/settings/payout-method"),
   savePayoutMethod: (body: PayoutMethodInput) =>
     request<OwnerPayoutMethodView>("/owner/settings/payout-method", {
       method: "PUT",
@@ -282,7 +447,9 @@ export const adminUsersApi = {
   list: () => request<AdminUserRow[]>("/admin/users"),
   get: (id: string) => request<AdminUserDetail>(`/admin/users/${id}`),
   revealPayout: (id: string) =>
-    request<RevealedPayoutMethod>(`/admin/users/${id}/payout-method/reveal`, { method: "POST" }),
+    request<RevealedPayoutMethod>(`/admin/users/${id}/payout-method/reveal`, {
+      method: "POST",
+    }),
 };
 
 export const catalogApi = {
@@ -295,7 +462,9 @@ export const reviewsApi = {
     if (propertySlug) qs.set("propertySlug", propertySlug);
     if (limit) qs.set("limit", String(limit));
     const suffix = qs.toString();
-    return request<PublicTestimonial[]>(`/reviews${suffix ? `?${suffix}` : ""}`);
+    return request<PublicTestimonial[]>(
+      `/reviews${suffix ? `?${suffix}` : ""}`,
+    );
   },
   bookingContext: (bookingId: string) =>
     request<BookingReviewContext>(`/reviews/booking/${bookingId}/context`),
@@ -329,12 +498,16 @@ export interface AgentStreamMeta {
  */
 export async function askAgentStream(
   body: { message: string; conversationId?: string; propertySlug?: string },
-  handlers: { onChunk: (text: string) => void; onDone: (meta: AgentStreamMeta) => void },
+  handlers: {
+    onChunk: (text: string) => void;
+    onDone: (meta: AgentStreamMeta) => void;
+  },
 ): Promise<void> {
+  const csrfHeaders = await csrfHeaderFor("POST");
   const res = await fetch(`${API_BASE}/ai/assistant/stream`, {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...csrfHeaders },
     body: JSON.stringify(body),
   });
   if (!res.ok || !res.body) {
@@ -386,8 +559,15 @@ export async function askAgentStream(
 }
 
 export const agentApi = {
-  ask: (body: { message: string; conversationId?: string; propertySlug?: string }) =>
-    request<AssistantReply>("/ai/assistant", { method: "POST", body: JSON.stringify(body) }),
+  ask: (body: {
+    message: string;
+    conversationId?: string;
+    propertySlug?: string;
+  }) =>
+    request<AssistantReply>("/ai/assistant", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   askStream: askAgentStream,
   listConversations: () => request<AgentConversation[]>("/ai/conversations"),
   createConversation: (title?: string) =>
@@ -395,7 +575,8 @@ export const agentApi = {
       method: "POST",
       body: JSON.stringify(title ? { title } : {}),
     }),
-  messages: (id: string) => request<AgentMessage[]>(`/ai/conversations/${id}/messages`),
+  messages: (id: string) =>
+    request<AgentMessage[]>(`/ai/conversations/${id}/messages`),
   rename: (id: string, title: string) =>
     request<AgentConversation>(`/ai/conversations/${id}`, {
       method: "PATCH",
@@ -430,7 +611,8 @@ export const guestApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  getHold: (holdId: string) => request<HoldSummary>(`/bookings/holds/${holdId}`),
+  getHold: (holdId: string) =>
+    request<HoldSummary>(`/bookings/holds/${holdId}`),
   checkout: (body: { holdId: string; email: string }) =>
     request<CheckoutResult>("/checkout", {
       method: "POST",
@@ -442,7 +624,10 @@ export const guestApi = {
 };
 
 /** Direct PUT of a file to a storage upload target (step 2 of the media flow). */
-export async function uploadToTarget(target: MediaUploadTarget, file: File): Promise<void> {
+export async function uploadToTarget(
+  target: MediaUploadTarget,
+  file: File,
+): Promise<void> {
   const res = await fetch(target.uploadUrl, {
     method: target.method,
     headers: target.headers,

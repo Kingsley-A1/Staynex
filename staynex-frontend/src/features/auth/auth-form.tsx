@@ -6,7 +6,14 @@ import Link from "next/link";
 import { Button, Field, Input, PasswordInput, Select } from "@/ui";
 import { GoogleAuthButton } from "@/features/auth/google-auth-button";
 import { authApi } from "@/lib/api";
-import { type AuthUser, capabilityHome, isAdminCapable, isOwnerCapable } from "@/lib/types";
+import {
+  type AuthMfaChallenge,
+  type AuthUser,
+  capabilityHome,
+  isAdminCapable,
+  isAuthMfaChallenge,
+  isOwnerCapable,
+} from "@/lib/types";
 
 type Mode = "login" | "register" | "admin";
 
@@ -34,6 +41,10 @@ export function AuthForm({
   const [name, setName] = useState("");
   const [role, setRole] = useState<"GUEST" | "OWNER">("GUEST");
   const [accessCode, setAccessCode] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaChallenge, setMfaChallenge] = useState<AuthMfaChallenge | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -44,6 +55,11 @@ export function AuthForm({
     setError(null);
     setEmailError(null);
     setPasswordError(null);
+  }
+
+  function resetMfa() {
+    setMfaChallenge(null);
+    setMfaCode("");
   }
 
   function goHome(user: AuthUser) {
@@ -73,24 +89,76 @@ export function AuthForm({
     try {
       let user: AuthUser;
       if (mode === "login") {
-        user = await authApi.login({ email, password });
+        const result = await authApi.login({ email, password });
+        if (isAuthMfaChallenge(result)) {
+          setMfaChallenge(result);
+          setBusy(false);
+          return;
+        }
+        user = result;
       } else if (mode === "admin") {
-        user = await authApi.adminRegister({ email, password, name: name || undefined, accessCode });
+        const result = await authApi.adminRegister({
+          email,
+          password,
+          name: name || undefined,
+          accessCode,
+        });
+        if (isAuthMfaChallenge(result)) {
+          setMfaChallenge(result);
+          setBusy(false);
+          return;
+        }
+        user = result;
       } else if (ownerIntent) {
-        user = await authApi.registerOwner({ email, password, name: name || undefined });
+        user = await authApi.registerOwner({
+          email,
+          password,
+          name: name || undefined,
+        });
       } else {
-        user = await authApi.register({ email, password, name: name || undefined, role });
+        user = await authApi.register({
+          email,
+          password,
+          name: name || undefined,
+          role,
+        });
       }
       handleSuccess(user);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       if (msg.includes("401")) {
         // Wrong credentials: flag the password field rather than a generic banner.
-        setPasswordError("Incorrect email or password. Check your password or reset it.");
+        setPasswordError(
+          "Incorrect email or password. Check your password or reset it.",
+        );
       } else if (msg.includes("409")) {
         setEmailError("An account with this email already exists.");
       } else if (msg.includes("403")) {
         setError("That admin access code wasn't accepted.");
+      } else if (msg.includes("429")) {
+        setError("Too many attempts. Please try again later.");
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
+      setBusy(false);
+    }
+  }
+
+  async function submitMfa(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!mfaChallenge) return;
+    setBusy(true);
+    clearErrors();
+    try {
+      const user = await authApi.completeMfa({
+        challengeId: mfaChallenge.challengeId,
+        code: mfaCode,
+      });
+      handleSuccess(user);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("401")) {
+        setError("That verification code wasn't accepted.");
       } else if (msg.includes("429")) {
         setError("Too many attempts. Please try again later.");
       } else {
@@ -111,12 +179,15 @@ export function AuthForm({
           : "Create account";
 
   if (registered) {
-    const goesToWorkspace = isOwnerCapable(registered) || isAdminCapable(registered);
+    const goesToWorkspace =
+      isOwnerCapable(registered) || isAdminCapable(registered);
     return (
       <RegistrationSuccess
         user={registered}
         busy={busy}
-        continueLabel={goesToWorkspace ? "Go to your dashboard" : "Start exploring stays"}
+        continueLabel={
+          goesToWorkspace ? "Go to your dashboard" : "Start exploring stays"
+        }
         onContinue={() => {
           setBusy(true);
           goHome(registered);
@@ -125,17 +196,84 @@ export function AuthForm({
     );
   }
 
+  if (mfaChallenge) {
+    return (
+      <form
+        onSubmit={submitMfa}
+        className={compact ? "space-y-4" : "surface-card space-y-4 p-6"}
+      >
+        <div className="space-y-1">
+          <h2 className="text-title-sm text-ink">Verify admin sign in</h2>
+          <p className="text-sm text-muted-foreground">
+            Enter the 6-digit code sent to {mfaChallenge.email}.
+          </p>
+        </div>
+        <Field label="Verification code" htmlFor="mfaCode" required>
+          <Input
+            id="mfaCode"
+            inputMode="numeric"
+            pattern="\d{6}"
+            maxLength={6}
+            required
+            value={mfaCode}
+            onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+            autoComplete="one-time-code"
+            placeholder="••••••"
+          />
+        </Field>
+        {error && (
+          <p className="text-sm text-error" role="alert">
+            {error}
+          </p>
+        )}
+        <Button
+          type="submit"
+          disabled={busy || mfaCode.length !== 6}
+          className="w-full"
+        >
+          {busy ? "Please wait…" : "Verify and continue"}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy}
+          className="w-full"
+          onClick={resetMfa}
+        >
+          Use a different account
+        </Button>
+      </form>
+    );
+  }
+
   return (
-    <form onSubmit={submit} className={compact ? "space-y-4" : "surface-card space-y-4 p-6"}>
+    <form
+      onSubmit={submit}
+      className={compact ? "space-y-4" : "surface-card space-y-4 p-6"}
+    >
       {mode !== "admin" && (
-        <GoogleAuthButton next={next} onSuccess={onSuccess} intent={ownerIntent ? "OWNER" : undefined} />
+        <GoogleAuthButton
+          next={next}
+          onSuccess={onSuccess}
+          intent={ownerIntent ? "OWNER" : undefined}
+        />
       )}
       {(mode === "register" || mode === "admin") && (
         <Field label="Name" htmlFor="name">
-          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+          <Input
+            id="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="name"
+          />
         </Field>
       )}
-      <Field label="Email" htmlFor="email" required error={emailError ?? undefined}>
+      <Field
+        label="Email"
+        htmlFor="email"
+        required
+        error={emailError ?? undefined}
+      >
         <Input
           id="email"
           type="email"
@@ -166,7 +304,10 @@ export function AuthForm({
 
       {mode === "login" && (
         <div className="-mt-1 text-right">
-          <Link href="/forgot-password" className="text-caption font-medium text-primary">
+          <Link
+            href="/forgot-password"
+            className="text-caption font-medium text-primary"
+          >
             Forgot password?
           </Link>
         </div>
@@ -174,7 +315,11 @@ export function AuthForm({
 
       {mode === "register" && !ownerIntent && (
         <Field label="I'm registering as" htmlFor="role">
-          <Select id="role" value={role} onChange={(e) => setRole(e.target.value as "GUEST" | "OWNER")}>
+          <Select
+            id="role"
+            value={role}
+            onChange={(e) => setRole(e.target.value as "GUEST" | "OWNER")}
+          >
             <option value="GUEST">A guest booking stays</option>
             <option value="OWNER">A property owner</option>
           </Select>
@@ -266,13 +411,21 @@ function RegistrationSuccess({
       </span>
       <div className="space-y-1">
         <h2 className="text-title-sm text-ink">
-          {firstName ? `Welcome to Staynex, ${firstName}!` : "Welcome to Staynex!"}
+          {firstName
+            ? `Welcome to Staynex, ${firstName}!`
+            : "Welcome to Staynex!"}
         </h2>
         <p className="text-muted-foreground">
-          Your account is ready{user.email ? ` for ${user.email}` : ""}. You&apos;re now signed in.
+          Your account is ready{user.email ? ` for ${user.email}` : ""}.
+          You&apos;re now signed in.
         </p>
       </div>
-      <Button type="button" onClick={onContinue} disabled={busy} className="w-full">
+      <Button
+        type="button"
+        onClick={onContinue}
+        disabled={busy}
+        className="w-full"
+      >
         {busy ? "Please wait…" : continueLabel}
       </Button>
     </div>

@@ -331,7 +331,11 @@ export interface AgentConversation {
 export type AppRole = "GUEST" | "OWNER" | "ADMIN_REVIEWER" | "ADMIN_MANAGER";
 
 /** Additive capabilities. GUEST is always present for a signed-in user. */
-export type AppCapability = "GUEST" | "OWNER" | "ADMIN_REVIEWER" | "ADMIN_MANAGER";
+export type AppCapability =
+  | "GUEST"
+  | "OWNER"
+  | "ADMIN_REVIEWER"
+  | "ADMIN_MANAGER";
 
 export interface AuthUser {
   id: string;
@@ -341,6 +345,28 @@ export interface AuthUser {
   /** COMPAT primary role. Prefer `capabilities` for access decisions. */
   role: AppRole;
   capabilities: AppCapability[];
+}
+
+export interface AuthMfaChallenge {
+  mfaRequired: true;
+  challengeId: string;
+  email: string;
+  expiresAt: string;
+}
+
+export type AuthResponse = AuthUser | AuthMfaChallenge;
+
+export interface SessionSummary {
+  id: string;
+  createdAt: string;
+  expiresAt: string;
+  current: boolean;
+}
+
+export function isAuthMfaChallenge(
+  value: AuthResponse,
+): value is AuthMfaChallenge {
+  return "mfaRequired" in value && value.mfaRequired === true;
 }
 
 export const ROLE_LABELS: Record<AppRole, string> = {
@@ -356,7 +382,8 @@ export function isOwnerCapable(user: AuthUser | null | undefined): boolean {
 
 export function isAdminCapable(user: AuthUser | null | undefined): boolean {
   return Boolean(
-    user?.capabilities.includes("ADMIN_REVIEWER") || user?.capabilities.includes("ADMIN_MANAGER"),
+    user?.capabilities.includes("ADMIN_REVIEWER") ||
+    user?.capabilities.includes("ADMIN_MANAGER"),
   );
 }
 
@@ -373,9 +400,15 @@ export function capabilityHome(user: AuthUser): string {
 
 // --- Owner v1: onboarding, locations, payout, settings ---
 
-export type PayoutMethodStatusValue = "PENDING_VERIFICATION" | "ACTIVE" | "DISABLED";
+export type PayoutMethodStatusValue =
+  | "PENDING_VERIFICATION"
+  | "ACTIVE"
+  | "DISABLED";
 
-export const PAYOUT_METHOD_STATUS_LABELS: Record<PayoutMethodStatusValue, string> = {
+export const PAYOUT_METHOD_STATUS_LABELS: Record<
+  PayoutMethodStatusValue,
+  string
+> = {
   PENDING_VERIFICATION: "Pending verification",
   ACTIVE: "Active",
   DISABLED: "Disabled",

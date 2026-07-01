@@ -1,9 +1,20 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { AuthForm } from "@/features/auth/auth-form";
 
-export const metadata: Metadata = { title: "Admin access — Staynex", robots: { index: false } };
+export const metadata: Metadata = {
+  title: "Admin access — Staynex",
+  robots: { index: false },
+};
 
 export default function AdminAccessPage() {
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.ENABLE_ADMIN_ACCESS_PAGE !== "true"
+  ) {
+    notFound();
+  }
+
   return (
     <main className="layout-container py-12">
       <div className="mx-auto max-w-md space-y-6">
