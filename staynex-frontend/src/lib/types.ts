@@ -535,7 +535,9 @@ export interface AdminUserDetail {
   id: string;
   name: string | null;
   email: string | null;
+  /** Populated only for Super Admins; null + `phoneRestricted` for reviewers. */
   phone: string | null;
+  phoneRestricted: boolean;
   role: AppRole;
   capabilities: AppCapability[];
   createdAt: string;

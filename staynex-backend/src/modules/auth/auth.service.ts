@@ -22,6 +22,7 @@ import type {
   AdminRegisterInput,
   CompleteMfaInput,
   LoginInput,
+  OwnerRegisterInput,
   RegisterInput,
 } from "./dto";
 import { hashPassword, verifyPassword } from "./password";
@@ -70,6 +71,13 @@ export interface SessionSummary {
   current: boolean;
 }
 
+type PasswordRegistrationInput = {
+  email: string;
+  password: string;
+  name?: string;
+  phone: string;
+};
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -86,11 +94,7 @@ export class AuthService {
   }
 
   /** Owner-intent registration. Same internal auth service; OWNER is forced. */
-  async registerOwner(input: {
-    email: string;
-    password: string;
-    name?: string;
-  }): Promise<AuthResult> {
+  async registerOwner(input: OwnerRegisterInput): Promise<AuthResult> {
     return this.createUserAndSession(input, UserRole.OWNER);
   }
 
@@ -428,7 +432,7 @@ export class AuthService {
   // --- internals -----------------------------------------------------------
 
   private async createUserAndSession(
-    input: { email: string; password: string; name?: string },
+    input: PasswordRegistrationInput,
     role: UserRole,
   ): Promise<AuthResult> {
     const userId = await this.createUser(input, role);
@@ -436,7 +440,7 @@ export class AuthService {
   }
 
   private async createUser(
-    input: { email: string; password: string; name?: string },
+    input: PasswordRegistrationInput,
     role: UserRole,
   ): Promise<string> {
     const existing = await prisma.user.findUnique({
@@ -451,6 +455,7 @@ export class AuthService {
       data: {
         email: input.email,
         name: input.name ?? null,
+        phone: input.phone,
         passwordHash: hashPassword(input.password),
         role,
         ...(grants.length ? { capabilities: { create: grants } } : {}),

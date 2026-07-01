@@ -39,6 +39,7 @@ export function AuthForm({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [role, setRole] = useState<"GUEST" | "OWNER">("GUEST");
   const [accessCode, setAccessCode] = useState("");
   const [mfaCode, setMfaCode] = useState("");
@@ -101,6 +102,7 @@ export function AuthForm({
           email,
           password,
           name: name || undefined,
+          phone,
           accessCode,
         });
         if (isAuthMfaChallenge(result)) {
@@ -114,12 +116,14 @@ export function AuthForm({
           email,
           password,
           name: name || undefined,
+          phone,
         });
       } else {
         user = await authApi.register({
           email,
           password,
           name: name || undefined,
+          phone,
           role,
         });
       }
@@ -265,6 +269,21 @@ export function AuthForm({
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoComplete="name"
+          />
+        </Field>
+      )}
+      {(mode === "register" || mode === "admin") && (
+        <Field label="Phone" htmlFor="phone" required>
+          <Input
+            id="phone"
+            type="tel"
+            required
+            minLength={7}
+            maxLength={40}
+            inputMode="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            autoComplete="tel"
           />
         </Field>
       )}

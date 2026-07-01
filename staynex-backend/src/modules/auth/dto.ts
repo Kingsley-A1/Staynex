@@ -10,11 +10,22 @@ const password = z
   .min(8, "Password must be at least 8 characters")
   .max(200);
 const name = z.string().trim().min(1).max(120).optional();
+const phone = z
+  .string()
+  .trim()
+  .min(7, "Phone number is required")
+  .max(40)
+  .regex(/^\+?[0-9][0-9\s().-]*$/, "Enter a valid phone number")
+  .refine(
+    (value) => value.replace(/\D/g, "").length >= 7,
+    "Enter a valid phone number",
+  );
 
 export const registerSchema = z.object({
   email,
   password,
   name,
+  phone,
   // Public self-service registration is GUEST or OWNER only. Admins use the
   // access-code flow. `roleIntent` is accepted as an alias for `role`.
   role: z.enum(["GUEST", "OWNER"]).optional(),
@@ -23,7 +34,7 @@ export const registerSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 // Owner-specific registration. Same backend auth; owner intent is locked on.
-export const ownerRegisterSchema = z.object({ email, password, name });
+export const ownerRegisterSchema = z.object({ email, password, name, phone });
 export type OwnerRegisterInput = z.infer<typeof ownerRegisterSchema>;
 
 export const loginSchema = z.object({ email, password });
@@ -83,6 +94,7 @@ export const adminRegisterSchema = z.object({
   email,
   password,
   name,
+  phone,
   accessCode: z.string().regex(/^\d{6}$/, "Access code must be 6 digits"),
 });
 export type AdminRegisterInput = z.infer<typeof adminRegisterSchema>;

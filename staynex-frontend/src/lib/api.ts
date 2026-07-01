@@ -306,13 +306,19 @@ export const authApi = {
     email: string;
     password: string;
     name?: string;
+    phone: string;
     role?: "GUEST" | "OWNER";
   }) =>
     request<AuthUser>("/auth/register", {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  registerOwner: (body: { email: string; password: string; name?: string }) =>
+  registerOwner: (body: {
+    email: string;
+    password: string;
+    name?: string;
+    phone: string;
+  }) =>
     request<AuthUser>("/auth/owner/register", {
       method: "POST",
       body: JSON.stringify(body),
@@ -321,6 +327,7 @@ export const authApi = {
     email: string;
     password: string;
     name?: string;
+    phone: string;
     accessCode: string;
   }) =>
     request<AuthResponse>("/auth/admin/register", {

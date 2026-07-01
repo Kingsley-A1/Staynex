@@ -474,7 +474,9 @@ export interface AdminUserDetail {
   id: string;
   name: string | null;
   email: string | null;
+  /** Populated only for ADMIN_MANAGER; null + `phoneRestricted` for reviewers. */
   phone: string | null;
+  phoneRestricted: boolean;
   role: AppRole;
   capabilities: AppCapability[];
   createdAt: string;
