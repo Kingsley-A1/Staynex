@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   HttpException,
@@ -15,6 +16,7 @@ import {
   randomInt,
   timingSafeEqual,
 } from "node:crypto";
+import { resolve4, resolve6, resolveMx } from "node:dns/promises";
 import { prisma } from "../../../db";
 import type { AppCapability, AuthUser } from "../../../types";
 import { EmailService } from "../notifications/email.service";
@@ -39,6 +41,15 @@ export const ADMIN_SESSION_TTL_MS = readPositiveIntEnv(
 const RESET_TOKEN_TTL_MS = 1000 * 60 * 60; // 1 hour, single-use
 const MFA_CODE_TTL_MS = 1000 * 60 * 10; // 10 minutes, single-use
 const MFA_MAX_ATTEMPTS = 5;
+const EMAIL_DNS_TIMEOUT_MS = 3000;
+const RESERVED_EMAIL_DOMAINS = new Set([
+  "example.com",
+  "example.net",
+  "example.org",
+  "invalid",
+  "localhost",
+  "test",
+]);
 
 // In-memory rate limiter for admin access-code attempts (POC; resets on restart).
 const ADMIN_CODE_WINDOW_MS = 15 * 60_000;
@@ -449,6 +460,7 @@ export class AuthService {
     });
     if (existing)
       throw new ConflictException("An account with this email already exists");
+    await assertDeliverableEmailDomain(input.email);
 
     const grants = capabilityGrantsForRole(role);
     const user = await prisma.user.create({
@@ -638,6 +650,57 @@ function sha256(value: string): string {
 
 function sessionTokenHash(rawToken: string): string {
   return sha256(rawToken);
+}
+
+async function assertDeliverableEmailDomain(email: string): Promise<void> {
+  const domain = email.split("@").pop()?.toLowerCase();
+  if (
+    !domain ||
+    !domain.includes(".") ||
+    domain.endsWith(".local") ||
+    RESERVED_EMAIL_DOMAINS.has(domain)
+  ) {
+    throw new BadRequestException(
+      "Use a real email address with a deliverable domain.",
+    );
+  }
+
+  const hasMailRoute = await hasEmailMailRoute(domain);
+  if (!hasMailRoute) {
+    throw new BadRequestException(
+      "Use an email address with a domain that can receive email.",
+    );
+  }
+}
+
+async function hasEmailMailRoute(domain: string): Promise<boolean> {
+  const mx = await dnsWithTimeout(resolveMx(domain), []);
+  if (mx.length > 0) return true;
+
+  const [ipv4, ipv6] = await Promise.all([
+    dnsWithTimeout(resolve4(domain), []),
+    dnsWithTimeout(resolve6(domain), []),
+  ]);
+  return ipv4.length > 0 || ipv6.length > 0;
+}
+
+async function dnsWithTimeout<T>(
+  lookup: Promise<T>,
+  fallback: T,
+): Promise<T> {
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      lookup,
+      new Promise<T>((resolve) => {
+        timeout = setTimeout(() => resolve(fallback), EMAIL_DNS_TIMEOUT_MS);
+      }),
+    ]);
+  } catch {
+    return fallback;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 function sessionTokenCandidates(rawToken: string): string[] {

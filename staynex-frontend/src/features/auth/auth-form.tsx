@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Field, Input, PasswordInput, Select } from "@/ui";
 import { GoogleAuthButton } from "@/features/auth/google-auth-button";
-import { authApi } from "@/lib/api";
+import { ApiError, apiErrorMessage, authApi } from "@/lib/api";
 import {
   type AuthMfaChallenge,
   type AuthUser,
@@ -77,6 +77,7 @@ export function AuthForm({
       // Confirm the account was created before sending the guest onward —
       // otherwise a guest (whose home is the welcome page) gets no signal that
       // registration worked.
+      setBusy(false);
       setRegistered(user);
     } else {
       goHome(user);
@@ -137,6 +138,13 @@ export function AuthForm({
         );
       } else if (msg.includes("409")) {
         setEmailError("An account with this email already exists.");
+      } else if (err instanceof ApiError && err.status === 400) {
+        const detail = apiErrorMessage(
+          err,
+          "Check your registration details and try again.",
+        );
+        if (/email|domain|deliverable/i.test(detail)) setEmailError(detail);
+        else setError(detail);
       } else if (msg.includes("403")) {
         setError("That admin access code wasn't accepted.");
       } else if (msg.includes("429")) {
