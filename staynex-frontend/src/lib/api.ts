@@ -47,6 +47,7 @@ type RequestOptions = RequestInit;
 const CSRF_COOKIE = "staynex_csrf";
 const CSRF_HEADER = "X-CSRF-Token";
 const BROWSER_API_BASE = "/api/backend";
+const AI_STREAM_TIMEOUT_MS = 45_000;
 let csrfTokenCache: string | null = null;
 let csrfTokenRequest: Promise<string | null> | null = null;
 
@@ -153,10 +154,15 @@ async function request<T>(
         message?: unknown;
         issues?: Array<{ message?: string }>;
       };
-      if (typeof data.message === "string") detail = data.message;
+      const issueDetail = Array.isArray(data.issues)
+        ? data.issues
+            .map((i) => i.message)
+            .filter(Boolean)
+            .join(", ")
+        : "";
+      if (issueDetail) detail = issueDetail;
+      else if (typeof data.message === "string") detail = data.message;
       else if (Array.isArray(data.message)) detail = data.message.join(", ");
-      else if (Array.isArray(data.issues))
-        detail = data.issues.map((i) => i.message).join(", ");
     } catch {
       /* non-JSON error body */
     }
@@ -516,43 +522,43 @@ export async function askAgentStream(
   },
 ): Promise<void> {
   const csrfHeaders = await csrfHeaderFor("POST");
-  const res = await fetch(apiUrl("/ai/assistant/stream"), {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...csrfHeaders },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok || !res.body) {
-    let detail: string | null = null;
-    try {
-      const data = (await res.json()) as { message?: string };
-      if (typeof data.message === "string") detail = data.message;
-    } catch {
-      /* non-JSON error body */
+  const controller = new AbortController();
+  const timeout = window.setTimeout(
+    () => controller.abort(),
+    AI_STREAM_TIMEOUT_MS,
+  );
+  try {
+    const res = await fetch(apiUrl("/ai/assistant/stream"), {
+      method: "POST",
+      credentials: "include",
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json", ...csrfHeaders },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok || !res.body) {
+      let detail: string | null = null;
+      try {
+        const data = (await res.json()) as { message?: string };
+        if (typeof data.message === "string") detail = data.message;
+      } catch {
+        /* non-JSON error body */
+      }
+      throw new ApiError(res.status, res.statusText, detail);
     }
-    throw new ApiError(res.status, res.statusText, detail);
-  }
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let doneMeta: AgentStreamMeta | null = null;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let doneMeta: AgentStreamMeta | null = null;
 
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let sep: number;
-    while ((sep = buffer.indexOf("\n\n")) !== -1) {
-      const block = buffer.slice(0, sep);
-      buffer = buffer.slice(sep + 2);
+    function handleBlock(block: string) {
       const line = block.split("\n").find((l) => l.startsWith("data:"));
-      if (!line) continue;
+      if (!line) return;
       let event: { type?: string; text?: string } & Partial<AgentStreamMeta>;
       try {
         event = JSON.parse(line.slice(5).trim());
       } catch {
-        continue;
+        return;
       }
       if (event.type === "chunk" && typeof event.text === "string") {
         handlers.onChunk(event.text);
@@ -565,9 +571,23 @@ export async function askAgentStream(
         };
       }
     }
-  }
 
-  if (doneMeta) handlers.onDone(doneMeta);
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep: number;
+      while ((sep = buffer.indexOf("\n\n")) !== -1) {
+        const block = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        handleBlock(block);
+      }
+    }
+    if (buffer.trim()) handleBlock(buffer);
+    if (doneMeta) handlers.onDone(doneMeta);
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 export const agentApi = {

@@ -102,7 +102,16 @@ export class AiController {
       }
     } catch (err) {
       this.logger.error(`Stream failed: ${err instanceof Error ? err.message : "unknown"}`);
-      res.write(`data: ${JSON.stringify({ type: "done", error: true })}\n\n`);
+      res.write(
+        `data: ${JSON.stringify({
+          type: "done",
+          conversationId: "",
+          refused: false,
+          unavailable: true,
+          groundedFacts: [],
+          error: true,
+        })}\n\n`,
+      );
     } finally {
       res.end();
     }

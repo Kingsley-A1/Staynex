@@ -20,6 +20,7 @@ const RETRYABLE_STATUS = new Set([429, 503]);
 const MAX_RETRIES = 2;
 const BASE_BACKOFF_MS = 600;
 const MAX_BACKOFF_MS = 4000;
+const GEMINI_REQUEST_TIMEOUT_MS = 30_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -81,15 +82,21 @@ export class GeminiService {
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
       try {
-        const res = await fetch(`${ENDPOINT}?key=${encodeURIComponent(key)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            contents: history.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
-            generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
-          }),
-        });
+        const res = await fetchWithTimeout(
+          `${ENDPOINT}?key=${encodeURIComponent(key)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: history.map((t) => ({
+                role: t.role,
+                parts: [{ text: t.text }],
+              })),
+              generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
+            }),
+          },
+        );
 
         if (res.ok) {
           const json = (await res.json().catch(() => null)) as {
@@ -147,43 +154,59 @@ export class GeminiService {
     const key = process.env.GEMINI_API_KEY;
     if (!key) throw new Error("Gemini not configured");
 
-    const res = await fetch(`${STREAM_ENDPOINT}?alt=sse&key=${encodeURIComponent(key)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: history.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
-        generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      GEMINI_REQUEST_TIMEOUT_MS,
+    );
+    try {
+      const res = await fetch(
+        `${STREAM_ENDPOINT}?alt=sse&key=${encodeURIComponent(key)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents: history.map((t) => ({
+              role: t.role,
+              parts: [{ text: t.text }],
+            })),
+            generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
+          }),
+        },
+      );
 
-    if (!res.ok || !res.body) {
-      if (res.status === 429) {
-        this.logger.warn("Gemini stream rate limited (429).");
-        throw new GeminiRateLimitError();
+      if (!res.ok || !res.body) {
+        if (res.status === 429) {
+          this.logger.warn("Gemini stream rate limited (429).");
+          throw new GeminiRateLimitError();
+        }
+        this.logger.warn(`Gemini stream failed: HTTP ${res.status}`);
+        throw new Error(`Gemini stream HTTP ${res.status}`);
       }
-      this.logger.warn(`Gemini stream failed: HTTP ${res.status}`);
-      throw new Error(`Gemini stream HTTP ${res.status}`);
-    }
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let sep: number;
-      // SSE events are separated by a blank line.
-      while ((sep = buffer.indexOf("\n\n")) !== -1) {
-        const event = buffer.slice(0, sep);
-        buffer = buffer.slice(sep + 2);
-        const text = textFromSseEvent(event);
-        if (text) yield text;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let sep: number;
+        // SSE events are separated by a blank line.
+        while ((sep = buffer.indexOf("\n\n")) !== -1) {
+          const event = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+          const text = textFromSseEvent(event);
+          if (text) yield text;
+        }
       }
+      const tail = textFromSseEvent(buffer);
+      if (tail) yield tail;
+    } finally {
+      clearTimeout(timeout);
     }
-    const tail = textFromSseEvent(buffer);
-    if (tail) yield tail;
   }
 
   /** Honour `Retry-After` (seconds) when present; otherwise exponential backoff + jitter. */
@@ -194,5 +217,21 @@ export class GeminiService {
     }
     const expo = BASE_BACKOFF_MS * 2 ** attempt + Math.random() * 250;
     return Math.min(expo, MAX_BACKOFF_MS);
+  }
+}
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    GEMINI_REQUEST_TIMEOUT_MS,
+  );
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
   }
 }
