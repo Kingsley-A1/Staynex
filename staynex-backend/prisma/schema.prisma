@@ -56,6 +56,27 @@ enum PropertyStatus {
   ARCHIVED
 }
 
+enum PropertyReviewStatus {
+  NOT_SUBMITTED
+  PENDING
+  FAILED
+  SCHEDULED
+  PUBLISHED
+  CANCELLED
+  MANUAL_REVIEW
+}
+
+enum PropertyReviewSource {
+  AUTO_REVIEW
+  ADMIN_OVERRIDE
+}
+
+enum PropertyReviewCheckStatus {
+  PASS
+  FAIL
+  WARNING
+}
+
 enum BookingStatus {
   HOLD
   PENDING_PAYMENT
@@ -332,34 +353,82 @@ model Area {
 // ---------------------------------------------------------------------------
 
 model Property {
-  id              String         @id @default(cuid())
-  ownerId         String
-  cityId          String
-  areaId          String?
+  id                 String                @id @default(cuid())
+  ownerId            String
+  cityId             String
+  areaId             String?
   /// Optional link to the owner's saved location. Canonical listing location stays
   /// on cityId/areaId; this only records which OwnerLocation a listing belongs to.
-  ownerLocationId String?
-  name            String
-  slug            String         @unique
-  description     String?
-  status          PropertyStatus @default(DRAFT)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  ownerLocationId    String?
+  name               String
+  slug               String                @unique
+  description        String?
+  status             PropertyStatus        @default(DRAFT)
+  /// Incremented whenever owner-controlled listing content changes. Auto-publish
+  /// only releases a property if the reviewed version is still current.
+  contentVersion     Int                   @default(1)
+  reviewStatus       PropertyReviewStatus  @default(NOT_SUBMITTED)
+  reviewSource       PropertyReviewSource?
+  reviewedAt         DateTime?
+  scheduledPublishAt DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 
-  owner         User            @relation("PropertyOwner", fields: [ownerId], references: [id])
-  city          City            @relation(fields: [cityId], references: [id])
-  area          Area?           @relation(fields: [areaId], references: [id])
-  ownerLocation OwnerLocation?  @relation(fields: [ownerLocationId], references: [id])
+  owner         User                @relation("PropertyOwner", fields: [ownerId], references: [id])
+  city          City                @relation(fields: [cityId], references: [id])
+  area          Area?               @relation(fields: [areaId], references: [id])
+  ownerLocation OwnerLocation?      @relation(fields: [ownerLocationId], references: [id])
   media         PropertyMedia[]
   roomTypes     RoomType[]
   payouts       Payout[]
   auditLogs     AuditLog[]
   testimonials  Testimonial[]
+  reviewRuns    PropertyReviewRun[]
 
   @@index([ownerId])
   @@index([cityId])
   @@index([areaId])
   @@index([ownerLocationId])
+  @@index([status])
+  @@index([reviewStatus])
+  @@index([scheduledPublishAt])
+}
+
+model PropertyReviewRun {
+  id                 String               @id @default(cuid())
+  propertyId         String
+  contentVersion     Int
+  source             PropertyReviewSource @default(AUTO_REVIEW)
+  status             PropertyReviewStatus @default(PENDING)
+  riskScore          Int                  @default(0)
+  summary            String?
+  scheduledPublishAt DateTime?
+  publishedAt        DateTime?
+  createdAt          DateTime             @default(now())
+  completedAt        DateTime?
+
+  property Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  checks   PropertyReviewCheck[]
+
+  @@index([propertyId])
+  @@index([status])
+  @@index([scheduledPublishAt])
+  @@index([propertyId, contentVersion])
+}
+
+model PropertyReviewCheck {
+  id        String                    @id @default(cuid())
+  runId     String
+  key       String
+  label     String
+  status    PropertyReviewCheckStatus
+  severity  String
+  details   String
+  createdAt DateTime                  @default(now())
+
+  run PropertyReviewRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
   @@index([status])
 }
 

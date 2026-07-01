@@ -49,6 +49,40 @@ export class NotificationsService {
     }
   }
 
+  async onPropertyAutoReviewScheduled(propertyId: string, scheduledAt: Date): Promise<void> {
+    await this.notifyPropertyOwner(propertyId, {
+      title: "Property passed auto-review",
+      body: `Your property passed Staynex checks and is scheduled to go live at ${scheduledAt.toISOString()}.`,
+      emailSubject: "Your Staynex property is scheduled to go live",
+    });
+  }
+
+  async onPropertyReviewNeedsChanges(propertyId: string, failedLabels: string[]): Promise<void> {
+    const issues = failedLabels.length ? failedLabels.join(", ") : "listing readiness";
+    await this.notifyPropertyOwner(propertyId, {
+      title: "Property review needs changes",
+      body: `Update these items before auto-publish can release your listing: ${issues}.`,
+      emailSubject: "Your Staynex property needs changes",
+    });
+  }
+
+  async onPropertyPublished(propertyId: string): Promise<void> {
+    await this.notifyPropertyOwner(propertyId, {
+      title: "Property is live",
+      body: "Your property passed review and is now public on Staynex.",
+      emailSubject: "Your Staynex property is live",
+    });
+  }
+
+  async onPropertyManualDecision(
+    propertyId: string,
+    decision: "APPROVE" | "REJECT" | "REQUEST_CHANGES",
+    note?: string,
+  ): Promise<void> {
+    const copy = manualDecisionCopy(decision, note);
+    await this.notifyPropertyOwner(propertyId, copy);
+  }
+
   private async sendGuestConfirmation(
     booking: Awaited<ReturnType<typeof loadBooking>>,
   ): Promise<void> {
@@ -126,6 +160,59 @@ export class NotificationsService {
     // Push foundation (no-op until FCM + device tokens exist).
     await this.push.send({ title, body, data: { bookingId: booking.id } });
   }
+
+  private async notifyPropertyOwner(
+    propertyId: string,
+    message: { title: string; body: string; emailSubject: string },
+  ): Promise<void> {
+    try {
+      const property = await loadPropertyForNotification(propertyId);
+      if (!property) return;
+      await prisma.notification.create({
+        data: {
+          userId: property.ownerId,
+          email: property.owner.email ?? null,
+          channel: "IN_APP",
+          status: "SENT",
+          title: message.title,
+          body: `${property.name}: ${message.body}`,
+        },
+      });
+      if (property.owner.email) {
+        const record = await prisma.notification.create({
+          data: {
+            userId: property.ownerId,
+            email: property.owner.email,
+            channel: "EMAIL",
+            status: "QUEUED",
+            title: message.emailSubject,
+            body: `${property.name}: ${message.body}`,
+          },
+        });
+        const result = await this.email.send({
+          to: property.owner.email,
+          subject: message.emailSubject,
+          html: propertyNotificationHtml(property.name, message.body),
+          text: `${property.name}\n\n${message.body}`,
+        });
+        await prisma.notification.update({
+          where: { id: record.id },
+          data: { status: result.delivered ? "SENT" : "FAILED" },
+        });
+      }
+      await this.push.send({
+        title: message.title,
+        body: `${property.name}: ${message.body}`,
+        data: { propertyId },
+      });
+    } catch (err) {
+      this.logger.error(
+        `Property notification failed for ${propertyId}: ${
+          err instanceof Error ? err.message : "unknown"
+        }`,
+      );
+    }
+  }
 }
 
 // Helper type anchor so the private methods can name the loaded shape.
@@ -141,6 +228,18 @@ async function loadBooking(id: string) {
           },
         },
       },
+    },
+  });
+}
+
+async function loadPropertyForNotification(id: string) {
+  return prisma.property.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      ownerId: true,
+      name: true,
+      owner: { select: { email: true, name: true } },
     },
   });
 }
@@ -178,4 +277,52 @@ function confirmationEmailHtml(p: {
     </p>
   </div>
 </body></html>`;
+}
+
+function manualDecisionCopy(
+  decision: "APPROVE" | "REJECT" | "REQUEST_CHANGES",
+  note?: string,
+): { title: string; body: string; emailSubject: string } {
+  const suffix = note ? ` Reviewer note: ${note}` : "";
+  if (decision === "APPROVE") {
+    return {
+      title: "Property approved",
+      body: `An admin approved your property and it is now live.${suffix}`,
+      emailSubject: "Your Staynex property was approved",
+    };
+  }
+  if (decision === "REQUEST_CHANGES") {
+    return {
+      title: "Property changes requested",
+      body: `An admin requested changes before the property can go live.${suffix}`,
+      emailSubject: "Staynex requested property changes",
+    };
+  }
+  return {
+    title: "Property rejected",
+    body: `An admin rejected this property submission.${suffix}`,
+    emailSubject: "Your Staynex property was not approved",
+  };
+}
+
+function propertyNotificationHtml(propertyName: string, body: string): string {
+  return `<!doctype html>
+<html><body style="margin:0;background:#F7F7FF;font-family:Arial,Helvetica,sans-serif">
+  <div style="max-width:520px;margin:0 auto;padding:24px">
+    <h1 style="color:#27187D;font-size:20px;margin:0 0 8px">${escapeHtml(propertyName)}</h1>
+    <p style="color:#101014;font-size:14px;line-height:1.5;margin:0">${escapeHtml(body)}</p>
+    <p style="color:#6E6A83;font-size:12px;margin:16px 0 0">
+      Staynex — Book trusted stays, Confidently.
+    </p>
+  </div>
+</body></html>`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }

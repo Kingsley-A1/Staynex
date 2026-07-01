@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { prisma } from "../../../db";
 import type { PropertyDetail, PropertySummary } from "../../../types";
 import type { CreatePropertyInput, UpdatePropertyInput } from "./dto";
+import { PropertyReviewService } from "../property-review/property-review.service";
 import {
   propertyDetailInclude,
   propertySummaryInclude,
@@ -22,6 +23,8 @@ function slugify(input: string): string {
  */
 @Injectable()
 export class PropertiesService {
+  constructor(private readonly propertyReview: PropertyReviewService) {}
+
   async createDraft(ownerId: string, input: CreatePropertyInput): Promise<PropertyDetail> {
     await this.assertCityExists(input.cityId);
     const slug = `${slugify(input.name) || "property"}-${Date.now().toString(36)}`;
@@ -40,6 +43,7 @@ export class PropertiesService {
 
   async update(ownerId: string, id: string, input: UpdatePropertyInput): Promise<PropertyDetail> {
     await this.assertOwned(ownerId, id);
+    if (!hasDefinedValue(input)) return this.getById(id);
     if (input.cityId) await this.assertCityExists(input.cityId);
     await prisma.property.update({
       where: { id },
@@ -49,13 +53,30 @@ export class PropertiesService {
         description: input.description,
       },
     });
+    await this.propertyReview.recordContentChange(id, { actorUserId: ownerId });
     return this.getById(id);
   }
 
-  /** Owner submits a draft for admin review. */
+  /** Owner submits a draft for automatic review, with admin fallback. */
   async submitForReview(ownerId: string, id: string): Promise<PropertyDetail> {
-    await this.assertOwned(ownerId, id);
-    await prisma.property.update({ where: { id }, data: { status: "PENDING_REVIEW" } });
+    const property = await this.assertOwned(ownerId, id);
+    if (property.status === "APPROVED") {
+      throw new BadRequestException("This property is already live.");
+    }
+    if (property.status === "ARCHIVED") {
+      throw new BadRequestException("Archived properties cannot be submitted.");
+    }
+    await prisma.property.update({
+      where: { id },
+      data: {
+        status: "PENDING_REVIEW",
+        reviewStatus: "PENDING",
+        reviewSource: "AUTO_REVIEW",
+        reviewedAt: null,
+        scheduledPublishAt: null,
+      },
+    });
+    await this.propertyReview.reviewSubmittedProperty(id);
     return this.getById(id);
   }
 
@@ -92,11 +113,19 @@ export class PropertiesService {
     if (!city) throw new BadRequestException("Unknown city. Please pick a city from the list.");
   }
 
-  private async assertOwned(ownerId: string, id: string): Promise<void> {
+  private async assertOwned(
+    ownerId: string,
+    id: string,
+  ): Promise<{ id: string; status: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED" }> {
     const found = await prisma.property.findFirst({
       where: { id, ownerId },
-      select: { id: true },
+      select: { id: true, status: true },
     });
     if (!found) throw new NotFoundException("Property not found");
+    return found;
   }
+}
+
+function hasDefinedValue(input: Record<string, unknown>): boolean {
+  return Object.values(input).some((value) => value !== undefined);
 }

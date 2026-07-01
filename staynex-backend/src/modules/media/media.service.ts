@@ -1,12 +1,16 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { prisma } from "../../../db";
 import type { MediaItem, MediaUploadTarget } from "../../../types";
+import { PropertyReviewService } from "../property-review/property-review.service";
 import { STORAGE_PROVIDER, type StorageProvider } from "./storage";
 import type { AttachMediaInput, RequestUploadInput } from "./dto";
 
 @Injectable()
 export class MediaService {
-  constructor(@Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider) {}
+  constructor(
+    @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
+    private readonly propertyReview: PropertyReviewService,
+  ) {}
 
   /** Step 1: issue a direct-upload target for the client. */
   requestUpload(input: RequestUploadInput): Promise<MediaUploadTarget> {
@@ -30,6 +34,7 @@ export class MediaService {
         sortOrder: input.sortOrder ?? 0,
       },
     });
+    await this.propertyReview.recordContentChange(propertyId, { actorUserId: ownerId });
     return { id: m.id, url: m.url, altText: m.altText, sortOrder: m.sortOrder };
   }
 
@@ -39,7 +44,7 @@ export class MediaService {
     roomTypeId: string,
     input: AttachMediaInput,
   ): Promise<MediaItem> {
-    await this.assertOwnedRoomType(ownerId, roomTypeId);
+    const roomType = await this.assertOwnedRoomType(ownerId, roomTypeId);
     const m = await prisma.roomMedia.create({
       data: {
         roomTypeId,
@@ -48,6 +53,7 @@ export class MediaService {
         sortOrder: input.sortOrder ?? 0,
       },
     });
+    await this.propertyReview.recordContentChange(roomType.propertyId, { actorUserId: ownerId });
     return { id: m.id, url: m.url, altText: m.altText, sortOrder: m.sortOrder };
   }
 
@@ -59,11 +65,15 @@ export class MediaService {
     if (!property) throw new NotFoundException("Property not found");
   }
 
-  private async assertOwnedRoomType(ownerId: string, roomTypeId: string): Promise<void> {
+  private async assertOwnedRoomType(
+    ownerId: string,
+    roomTypeId: string,
+  ): Promise<{ id: string; propertyId: string }> {
     const roomType = await prisma.roomType.findFirst({
       where: { id: roomTypeId, property: { ownerId } },
-      select: { id: true },
+      select: { id: true, propertyId: true },
     });
     if (!roomType) throw new NotFoundException("Room type not found");
+    return roomType;
   }
 }

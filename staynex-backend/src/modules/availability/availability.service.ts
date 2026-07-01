@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { prisma } from "../../../db";
 import type { AvailabilityDay } from "../../../types";
+import { PropertyReviewService } from "../property-review/property-review.service";
 import type { SetCapacityInput } from "./dto";
 
 function eachUtcDate(from: string, to: string): Date[] {
@@ -23,8 +24,10 @@ function eachUtcDate(from: string, to: string): Date[] {
  */
 @Injectable()
 export class AvailabilityService {
+  constructor(private readonly propertyReview: PropertyReviewService) {}
+
   async setCapacity(ownerId: string, input: SetCapacityInput): Promise<{ updatedDays: number }> {
-    await this.assertOwnedRoomType(ownerId, input.roomTypeId);
+    const roomType = await this.assertOwnedRoomType(ownerId, input.roomTypeId);
     const days = eachUtcDate(input.from, input.to);
     await prisma.$transaction(
       days.map((date) =>
@@ -35,6 +38,10 @@ export class AvailabilityService {
         }),
       ),
     );
+    await this.propertyReview.recordContentChange(roomType.propertyId, {
+      actorUserId: ownerId,
+      unpublishApproved: false,
+    });
     return { updatedDays: days.length };
   }
 
@@ -54,11 +61,15 @@ export class AvailabilityService {
     }));
   }
 
-  private async assertOwnedRoomType(ownerId: string, roomTypeId: string): Promise<void> {
+  private async assertOwnedRoomType(
+    ownerId: string,
+    roomTypeId: string,
+  ): Promise<{ id: string; propertyId: string }> {
     const roomType = await prisma.roomType.findFirst({
       where: { id: roomTypeId, property: { ownerId } },
-      select: { id: true },
+      select: { id: true, propertyId: true },
     });
     if (!roomType) throw new NotFoundException("Room type not found");
+    return roomType;
   }
 }

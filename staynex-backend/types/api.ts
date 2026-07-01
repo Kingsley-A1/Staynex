@@ -11,6 +11,41 @@ export type PropertyStatus =
   | "REJECTED"
   | "ARCHIVED";
 
+export type PropertyReviewStatus =
+  | "NOT_SUBMITTED"
+  | "PENDING"
+  | "FAILED"
+  | "SCHEDULED"
+  | "PUBLISHED"
+  | "CANCELLED"
+  | "MANUAL_REVIEW";
+
+export type PropertyReviewSource = "AUTO_REVIEW" | "ADMIN_OVERRIDE";
+
+export type PropertyReviewCheckStatus = "PASS" | "FAIL" | "WARNING";
+
+export interface PropertyReviewCheckView {
+  id: string;
+  key: string;
+  label: string;
+  status: PropertyReviewCheckStatus;
+  severity: string;
+  details: string;
+}
+
+export interface PropertyReviewRunView {
+  id: string;
+  source: PropertyReviewSource;
+  status: PropertyReviewStatus;
+  riskScore: number;
+  summary: string | null;
+  scheduledPublishAt: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  checks: PropertyReviewCheckView[];
+}
+
 export interface MediaItem {
   id: string;
   url: string;
@@ -33,6 +68,10 @@ export interface PropertySummary {
   name: string;
   slug: string;
   status: PropertyStatus;
+  reviewStatus: PropertyReviewStatus;
+  reviewSource: PropertyReviewSource | null;
+  reviewedAt: string | null;
+  scheduledPublishAt: string | null;
   cityName: string;
   fromPriceKobo: number | null;
   roomTypeCount: number;
@@ -44,6 +83,7 @@ export interface PropertyDetail extends PropertySummary {
   description: string | null;
   media: MediaItem[];
   roomTypes: RoomTypeDetail[];
+  latestReview: PropertyReviewRunView | null;
 }
 
 export interface MediaUploadTarget {

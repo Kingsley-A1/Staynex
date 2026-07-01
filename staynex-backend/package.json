@@ -15,6 +15,7 @@
     "build": "nest build",
     "start": "node dist/src/main.js",
     "check": "tsc --noEmit",
+    "test:property-review": "pnpm build && node --test test/property-review-policy.test.cjs",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "prisma:push": "prisma db push --schema prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma",

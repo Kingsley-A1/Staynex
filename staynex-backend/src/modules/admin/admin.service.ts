@@ -28,6 +28,7 @@ import {
 } from "../properties/mappers";
 import { AuditService } from "../audit/audit.service";
 import { auditActorId } from "../auth/auth.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import type { ApprovalActionInput } from "./dto";
 
 const DECISION_STATUS: Record<ApprovalActionInput["decision"], PropertyStatus> = {
@@ -42,10 +43,22 @@ const DECISION_ACTION: Record<ApprovalActionInput["decision"], string> = {
   REQUEST_CHANGES: "PROPERTY_CHANGES_REQUESTED",
 };
 
+const DECISION_REVIEW_STATUS: Record<
+  ApprovalActionInput["decision"],
+  "PUBLISHED" | "FAILED" | "MANUAL_REVIEW"
+> = {
+  APPROVE: "PUBLISHED",
+  REJECT: "FAILED",
+  REQUEST_CHANGES: "MANUAL_REVIEW",
+};
+
 /** Admin property approval. Every decision is an override and is audited. */
 @Injectable()
 export class AdminService {
-  constructor(private readonly audit: AuditService) {}
+  constructor(
+    private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async approvalQueue(): Promise<PropertySummary[]> {
     const rows = await prisma.property.findMany({
@@ -72,7 +85,7 @@ export class AdminService {
   ): Promise<ApprovalActionResult> {
     const existing = await prisma.property.findUnique({
       where: { id: propertyId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, contentVersion: true },
     });
     if (!existing) throw new NotFoundException("Property not found");
     if (existing.status !== "PENDING_REVIEW") {
@@ -80,11 +93,42 @@ export class AdminService {
     }
 
     const status = DECISION_STATUS[input.decision];
+    const reviewStatus = DECISION_REVIEW_STATUS[input.decision];
+    const now = new Date();
 
     // State change + audit in one transaction so an override can never land
     // without its audit record (skill.md §9).
     const updated = await prisma.$transaction(async (tx) => {
-      const next = await tx.property.update({ where: { id: propertyId }, data: { status } });
+      await tx.propertyReviewRun.updateMany({
+        where: { propertyId, status: { in: ["PENDING", "SCHEDULED"] } },
+        data: {
+          status: "CANCELLED",
+          completedAt: now,
+          summary: `Superseded by admin decision: ${input.decision}.`,
+        },
+      });
+      const next = await tx.property.update({
+        where: { id: propertyId },
+        data: {
+          status,
+          reviewStatus,
+          reviewSource: "ADMIN_OVERRIDE",
+          reviewedAt: now,
+          scheduledPublishAt: null,
+        },
+      });
+      await tx.propertyReviewRun.create({
+        data: {
+          propertyId,
+          contentVersion: existing.contentVersion,
+          source: "ADMIN_OVERRIDE",
+          status: reviewStatus,
+          riskScore: input.decision === "APPROVE" ? 0 : 100,
+          summary: input.note ?? `Admin decision: ${input.decision}.`,
+          publishedAt: input.decision === "APPROVE" ? now : null,
+          completedAt: now,
+        },
+      });
       await this.audit.record(
         {
           actorUserId: auditActorId(admin),
@@ -98,6 +142,7 @@ export class AdminService {
       return next;
     });
 
+    await this.notifications.onPropertyManualDecision(propertyId, input.decision, input.note);
     return { id: updated.id, status: updated.status as PropertyStatus };
   }
 
