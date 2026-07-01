@@ -67,6 +67,8 @@ export const envSchema = z.object({
       .regex(/^\d{6}$/, "ADMIN_MANAGER_ACCESS_CODE must be 6 digits")
       .optional(),
   ),
+  SESSION_TTL_MS: z.coerce.number().int().positive().optional(),
+  ADMIN_SESSION_TTL_MS: z.coerce.number().int().positive().optional(),
   // Set in production so session cookies are marked Secure.
   COOKIE_DOMAIN: optionalString,
   // Google OAuth. The agent verifies the Google ID token's `aud` against this.

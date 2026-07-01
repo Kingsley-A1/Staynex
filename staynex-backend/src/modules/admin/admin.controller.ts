@@ -1,81 +1,82 @@
-import { Body, Controller, Get, Headers, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import type { AuthUser } from "../../../types";
 import { parseBody } from "../../common/http";
-import { AuthService } from "../auth/auth.service";
+import { RateLimit } from "../../common/rate-limit.guard";
+import {
+  CapabilitiesGuard,
+  CurrentUser,
+  RequireAnyCapability,
+  SessionGuard,
+} from "../auth/access-control";
 import { AdminService } from "./admin.service";
 import { approvalActionSchema } from "./dto";
 
 @Controller("admin")
+@UseGuards(SessionGuard, CapabilitiesGuard)
+@RequireAnyCapability("ADMIN_REVIEWER", "ADMIN_MANAGER")
 export class AdminController {
-  constructor(
-    private readonly admin: AdminService,
-    private readonly auth: AuthService,
-  ) {}
+  constructor(private readonly admin: AdminService) {}
 
   @Get("approvals")
-  async queue(
-    @Headers("cookie") cookie: string | undefined,  ) {
-    await this.auth.requireAdmin(cookie);
+  async queue() {
     return this.admin.approvalQueue();
   }
 
   @Get("approvals/:id")
-  async review(
-    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
-  ) {
-    await this.auth.requireAdmin(cookie);
+  async review(@Param("id") id: string) {
     return this.admin.getForReview(id);
   }
 
   @Post("approvals/:id/decision")
+  @RateLimit({
+    bucket: "admin:approval-decision",
+    limit: 20,
+    windowMs: 60_000,
+    keyBy: ["user"],
+  })
   async decide(
-    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
+    @CurrentUser() admin: AuthUser,
+    @Param("id") id: string,
     @Body() body: unknown,
   ) {
-    const admin = await this.auth.requireAdmin(cookie);
-    return this.admin.review(
-      admin,
-      id,
-      parseBody(approvalActionSchema, body),
-    );
+    return this.admin.review(admin, id, parseBody(approvalActionSchema, body));
   }
 
   // --- Phase 4: operational overview (read-only) ---
 
   @Get("bookings")
-  async bookings(
-    @Headers("cookie") cookie: string | undefined,  ) {
-    await this.auth.requireAdmin(cookie);
+  async bookings() {
     return this.admin.bookingsOverview();
   }
 
   // --- Phase A: owner payout settlement (manual) ---
 
   @Get("payouts")
-  async payouts(
-    @Headers("cookie") cookie: string | undefined,  ) {
-    await this.auth.requireAdmin(cookie);
+  async payouts() {
     return this.admin.payoutQueue();
   }
 
   @Post("payouts/:id/paid")
+  @RateLimit({
+    bucket: "admin:payout-paid",
+    limit: 10,
+    windowMs: 60_000,
+    keyBy: ["user"],
+  })
   async markPayoutPaid(
-    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
+    @CurrentUser() admin: AuthUser,
+    @Param("id") id: string,
   ) {
-    const admin = await this.auth.requireAdmin(cookie);
     return this.admin.markPayoutPaid(admin, id);
   }
 
   @Get("audit-logs")
-  async auditLogs(
-    @Headers("cookie") cookie: string | undefined,  ) {
-    await this.auth.requireAdmin(cookie);
+  async auditLogs() {
     return this.admin.auditLogs();
   }
 
   @Get("ai-logs")
-  async aiLogs(
-    @Headers("cookie") cookie: string | undefined,  ) {
-    await this.auth.requireAdmin(cookie);
+  async aiLogs() {
     return this.admin.aiLogs();
   }
 }

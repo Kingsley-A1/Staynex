@@ -317,7 +317,11 @@ export type AppRole = "GUEST" | "OWNER" | "ADMIN_REVIEWER" | "ADMIN_MANAGER";
  * Additive capability set. GUEST is always present for a signed-in user; owner
  * and admin privileges are layered on top. `role` is the compatibility mirror.
  */
-export type AppCapability = "GUEST" | "OWNER" | "ADMIN_REVIEWER" | "ADMIN_MANAGER";
+export type AppCapability =
+  | "GUEST"
+  | "OWNER"
+  | "ADMIN_REVIEWER"
+  | "ADMIN_MANAGER";
 
 export interface AuthUser {
   id: string;
@@ -330,9 +334,28 @@ export interface AuthUser {
   capabilities: AppCapability[];
 }
 
+export interface AuthMfaChallenge {
+  mfaRequired: true;
+  challengeId: string;
+  email: string;
+  expiresAt: string;
+}
+
+export type AuthResponse = AuthUser | AuthMfaChallenge;
+
+export interface SessionSummary {
+  id: string;
+  createdAt: string;
+  expiresAt: string;
+  current: boolean;
+}
+
 // --- Owner v1: onboarding, locations, payout, settings ---
 
-export type PayoutMethodStatusValue = "PENDING_VERIFICATION" | "ACTIVE" | "DISABLED";
+export type PayoutMethodStatusValue =
+  | "PENDING_VERIFICATION"
+  | "ACTIVE"
+  | "DISABLED";
 
 export interface OwnerProfileView {
   /** Display name (User.name). */

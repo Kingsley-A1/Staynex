@@ -2,6 +2,12 @@ import { Logger } from "@nestjs/common";
 import { HttpAdapterHost, NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { PrismaExceptionFilter } from "./common/prisma-exception.filter";
+import {
+  csrfProtection,
+  requestSizeLimit,
+  requireJsonContentType,
+  securityHeaders,
+} from "./common/security";
 import { connectWithRetry } from "../db";
 import { loadEnv } from "../config";
 
@@ -36,7 +42,17 @@ function allowedOriginsFromEnv(env: ReturnType<typeof loadEnv>): string[] {
 async function bootstrap() {
   const env = loadEnv();
   // rawBody is required to verify Paystack webhook signatures.
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true,
+    bodyParser: false,
+  });
+  const appWithBodyParser = app as typeof app & {
+    useBodyParser(type: string, options: Record<string, unknown>): unknown;
+  };
+  const server = app.getHttpAdapter().getInstance() as {
+    disable?: (setting: string) => void;
+  };
+  server.disable?.("x-powered-by");
 
   // Warm the DB pool with bounded retry so a CockroachDB cold-start/blip becomes
   // a short delay, not a boot failure. Lazy reconnect still covers later blips.
@@ -52,6 +68,9 @@ async function bootstrap() {
   app.useGlobalFilters(new PrismaExceptionFilter(httpAdapter));
 
   const allowedOrigins = allowedOriginsFromEnv(env);
+  app.use(securityHeaders(env.NODE_ENV === "production"));
+  app.use(requestSizeLimit());
+  app.use(requireJsonContentType());
   app.enableCors({
     origin(
       origin: string | undefined,
@@ -63,8 +82,14 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-User-Id"],
+    allowedHeaders: ["Content-Type", "X-CSRF-Token"],
     optionsSuccessStatus: 204,
+  });
+  app.use(csrfProtection(allowedOrigins));
+  appWithBodyParser.useBodyParser("json", { limit: "1mb" });
+  appWithBodyParser.useBodyParser("urlencoded", {
+    limit: "16kb",
+    extended: false,
   });
   await app.listen(env.API_PORT, "0.0.0.0");
 }

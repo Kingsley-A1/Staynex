@@ -1,29 +1,50 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
+import type { AuthUser } from "../../../types";
 import { parseBody } from "../../common/http";
-import { AuthService } from "../auth/auth.service";
+import { RateLimit } from "../../common/rate-limit.guard";
+import {
+  CapabilitiesGuard,
+  CurrentUser,
+  RequireAnyCapability,
+  SessionGuard,
+} from "../auth/access-control";
 import { RoomsService } from "./rooms.service";
-import { createRoomTypeSchema, createRoomUnitSchema, updateRoomTypeSchema } from "./dto";
+import {
+  createRoomTypeSchema,
+  createRoomUnitSchema,
+  updateRoomTypeSchema,
+} from "./dto";
 
 @Controller("owner")
+@UseGuards(SessionGuard, CapabilitiesGuard)
+@RequireAnyCapability("OWNER")
 export class RoomsController {
-  constructor(
-    private readonly rooms: RoomsService,
-    private readonly auth: AuthService,
-  ) {}
+  constructor(private readonly rooms: RoomsService) {}
 
   @Get("properties/:propertyId/room-types")
   async listTypes(
-    @Headers("cookie") cookie: string | undefined,    @Param("propertyId") propertyId: string,
+    @CurrentUser() owner: AuthUser,
+    @Param("propertyId") propertyId: string,
   ) {
-    const owner = await this.auth.requireOwner(cookie);
     return this.rooms.listRoomTypes(owner.id, propertyId);
   }
 
   @Post("room-types")
-  async createType(
-    @Headers("cookie") cookie: string | undefined,    @Body() body: unknown,
-  ) {
-    const owner = await this.auth.requireOwner(cookie);
+  @RateLimit({
+    bucket: "owner:room-type-create",
+    limit: 30,
+    windowMs: 60_000,
+    keyBy: ["user"],
+  })
+  async createType(@CurrentUser() owner: AuthUser, @Body() body: unknown) {
     return this.rooms.createRoomType(
       owner.id,
       parseBody(createRoomTypeSchema, body),
@@ -31,11 +52,17 @@ export class RoomsController {
   }
 
   @Patch("room-types/:id")
+  @RateLimit({
+    bucket: "owner:room-type-update",
+    limit: 40,
+    windowMs: 60_000,
+    keyBy: ["user"],
+  })
   async updateType(
-    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
+    @CurrentUser() owner: AuthUser,
+    @Param("id") id: string,
     @Body() body: unknown,
   ) {
-    const owner = await this.auth.requireOwner(cookie);
     return this.rooms.updateRoomType(
       owner.id,
       id,
@@ -45,17 +72,20 @@ export class RoomsController {
 
   @Get("room-types/:roomTypeId/units")
   async listUnits(
-    @Headers("cookie") cookie: string | undefined,    @Param("roomTypeId") roomTypeId: string,
+    @CurrentUser() owner: AuthUser,
+    @Param("roomTypeId") roomTypeId: string,
   ) {
-    const owner = await this.auth.requireOwner(cookie);
     return this.rooms.listRoomUnits(owner.id, roomTypeId);
   }
 
   @Post("room-units")
-  async addUnit(
-    @Headers("cookie") cookie: string | undefined,    @Body() body: unknown,
-  ) {
-    const owner = await this.auth.requireOwner(cookie);
+  @RateLimit({
+    bucket: "owner:room-unit-create",
+    limit: 60,
+    windowMs: 60_000,
+    keyBy: ["user"],
+  })
+  async addUnit(@CurrentUser() owner: AuthUser, @Body() body: unknown) {
     return this.rooms.addRoomUnit(
       owner.id,
       parseBody(createRoomUnitSchema, body),

@@ -1,6 +1,22 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
+import type { AuthUser } from "../../../types";
 import { parseBody } from "../../common/http";
-import { AuthService } from "../auth/auth.service";
+import { RateLimit } from "../../common/rate-limit.guard";
+import {
+  CapabilitiesGuard,
+  CurrentUser,
+  RequireAnyCapability,
+  SessionGuard,
+} from "../auth/access-control";
 import { AreasService } from "./areas.service";
 import { createAreaSchema, updateAreaSchema } from "./dto";
 
@@ -17,34 +33,39 @@ export class AreasController {
 
 // Admin: areas remain admin-editable.
 @Controller("admin/areas")
+@UseGuards(SessionGuard, CapabilitiesGuard)
+@RequireAnyCapability("ADMIN_REVIEWER", "ADMIN_MANAGER")
 export class AdminAreasController {
-  constructor(
-    private readonly areas: AreasService,
-    private readonly auth: AuthService,
-  ) {}
+  constructor(private readonly areas: AreasService) {}
 
   @Get()
-  async list(
-    @Headers("cookie") cookie: string | undefined,    @Query("city") city?: string,
-  ) {
-    await this.auth.requireAdmin(cookie);
+  async list(@Query("city") city?: string) {
     return this.areas.adminList(city);
   }
 
   @Post()
-  async create(
-    @Body() body: unknown,
-    @Headers("cookie") cookie: string | undefined,  ) {
-    const admin = await this.auth.requireAdmin(cookie);
+  @RateLimit({
+    bucket: "admin:area-create",
+    limit: 20,
+    windowMs: 60_000,
+    keyBy: ["user"],
+  })
+  async create(@Body() body: unknown, @CurrentUser() admin: AuthUser) {
     return this.areas.create(admin, parseBody(createAreaSchema, body));
   }
 
   @Patch(":id")
+  @RateLimit({
+    bucket: "admin:area-update",
+    limit: 30,
+    windowMs: 60_000,
+    keyBy: ["user"],
+  })
   async update(
     @Param("id") id: string,
     @Body() body: unknown,
-    @Headers("cookie") cookie: string | undefined,  ) {
-    const admin = await this.auth.requireAdmin(cookie);
+    @CurrentUser() admin: AuthUser,
+  ) {
     return this.areas.update(admin, id, parseBody(updateAreaSchema, body));
   }
 }

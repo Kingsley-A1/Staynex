@@ -1,28 +1,28 @@
-import { Controller, Get, Headers, Param } from "@nestjs/common";
-import { AuthService } from "../auth/auth.service";
+import { Controller, Get, Param, UseGuards } from "@nestjs/common";
+import type { AuthUser } from "../../../types";
+import {
+  CapabilitiesGuard,
+  CurrentUser,
+  RequireAnyCapability,
+  SessionGuard,
+} from "../auth/access-control";
 import { BookingReportsService } from "./booking-reports.service";
 
 // Reads are owner-scoped in the service so one owner can never see another
 // owner's bookings.
 @Controller("owner/bookings")
+@UseGuards(SessionGuard, CapabilitiesGuard)
+@RequireAnyCapability("OWNER")
 export class OwnerBookingsController {
-  constructor(
-    private readonly reports: BookingReportsService,
-    private readonly auth: AuthService,
-  ) {}
+  constructor(private readonly reports: BookingReportsService) {}
 
   @Get()
-  async list(
-    @Headers("cookie") cookie: string | undefined,  ) {
-    const owner = await this.auth.requireOwner(cookie);
+  async list(@CurrentUser() owner: AuthUser) {
     return this.reports.ownerView(owner.id);
   }
 
   @Get(":id")
-  async detail(
-    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
-  ) {
-    const owner = await this.auth.requireOwner(cookie);
+  async detail(@CurrentUser() owner: AuthUser, @Param("id") id: string) {
     return this.reports.ownerBooking(owner.id, id);
   }
 }

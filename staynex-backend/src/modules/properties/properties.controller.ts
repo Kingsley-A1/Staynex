@@ -1,28 +1,43 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
+import type { AuthUser } from "../../../types";
 import { parseBody } from "../../common/http";
-import { AuthService } from "../auth/auth.service";
+import { RateLimit } from "../../common/rate-limit.guard";
+import {
+  CapabilitiesGuard,
+  CurrentUser,
+  RequireAnyCapability,
+  SessionGuard,
+} from "../auth/access-control";
 import { PropertiesService } from "./properties.service";
 import { createPropertySchema, updatePropertySchema } from "./dto";
 
 @Controller("owner/properties")
+@UseGuards(SessionGuard, CapabilitiesGuard)
+@RequireAnyCapability("OWNER")
 export class PropertiesController {
-  constructor(
-    private readonly properties: PropertiesService,
-    private readonly auth: AuthService,
-  ) {}
+  constructor(private readonly properties: PropertiesService) {}
 
   @Get()
-  async list(
-    @Headers("cookie") cookie: string | undefined,  ) {
-    const owner = await this.auth.requireOwner(cookie);
+  async list(@CurrentUser() owner: AuthUser) {
     return this.properties.listForOwner(owner.id);
   }
 
   @Post()
-  async create(
-    @Headers("cookie") cookie: string | undefined,    @Body() body: unknown,
-  ) {
-    const owner = await this.auth.requireOwner(cookie);
+  @RateLimit({
+    bucket: "owner:property-create",
+    limit: 20,
+    windowMs: 60_000,
+    keyBy: ["user"],
+  })
+  async create(@CurrentUser() owner: AuthUser, @Body() body: unknown) {
     return this.properties.createDraft(
       owner.id,
       parseBody(createPropertySchema, body),
@@ -30,19 +45,22 @@ export class PropertiesController {
   }
 
   @Get(":id")
-  async get(
-    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
-  ) {
-    const owner = await this.auth.requireOwner(cookie);
+  async get(@CurrentUser() owner: AuthUser, @Param("id") id: string) {
     return this.properties.getForOwner(owner.id, id);
   }
 
   @Patch(":id")
+  @RateLimit({
+    bucket: "owner:property-update",
+    limit: 40,
+    windowMs: 60_000,
+    keyBy: ["user"],
+  })
   async update(
-    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
+    @CurrentUser() owner: AuthUser,
+    @Param("id") id: string,
     @Body() body: unknown,
   ) {
-    const owner = await this.auth.requireOwner(cookie);
     return this.properties.update(
       owner.id,
       id,
@@ -51,10 +69,13 @@ export class PropertiesController {
   }
 
   @Post(":id/submit")
-  async submit(
-    @Headers("cookie") cookie: string | undefined,    @Param("id") id: string,
-  ) {
-    const owner = await this.auth.requireOwner(cookie);
+  @RateLimit({
+    bucket: "owner:property-submit",
+    limit: 10,
+    windowMs: 60_000,
+    keyBy: ["user"],
+  })
+  async submit(@CurrentUser() owner: AuthUser, @Param("id") id: string) {
     return this.properties.submitForReview(owner.id, id);
   }
 }

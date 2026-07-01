@@ -111,22 +111,23 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  guestProfile    GuestProfile?
-  ownerProfile    OwnerProfile?
-  capabilities    UserCapability[]
-  ownerLocations  OwnerLocation[]  @relation("OwnerLocations")
-  payoutMethod    OwnerPayoutMethod?
-  passwordResets  PasswordResetToken[]
-  ownedProperties Property[]       @relation("PropertyOwner")
-  bookings        Booking[]
-  bookingHolds    BookingHold[]
-  notifications   Notification[]
-  aiConversations AIConversation[]
-  auditLogs       AuditLog[]       @relation("AuditActor")
-  sessions        Session[]
-  testimonials    Testimonial[]
-  payouts          Payout[]        @relation("PayoutOwner")
-  processedPayouts Payout[]        @relation("PayoutProcessor")
+  guestProfile     GuestProfile?
+  ownerProfile     OwnerProfile?
+  capabilities     UserCapability[]
+  ownerLocations   OwnerLocation[]      @relation("OwnerLocations")
+  payoutMethod     OwnerPayoutMethod?
+  passwordResets   PasswordResetToken[]
+  ownedProperties  Property[]           @relation("PropertyOwner")
+  bookings         Booking[]
+  bookingHolds     BookingHold[]
+  notifications    Notification[]
+  aiConversations  AIConversation[]
+  auditLogs        AuditLog[]           @relation("AuditActor")
+  sessions         Session[]
+  mfaChallenges    MfaChallenge[]
+  testimonials     Testimonial[]
+  payouts          Payout[]             @relation("PayoutOwner")
+  processedPayouts Payout[]             @relation("PayoutProcessor")
 
   @@index([role])
 }
@@ -148,6 +149,7 @@ model UserCapability {
 model Session {
   id        String   @id @default(cuid())
   userId    String
+  /// SHA-256 hash of the raw cookie token. Older raw tokens are upgraded on use.
   token     String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
@@ -156,6 +158,22 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model MfaChallenge {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([usedAt])
 }
 
 model GuestProfile {
@@ -328,10 +346,10 @@ model Property {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  owner         User           @relation("PropertyOwner", fields: [ownerId], references: [id])
-  city          City           @relation(fields: [cityId], references: [id])
-  area          Area?          @relation(fields: [areaId], references: [id])
-  ownerLocation OwnerLocation? @relation(fields: [ownerLocationId], references: [id])
+  owner         User            @relation("PropertyOwner", fields: [ownerId], references: [id])
+  city          City            @relation(fields: [cityId], references: [id])
+  area          Area?           @relation(fields: [areaId], references: [id])
+  ownerLocation OwnerLocation?  @relation(fields: [ownerLocationId], references: [id])
   media         PropertyMedia[]
   roomTypes     RoomType[]
   payouts       Payout[]
@@ -482,29 +500,29 @@ model Booking {
 }
 
 model Payment {
-  id        String        @id @default(cuid())
-  bookingId String        @unique
+  id                String        @id @default(cuid())
+  bookingId         String        @unique
   /// COMPAT: mirror of `grossAmountKobo`. Kept so older rows/readers keep working;
   /// all new accounting logic reads the explicit fields below. Always equals
   /// `grossAmountKobo` for payments created on/after Phase A.
-  amount    Int
+  amount            Int
   /// Full amount charged to the guest (minor units, kobo). Canonical gross.
-  grossAmountKobo   Int @default(0)
+  grossAmountKobo   Int           @default(0)
   /// Staynex commission retained from gross (kobo).
-  platformFeeKobo   Int @default(0)
+  platformFeeKobo   Int           @default(0)
   /// Net amount owed to the property owner (kobo) = gross - platform fee.
-  ownerPayoutKobo   Int @default(0)
+  ownerPayoutKobo   Int           @default(0)
   /// Commission rate snapshotted at checkout, in basis points (1000 = 10%).
   /// Snapshotted so historical accounting never shifts if the platform rate changes.
-  commissionRateBps Int @default(0)
-  currency  String        @default("NGN")
-  provider  String?
-  reference String?       @unique
-  status    PaymentStatus @default(PENDING)
+  commissionRateBps Int           @default(0)
+  currency          String        @default("NGN")
+  provider          String?
+  reference         String?       @unique
+  status            PaymentStatus @default(PENDING)
   /// Set once when the payment is verified SUCCESS.
-  paidAt    DateTime?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   payout  Payout?
@@ -541,25 +559,25 @@ model Testimonial {
 // backend only when a payment is verified SUCCESS and its booking CONFIRMED.
 // Phase A: payouts are settled manually by an admin; Phase B automates transfers.
 model Payout {
-  id         String       @id @default(cuid())
-  bookingId  String       @unique
-  paymentId  String       @unique
-  ownerId    String
-  propertyId String
+  id                String       @id @default(cuid())
+  bookingId         String       @unique
+  paymentId         String       @unique
+  ownerId           String
+  propertyId        String
   /// Net amount owed to the owner in minor units (kobo) = payment.ownerPayoutKobo.
-  amount     Int
-  currency   String       @default("NGN")
-  status     PayoutStatus @default(PENDING)
+  amount            Int
+  currency          String       @default("NGN")
+  status            PayoutStatus @default(PENDING)
   /// When this payout becomes eligible to settle (checkIn + 24h).
-  eligibleAt DateTime
+  eligibleAt        DateTime
   /// Set when an admin approves the payout for settlement (Phase B workflow hook).
-  approvedAt DateTime?
+  approvedAt        DateTime?
   /// Set when the payout has actually been paid to the owner (manual in Phase A).
-  paidAt     DateTime?
+  paidAt            DateTime?
   /// Admin who last actioned this payout (manual settlement marker).
   processedByUserId String?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
   booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
@@ -607,9 +625,9 @@ model AuditLog {
   entityId    String
   createdAt   DateTime @default(now())
 
-  actor      User?         @relation("AuditActor", fields: [actorUserId], references: [id])
-  property   Property?     @relation(fields: [propertyId], references: [id])
-  aiActions  AIActionLog[]
+  actor     User?         @relation("AuditActor", fields: [actorUserId], references: [id])
+  property  Property?     @relation(fields: [propertyId], references: [id])
+  aiActions AIActionLog[]
 
   @@index([actorUserId])
   @@index([propertyId])
