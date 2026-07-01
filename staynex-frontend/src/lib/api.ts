@@ -46,8 +46,13 @@ import { API_BASE } from "@/lib/api-base";
 type RequestOptions = RequestInit;
 const CSRF_COOKIE = "staynex_csrf";
 const CSRF_HEADER = "X-CSRF-Token";
+const BROWSER_API_BASE = "/api/backend";
 let csrfTokenCache: string | null = null;
 let csrfTokenRequest: Promise<string | null> | null = null;
+
+function apiUrl(path: string): string {
+  return `${typeof window === "undefined" ? API_BASE : BROWSER_API_BASE}${path}`;
+}
 
 function unsafeMethod(method: string | undefined): boolean {
   return !["GET", "HEAD", "OPTIONS"].includes((method ?? "GET").toUpperCase());
@@ -71,7 +76,7 @@ async function csrfHeaderFor(
 
   let token = csrfTokenCache ?? readBrowserCookie(CSRF_COOKIE);
   if (!token) {
-    csrfTokenRequest ??= fetch(`${API_BASE}/auth/csrf`, {
+    csrfTokenRequest ??= fetch(apiUrl("/auth/csrf"), {
       cache: "no-store",
       credentials: "include",
     })
@@ -130,7 +135,7 @@ async function request<T>(
 ): Promise<T> {
   const { headers, ...rest } = options;
   const csrfHeaders = await csrfHeaderFor(rest.method);
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...rest,
     // Send/receive the session cookie so auth-aware endpoints resolve the user.
     credentials: "include",
@@ -504,7 +509,7 @@ export async function askAgentStream(
   },
 ): Promise<void> {
   const csrfHeaders = await csrfHeaderFor("POST");
-  const res = await fetch(`${API_BASE}/ai/assistant/stream`, {
+  const res = await fetch(apiUrl("/ai/assistant/stream"), {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json", ...csrfHeaders },
