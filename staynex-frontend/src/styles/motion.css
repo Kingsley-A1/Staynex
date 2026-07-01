@@ -191,14 +191,6 @@
     }
   }
 
-  .destination-cycle-city {
-    animation: destination-city-cycle 10s var(--ease-standard) infinite;
-  }
-
-  .destination-cycle-room {
-    animation: destination-room-cycle 10s var(--ease-standard) infinite;
-  }
-
   .page-loading-line {
     position: fixed;
     inset: 0 0 auto;
@@ -285,39 +277,6 @@
     }
   }
 
-  @keyframes destination-city-cycle {
-    0%,
-    45% {
-      opacity: 1;
-      transform: scale(1);
-    }
-    50%,
-    95% {
-      opacity: 0;
-      transform: scale(1.03);
-    }
-    100% {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-
-  @keyframes destination-room-cycle {
-    0%,
-    45% {
-      opacity: 0;
-      transform: scale(1.03);
-    }
-    50%,
-    95% {
-      opacity: 1;
-      transform: scale(1);
-    }
-    100% {
-      opacity: 0;
-      transform: scale(1.03);
-    }
-  }
 }
 
 /* =============================================================================
@@ -361,13 +320,5 @@
   .brand-spinner {
     animation: none;
     border-top-color: var(--color-primary);
-  }
-  .destination-cycle-city,
-  .destination-cycle-room {
-    animation: none;
-    transform: none;
-  }
-  .destination-cycle-room {
-    opacity: 0;
   }
 }

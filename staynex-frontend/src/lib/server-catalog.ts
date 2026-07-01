@@ -10,6 +10,7 @@ import { API_BASE } from "@/lib/api-base";
 import type {
   AreaOption,
   BookingView,
+  HomeCatalogView,
   PropertyDetail,
   PropertySummary,
   PublicTestimonial,
@@ -21,6 +22,25 @@ export interface SearchParams {
   checkIn?: string;
   checkOut?: string;
   guests?: number;
+}
+
+const emptyHomeCatalog: HomeCatalogView = {
+  latestProperties: [],
+  mostBookedProperties: [],
+  destinations: [],
+};
+
+export async function getHomeCatalog(): Promise<{
+  catalog: HomeCatalogView;
+  live: boolean;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/catalog/home`, { cache: "no-store" });
+    if (!res.ok) throw new Error(String(res.status));
+    return { catalog: (await res.json()) as HomeCatalogView, live: true };
+  } catch {
+    return { catalog: emptyHomeCatalog, live: false };
+  }
 }
 
 export async function searchProperties(

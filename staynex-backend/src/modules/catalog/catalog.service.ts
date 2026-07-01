@@ -1,6 +1,12 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { prisma } from "../../../db";
-import type { CityOption, PropertyDetail, PropertySummary } from "../../../types";
+import type {
+  CityOption,
+  DestinationShowcase,
+  HomeCatalogView,
+  PropertyDetail,
+  PropertySummary,
+} from "../../../types";
 import {
   propertyDetailInclude,
   propertySummaryInclude,
@@ -13,6 +19,25 @@ import type { SearchQuery } from "./dto";
 /** Public guest catalog. Only APPROVED properties are ever exposed. */
 @Injectable()
 export class CatalogService {
+  async home(): Promise<HomeCatalogView> {
+    const [latestRows, mostBooked, destinations] = await Promise.all([
+      prisma.property.findMany({
+        where: { status: "APPROVED" },
+        orderBy: { updatedAt: "desc" },
+        take: 8,
+        include: propertySummaryInclude,
+      }),
+      this.mostBookedProperties(),
+      this.destinationShowcases(),
+    ]);
+
+    return {
+      latestProperties: latestRows.map(toPropertySummary),
+      mostBookedProperties: mostBooked,
+      destinations,
+    };
+  }
+
   async search(query: SearchQuery): Promise<PropertySummary[]> {
     const cities = await prisma.city.findMany({
       where: {
@@ -65,6 +90,83 @@ export class CatalogService {
     });
     if (!property) throw new NotFoundException("Property not found");
     return toPropertyDetail(property);
+  }
+
+  private async mostBookedProperties(): Promise<PropertySummary[]> {
+    const bookings = await prisma.booking.findMany({
+      where: {
+        status: "CONFIRMED",
+        roomUnit: { roomType: { property: { status: "APPROVED" } } },
+      },
+      select: {
+        roomUnit: { select: { roomType: { select: { propertyId: true } } } },
+      },
+      take: 5000,
+    });
+
+    const counts = new Map<string, number>();
+    for (const booking of bookings) {
+      const propertyId = booking.roomUnit.roomType.propertyId;
+      counts.set(propertyId, (counts.get(propertyId) ?? 0) + 1);
+    }
+
+    const orderedIds = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([id]) => id);
+    if (orderedIds.length === 0) return [];
+
+    const rows = await prisma.property.findMany({
+      where: { id: { in: orderedIds }, status: "APPROVED" },
+      include: propertySummaryInclude,
+    });
+    const byId = new Map(rows.map((row) => [row.id, toPropertySummary(row)]));
+    return orderedIds.flatMap((id) => {
+      const property = byId.get(id);
+      return property ? [property] : [];
+    });
+  }
+
+  private async destinationShowcases(): Promise<DestinationShowcase[]> {
+    const [cities, counts] = await Promise.all([
+      prisma.city.findMany({
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          properties: {
+            where: { status: "APPROVED" },
+            orderBy: { updatedAt: "desc" },
+            take: 6,
+            select: {
+              media: {
+                orderBy: { sortOrder: "asc" },
+                take: 1,
+                select: { url: true },
+              },
+            },
+          },
+        },
+      }),
+      prisma.property.groupBy({
+        by: ["cityId"],
+        where: { status: "APPROVED" },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const countByCity = new Map(
+      counts.map((row) => [row.cityId, row._count._all]),
+    );
+    return cities.map((city) => ({
+      cityName: city.name,
+      citySlug: city.slug,
+      stayCount: countByCity.get(city.id) ?? 0,
+      propertyImageUrls: city.properties
+        .map((property) => property.media[0]?.url)
+        .filter((url): url is string => Boolean(url)),
+    }));
   }
 
   private async availablePropertyIds(cityIds: string[], query: SearchQuery): Promise<string[]> {

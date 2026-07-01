@@ -17,6 +17,11 @@ export class CatalogController {
     return this.catalog.cities();
   }
 
+  @Get("catalog/home")
+  home() {
+    return this.catalog.home();
+  }
+
   @Get("stays/:slug")
   detail(@Param("slug") slug: string) {
     return this.catalog.getPublicProperty(slug);
