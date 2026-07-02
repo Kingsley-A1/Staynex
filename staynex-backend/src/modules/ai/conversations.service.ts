@@ -18,8 +18,17 @@ export class ConversationsService {
       where: { userId: user.id, deletedAt: null },
       orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
       take: 100,
+      include: {
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { content: true },
+        },
+      },
     });
-    return rows.map(toConversation);
+    return rows.map((row) =>
+      toConversation(row, row.messages[0] ? truncate(row.messages[0].content, 100) : null),
+    );
   }
 
   async create(user: AuthUser | null, title?: string): Promise<AgentConversation> {
@@ -92,8 +101,8 @@ export class ConversationsService {
    */
   async recentForModel(
     conversationId: string,
-    maxMessages = 12,
-    maxChars = 6000,
+    maxMessages = 24,
+    maxChars = 9000,
   ): Promise<{ role: AIMessageRole; content: string }[]> {
     // Newest-first so we keep the most recent context when the budget is tight.
     const rows = await prisma.aIMessage.findMany({
@@ -120,6 +129,46 @@ export class ConversationsService {
     return picked;
   }
 
+  /**
+   * Compact context from the user's other recent conversations so a new chat
+   * doesn't start from zero (cross-conversation memory). Each line carries the
+   * conversation title plus its last exchange, truncated. Authenticated users
+   * only — anonymous sessions have no identity to link conversations across.
+   */
+  async crossConversationContext(
+    user: AuthUser | null,
+    excludeConversationId: string,
+    maxConversations = 3,
+  ): Promise<string[]> {
+    if (!user) return [];
+    const rows = await prisma.aIConversation.findMany({
+      where: { userId: user.id, deletedAt: null, id: { not: excludeConversationId } },
+      orderBy: { updatedAt: "desc" },
+      take: maxConversations,
+      select: {
+        title: true,
+        updatedAt: true,
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 2,
+          select: { role: true, content: true },
+        },
+      },
+    });
+
+    const lines: string[] = [];
+    for (const convo of rows) {
+      const exchange = [...convo.messages].reverse();
+      if (exchange.length === 0) continue;
+      const parts = exchange.map(
+        (m) =>
+          `${m.role === AIMessageRole.USER ? "they asked" : "you answered"}: "${truncate(m.content, 140)}"`,
+      );
+      lines.push(`In "${convo.title ?? "an earlier chat"}", ${parts.join("; ")}`);
+    }
+    return lines;
+  }
+
   /** Set a title from the first user message if one isn't set yet. */
   async ensureTitle(conversationId: string, fromMessage: string): Promise<void> {
     const convo = await prisma.aIConversation.findUnique({
@@ -133,16 +182,25 @@ export class ConversationsService {
   }
 }
 
-function toConversation(c: {
-  id: string;
-  title: string | null;
-  pinned: boolean;
-  updatedAt: Date;
-}): AgentConversation {
+function toConversation(
+  c: {
+    id: string;
+    title: string | null;
+    pinned: boolean;
+    updatedAt: Date;
+  },
+  preview: string | null = null,
+): AgentConversation {
   return {
     id: c.id,
     title: c.title,
     pinned: c.pinned,
     updatedAt: c.updatedAt.toISOString(),
+    preview,
   };
+}
+
+function truncate(text: string, max: number): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
 }

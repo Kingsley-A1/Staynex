@@ -12,11 +12,102 @@ const SUGGESTIONS = [
   "What should I check before choosing a stay?",
 ];
 
+/**
+ * Rotating status phrases shown while the agent works (Claude.ai-style).
+ * Order matters: starts familiar, then narrates progress.
+ */
+const THINKING_PHRASES = [
+  "Thinking",
+  "Looking into it",
+  "Checking verified stays",
+  "Reviewing the details",
+  "Putting it together",
+  "Almost there",
+];
+const THINKING_ROTATE_MS = 2200;
+
 type Msg = { role: "USER" | "AGENT"; content: string; note?: "refused" | "unavailable" };
 
 // Remembers the active conversation across reloads so the panel reopens where the
 // user left off (server is the source of truth — this only stores the id).
 const ACTIVE_KEY = "staynex_ai_active_conversation";
+
+// ---------------------------------------------------------------------------
+// Local session chat registry.
+// The server lists conversations only for signed-in users; a guest's chats are
+// capability-based (accessible by id only). This registry mirrors the guest's
+// chat list in localStorage so the history drawer never "forgets" a session
+// conversation. On merge the server list wins — once a chat is claimed at
+// sign-in it arrives from the server and the local copy is pruned.
+// ---------------------------------------------------------------------------
+
+const LOCAL_CHATS_KEY = "staynex_ai_chats";
+const LOCAL_CHATS_MAX = 20;
+
+type LocalChat = {
+  id: string;
+  title: string | null;
+  pinned: boolean;
+  updatedAt: string;
+  preview: string | null;
+};
+
+function readLocalChats(): LocalChat[] {
+  try {
+    const raw = window.localStorage.getItem(LOCAL_CHATS_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (c): c is LocalChat => Boolean(c) && typeof (c as LocalChat).id === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalChats(chats: LocalChat[]) {
+  try {
+    window.localStorage.setItem(LOCAL_CHATS_KEY, JSON.stringify(chats.slice(0, LOCAL_CHATS_MAX)));
+  } catch {
+    /* storage unavailable (private mode / quota) — history simply won't persist */
+  }
+}
+
+function upsertLocalChat(partial: {
+  id: string;
+  title?: string | null;
+  preview?: string | null;
+  pinned?: boolean;
+}) {
+  const chats = readLocalChats();
+  const existing = chats.find((c) => c.id === partial.id);
+  const merged: LocalChat = {
+    id: partial.id,
+    title: partial.title !== undefined ? partial.title : (existing?.title ?? null),
+    pinned: partial.pinned ?? existing?.pinned ?? false,
+    preview: partial.preview !== undefined ? partial.preview : (existing?.preview ?? null),
+    updatedAt: new Date().toISOString(),
+  };
+  writeLocalChats([merged, ...chats.filter((c) => c.id !== partial.id)]);
+}
+
+function removeLocalChat(id: string) {
+  writeLocalChats(readLocalChats().filter((c) => c.id !== id));
+}
+
+/** Compact "2m ago"-style timestamp for the history drawer. */
+function relativeTime(iso: string): string {
+  const diffMs = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(diffMs)) return "";
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
 
 export function AssistantWidget() {
   const pathname = usePathname();
@@ -29,17 +120,42 @@ export function AssistantWidget() {
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const restoredRef = useRef(false);
+  // Accumulates the streamed reply so onDone can snapshot a preview for the
+  // local chat registry without racing React state updates.
+  const streamedRef = useRef("");
 
   const refreshConversations = useCallback(async () => {
+    let server: AgentConversation[] = [];
     try {
-      setConversations(await agentApi.listConversations());
+      server = await agentApi.listConversations();
     } catch {
-      setConversations([]);
+      server = [];
     }
+    const serverIds = new Set(server.map((c) => c.id));
+    // Prune local copies the server now owns (claimed at sign-in), then merge
+    // the remaining session chats after the server list (which is pinned-first).
+    const all = readLocalChats();
+    const locals = all.filter((c) => !serverIds.has(c.id));
+    if (locals.length !== all.length) writeLocalChats(locals);
+    locals.sort(
+      (a, b) =>
+        Number(b.pinned) - Number(a.pinned) || Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
+    );
+    setConversations([
+      ...server,
+      ...locals.map((c) => ({
+        id: c.id,
+        title: c.title,
+        pinned: c.pinned,
+        updatedAt: c.updatedAt,
+        preview: c.preview,
+      })),
+    ]);
   }, []);
 
   useEffect(() => {
@@ -58,11 +174,16 @@ export function AssistantWidget() {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, busy]);
 
+  // Escape closes the drawer first, then the panel.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key !== "Escape") return;
+      setHistoryOpen((h) => {
+        if (!h) setOpen(false);
+        return false;
+      });
     }
     if (open) window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -77,6 +198,7 @@ export function AssistantWidget() {
 
   // Append a text delta to the in-flight agent message (created on first chunk).
   function appendToAgent(text: string) {
+    streamedRef.current += text;
     setMessages((m) => {
       const copy = [...m];
       const last = copy[copy.length - 1];
@@ -92,9 +214,11 @@ export function AssistantWidget() {
   async function sendMessage(text: string) {
     const message = text.trim();
     if (!message || busy) return;
+    const startedNew = !activeId;
     resetInput();
     setMessages((m) => [...m, { role: "USER", content: message }]);
     setBusy(true);
+    streamedRef.current = "";
     try {
       const slug = pathname.match(/^\/stays\/([^/?#]+)/)?.[1];
       await agentApi.askStream(
@@ -106,7 +230,15 @@ export function AssistantWidget() {
         {
           onChunk: (t) => appendToAgent(t),
           onDone: (meta) => {
-            if (meta.conversationId) setActiveId(meta.conversationId);
+            if (meta.conversationId) {
+              setActiveId(meta.conversationId);
+              // Mirror into the session registry so guests keep their chat list.
+              upsertLocalChat({
+                id: meta.conversationId,
+                ...(startedNew ? { title: message.replace(/\s+/g, " ").slice(0, 60) } : {}),
+                ...(streamedRef.current ? { preview: streamedRef.current.slice(0, 100) } : {}),
+              });
+            }
             // Tag the just-streamed agent message with its final state, if any.
             const note = meta.refused ? "refused" : meta.unavailable ? "unavailable" : undefined;
             if (note) {
@@ -157,6 +289,7 @@ export function AssistantWidget() {
       setMessages(msgs.map((m) => ({ role: m.role, content: m.content })));
     } catch {
       // Stored/clicked conversation is gone or no longer ours — reset cleanly.
+      removeLocalChat(id);
       setActiveId(null);
       setMessages([]);
       window.localStorage.removeItem(ACTIVE_KEY);
@@ -173,18 +306,24 @@ export function AssistantWidget() {
 
   async function togglePin(c: AgentConversation) {
     await agentApi.setPinned(c.id, !c.pinned).catch(() => {});
+    upsertLocalChat({ id: c.id, pinned: !c.pinned });
     void refreshConversations();
   }
 
   async function saveRename(id: string) {
     const title = editTitle.trim();
     setEditingId(null);
-    if (title) await agentApi.rename(id, title).catch(() => {});
+    if (title) {
+      await agentApi.rename(id, title).catch(() => {});
+      upsertLocalChat({ id, title });
+    }
     void refreshConversations();
   }
 
   async function remove(id: string) {
+    setConfirmDeleteId(null);
     await agentApi.remove(id).catch(() => {});
+    removeLocalChat(id);
     if (activeId === id) newChat();
     void refreshConversations();
   }
@@ -197,7 +336,7 @@ export function AssistantWidget() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls="staynex-ai-panel"
-        className="fixed bottom-4 right-4 z-40 inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg transition-colors hover:bg-primary-hover"
+        className="fixed bottom-4 right-4 z-40 inline-flex h-11 animate-scale-in items-center gap-2 whitespace-nowrap rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg transition-colors hover:bg-primary-hover"
       >
         <SparkIcon />
         {open ? "Close" : "Staynex AI"}
@@ -207,7 +346,7 @@ export function AssistantWidget() {
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 z-40 bg-black/20"
+            className="fixed inset-0 z-40 animate-fade-in bg-black/20"
             onClick={() => setOpen(false)}
             aria-hidden
           />
@@ -218,7 +357,7 @@ export function AssistantWidget() {
             role="dialog"
             aria-modal="true"
             aria-label="Staynex AI"
-            className="fixed inset-0 z-50 flex flex-col bg-surface-raised sm:inset-y-0 sm:left-auto sm:right-0 sm:w-[420px] sm:border-l sm:border-border sm:shadow-xl"
+            className="fixed inset-0 z-50 flex animate-slide-up flex-col bg-surface-raised sm:inset-y-0 sm:left-auto sm:right-0 sm:w-[420px] sm:animate-slide-in-right sm:border-l sm:border-border sm:shadow-xl"
           >
             {/* Header */}
             <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
@@ -232,12 +371,16 @@ export function AssistantWidget() {
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
-                <IconButton
-                  label={historyOpen ? "Hide chats" : "Conversation history"}
+                {/* Labeled — the drawer must be discoverable, not hidden behind an icon */}
+                <button
+                  type="button"
                   onClick={() => setHistoryOpen((v) => !v)}
+                  aria-expanded={historyOpen}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <HistoryIcon />
-                </IconButton>
+                  Chats
+                </button>
                 <IconButton label="New chat" onClick={newChat}>
                   <PlusIcon />
                 </IconButton>
@@ -254,110 +397,50 @@ export function AssistantWidget() {
               </div>
             </header>
 
-            {historyOpen ? (
-              /* History panel */
-              <div className="flex-1 overflow-y-auto p-3">
-                <button
-                  type="button"
-                  onClick={newChat}
-                  className="mb-2 flex w-full items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-ink hover:bg-secondary"
-                >
-                  <PlusIcon /> New chat
-                </button>
-                {conversations.length === 0 ? (
-                  <p className="px-1 py-6 text-center text-caption text-muted-foreground">
-                    No saved chats yet. Sign in to keep your history.
-                  </p>
-                ) : (
-                  <ul className="space-y-0.5">
-                    {conversations.map((c) => (
-                      <li key={c.id} className="group rounded-md hover:bg-secondary">
-                        {editingId === c.id ? (
-                          <form
-                            onSubmit={(e) => {
-                              e.preventDefault();
-                              void saveRename(c.id);
-                            }}
-                            className="flex gap-1 p-1"
-                          >
-                            <input
-                              autoFocus
-                              value={editTitle}
-                              onChange={(e) => setEditTitle(e.target.value)}
-                              aria-label="Chat name"
-                              className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm"
-                            />
-                            <IconButton label="Save name" type="submit">
-                              <CheckIcon />
-                            </IconButton>
-                          </form>
-                        ) : (
-                          <div className="flex items-center gap-0.5 p-1">
-                            <button
-                              type="button"
-                              onClick={() => void openConversation(c.id)}
-                              className={`flex-1 truncate rounded px-2 py-1.5 text-left text-sm ${
-                                activeId === c.id ? "font-semibold text-primary" : "text-ink"
-                              }`}
-                            >
-                              {c.pinned && <span aria-hidden>📌 </span>}
-                              {c.title ?? "New chat"}
-                            </button>
-                            <IconButton
-                              label={c.pinned ? "Unpin chat" : "Pin chat"}
-                              onClick={() => void togglePin(c)}
-                            >
-                              <PinIcon filled={c.pinned} />
-                            </IconButton>
-                            <IconButton
-                              label="Rename chat"
-                              onClick={() => {
-                                setEditingId(c.id);
-                                setEditTitle(c.title ?? "");
-                              }}
-                            >
-                              <EditIcon />
-                            </IconButton>
-                            <IconButton label="Delete chat" onClick={() => void remove(c.id)}>
-                              <TrashIcon />
-                            </IconButton>
-                          </div>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ) : (
-              <>
-                {/* Message feed */}
-                <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-                  {messages.length === 0 ? (
-                    <div className="space-y-5">
+            {/* Body — the history drawer slides over the conversation, not instead of it */}
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              {/* Message feed */}
+              <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+                {messages.length === 0 ? (
+                  <div className="space-y-6 pt-1">
+                    <div className="space-y-2.5">
+                      <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <SparkIcon />
+                      </span>
+                      <h3 className="text-base font-semibold text-ink">
+                        Hi, I&apos;m Staynex AI
+                      </h3>
                       <p className="text-sm leading-relaxed text-muted-foreground">
-                        Hi, I&apos;m Staynex AI — an AI assistant, not a person. I can help you
-                        find available stays and walk you through booking. I can&apos;t confirm
-                        payments, promise availability, or handle refunds.
+                        I can help you find verified stays and walk you through booking. I&apos;m an
+                        AI assistant, not a person — I can&apos;t confirm payments, promise
+                        availability, or handle refunds.
                       </p>
-                      <div className="space-y-2">
-                        <p className="text-overline text-muted-foreground">Try asking</p>
-                        {SUGGESTIONS.map((s) => (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => void sendMessage(s)}
-                            className="block w-full rounded-xl border border-border px-3 py-2.5 text-left text-sm text-ink transition-colors hover:border-primary/30 hover:bg-secondary"
-                          >
-                            {s}
-                          </button>
-                        ))}
-                      </div>
                     </div>
-                  ) : (
-                    messages.map((t, i) => (
+                    <div className="space-y-2">
+                      <p className="text-overline text-muted-foreground">Try asking</p>
+                      {SUGGESTIONS.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => void sendMessage(s)}
+                          className="block w-full rounded-xl border border-border px-3 py-2.5 text-left text-sm text-ink transition-colors hover:border-primary/30 hover:bg-secondary"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  messages.map((t, i) => {
+                    const streaming = busy && i === messages.length - 1 && t.role === "AGENT";
+                    return (
                       <div
                         key={i}
-                        className={t.role === "USER" ? "flex justify-end" : "flex justify-start"}
+                        className={
+                          t.role === "USER"
+                            ? "flex animate-slide-up justify-end"
+                            : "flex animate-slide-up justify-start"
+                        }
                       >
                         <div
                           className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
@@ -375,70 +458,247 @@ export function AssistantWidget() {
                           ) : (
                             <FormattedMessage content={t.content} onNavigate={() => setOpen(false)} />
                           )}
+                          {streaming && (
+                            <span
+                              className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse-soft rounded-full bg-primary align-[-2px]"
+                              aria-hidden
+                            />
+                          )}
                         </div>
                       </div>
-                    ))
-                  )}
-                  {busy && messages[messages.length - 1]?.role === "USER" && (
-                    <div className="flex justify-start" aria-live="polite">
-                      <p className="rounded-2xl rounded-bl-sm bg-secondary px-3 py-2 text-sm text-muted-foreground">
-                        Thinking…
-                      </p>
-                    </div>
-                  )}
-                  <div ref={endRef} />
-                </div>
+                    );
+                  })
+                )}
+                {busy && messages[messages.length - 1]?.role === "USER" && <ThinkingIndicator />}
+                <div ref={endRef} />
+              </div>
 
-                <div className="border-t border-border px-3 py-3">
-                  <form
-                    onSubmit={(e: FormEvent) => {
-                      e.preventDefault();
-                      void sendMessage(input);
-                    }}
-                    className="rounded-[28px] border border-border bg-background/95 shadow-[0_10px_30px_rgba(15,23,42,0.08)] transition-colors focus-within:border-primary/35"
+              {/* Composer */}
+              <div className="border-t border-border px-3 py-3">
+                <form
+                  onSubmit={(e: FormEvent) => {
+                    e.preventDefault();
+                    void sendMessage(input);
+                  }}
+                  className="rounded-[28px] border border-border bg-background/95 shadow-[0_10px_30px_rgba(15,23,42,0.08)] transition-colors focus-within:border-primary/35"
+                >
+                  <div className="flex items-end gap-2 p-2">
+                    <textarea
+                      ref={inputRef}
+                      value={input}
+                      rows={1}
+                      onChange={(e) => {
+                        setInput(e.target.value);
+                        e.target.style.height = "auto";
+                        e.target.style.height = `${e.target.scrollHeight}px`;
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          void sendMessage(input);
+                        }
+                      }}
+                      placeholder="Message Staynex AI"
+                      aria-label="Message Staynex AI"
+                      className="max-h-40 min-h-[52px] flex-1 resize-none overflow-y-auto bg-transparent px-3 py-3 text-sm leading-6 text-ink outline-none placeholder:text-muted-foreground"
+                    />
+                    <button
+                      type="submit"
+                      aria-label="Send message"
+                      disabled={busy || !input.trim()}
+                      className="mb-1 mr-1 inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
+                    >
+                      <ArrowUpIcon />
+                    </button>
+                  </div>
+                </form>
+                {/* Persistent transparency line — under the input, not atop the panel. */}
+                <p className="mt-2 px-2 text-center text-caption text-muted-foreground">
+                  Staynex AI can make mistakes — confirm availability and prices on the
+                  property page.
+                </p>
+              </div>
+
+              {/* History drawer */}
+              {historyOpen && (
+                <>
+                  <div
+                    className="absolute inset-0 z-10 animate-fade-in bg-black/20"
+                    onClick={() => setHistoryOpen(false)}
+                    aria-hidden
+                  />
+                  <div
+                    role="dialog"
+                    aria-label="Chat history"
+                    className="absolute inset-y-0 left-0 z-20 flex w-[88%] max-w-[340px] animate-slide-in-left flex-col border-r border-border bg-surface-raised shadow-xl"
                   >
-                    <div className="flex items-end gap-2 p-2">
-                      <textarea
-                        ref={inputRef}
-                        value={input}
-                        rows={1}
-                        onChange={(e) => {
-                          setInput(e.target.value);
-                          e.target.style.height = "auto";
-                          e.target.style.height = `${e.target.scrollHeight}px`;
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            void sendMessage(input);
-                          }
-                        }}
-                        placeholder="Message Staynex AI"
-                        aria-label="Message Staynex AI"
-                        className="max-h-40 min-h-[52px] flex-1 resize-none overflow-y-auto bg-transparent px-3 py-3 text-sm leading-6 text-ink outline-none placeholder:text-muted-foreground"
-                      />
-                      <button
-                        type="submit"
-                        aria-label="Send message"
-                        disabled={busy || !input.trim()}
-                        className="mb-1 mr-1 inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
-                      >
-                        <ArrowUpIcon />
-                      </button>
+                    <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                      <p className="font-semibold text-ink">Chats</p>
+                      <IconButton label="Close chat history" onClick={() => setHistoryOpen(false)}>
+                        <CloseIcon />
+                      </IconButton>
                     </div>
-                  </form>
-                  {/* Persistent transparency line — under the input, not atop the panel. */}
-                  <p className="mt-2 px-2 text-center text-caption text-muted-foreground">
-                    Staynex AI can make mistakes — confirm availability and prices on the
-                    property page.
-                  </p>
-                </div>
-              </>
-            )}
+                    <div className="flex-1 overflow-y-auto p-3">
+                      <button
+                        type="button"
+                        onClick={newChat}
+                        className="mb-3 flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:border-primary/30 hover:bg-secondary"
+                      >
+                        <PlusIcon /> New chat
+                      </button>
+                      {conversations.length === 0 ? (
+                        <div className="space-y-1.5 px-1 py-8 text-center">
+                          <p className="text-sm font-medium text-ink">No conversations yet</p>
+                          <p className="text-caption leading-relaxed text-muted-foreground">
+                            Your chats will appear here. Sign in to keep them across devices.
+                          </p>
+                        </div>
+                      ) : (
+                        <ul className="space-y-0.5">
+                          {conversations.map((c) => (
+                            <li key={c.id} className="group rounded-lg transition-colors hover:bg-secondary">
+                              {editingId === c.id ? (
+                                <form
+                                  onSubmit={(e) => {
+                                    e.preventDefault();
+                                    void saveRename(c.id);
+                                  }}
+                                  className="flex gap-1 p-1.5"
+                                >
+                                  <input
+                                    autoFocus
+                                    value={editTitle}
+                                    onChange={(e) => setEditTitle(e.target.value)}
+                                    aria-label="Chat name"
+                                    className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm"
+                                  />
+                                  <IconButton label="Save name" type="submit">
+                                    <CheckIcon />
+                                  </IconButton>
+                                </form>
+                              ) : (
+                                <div className="flex items-center gap-0.5 p-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => void openConversation(c.id)}
+                                    className="min-w-0 flex-1 rounded-md px-1.5 py-1 text-left"
+                                  >
+                                    <span className="flex items-baseline gap-1.5">
+                                      {c.pinned && (
+                                        <span className="shrink-0 text-primary" aria-label="Pinned">
+                                          <PinIcon filled small />
+                                        </span>
+                                      )}
+                                      <span
+                                        className={`truncate text-sm ${
+                                          activeId === c.id
+                                            ? "font-semibold text-primary"
+                                            : "font-medium text-ink"
+                                        }`}
+                                      >
+                                        {c.title ?? "New chat"}
+                                      </span>
+                                      <span className="ml-auto shrink-0 text-caption text-muted-foreground">
+                                        {relativeTime(c.updatedAt)}
+                                      </span>
+                                    </span>
+                                    {c.preview && (
+                                      <span className="mt-0.5 block truncate text-caption text-muted-foreground">
+                                        {c.preview}
+                                      </span>
+                                    )}
+                                  </button>
+                                  {confirmDeleteId === c.id ? (
+                                    <span className="flex shrink-0 items-center gap-0.5">
+                                      <span className="text-caption font-medium text-error">
+                                        Delete?
+                                      </span>
+                                      <IconButton label="Confirm delete" onClick={() => void remove(c.id)}>
+                                        <CheckIcon />
+                                      </IconButton>
+                                      <IconButton
+                                        label="Cancel delete"
+                                        onClick={() => setConfirmDeleteId(null)}
+                                      >
+                                        <CloseIcon />
+                                      </IconButton>
+                                    </span>
+                                  ) : (
+                                    <span className="flex shrink-0 items-center gap-0.5">
+                                      <IconButton
+                                        label={c.pinned ? "Unpin chat" : "Pin chat"}
+                                        onClick={() => void togglePin(c)}
+                                      >
+                                        <PinIcon filled={c.pinned} />
+                                      </IconButton>
+                                      <IconButton
+                                        label="Rename chat"
+                                        onClick={() => {
+                                          setEditingId(c.id);
+                                          setEditTitle(c.title ?? "");
+                                        }}
+                                      >
+                                        <EditIcon />
+                                      </IconButton>
+                                      <IconButton
+                                        label="Delete chat"
+                                        onClick={() => setConfirmDeleteId(c.id)}
+                                      >
+                                        <TrashIcon />
+                                      </IconButton>
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </>
       )}
     </>
+  );
+}
+
+/**
+ * "Working" bubble with a rotating status word and soft bouncing dots.
+ * The rotating text is aria-hidden; screen readers get one stable
+ * announcement via role="status".
+ */
+function ThinkingIndicator() {
+  const [phrase, setPhrase] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(
+      () => setPhrase((v) => (v + 1) % THINKING_PHRASES.length),
+      THINKING_ROTATE_MS,
+    );
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <div className="flex justify-start" role="status">
+      <span className="sr-only">Staynex AI is thinking</span>
+      <p
+        aria-hidden
+        className="flex items-center gap-2 rounded-2xl rounded-bl-sm bg-secondary px-3 py-2 text-sm text-muted-foreground"
+      >
+        <span key={phrase} className="animate-fade-in">
+          {THINKING_PHRASES[phrase]}
+        </span>
+        <span className="thinking-dots">
+          <i />
+          <i />
+          <i />
+        </span>
+      </p>
+    </div>
   );
 }
 
@@ -514,8 +774,8 @@ const TrashIcon = () => (
     <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" />
   </svg>
 );
-const PinIcon = ({ filled }: { filled: boolean }) => (
-  <svg {...svg} fill={filled ? "currentColor" : "none"}>
+const PinIcon = ({ filled, small }: { filled: boolean; small?: boolean }) => (
+  <svg {...svg} className={small ? "size-3" : "size-4"} fill={filled ? "currentColor" : "none"}>
     <path d="M12 17v5M7 4h10l-1 7 3 3H5l3-3-1-7Z" />
   </svg>
 );

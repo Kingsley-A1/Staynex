@@ -103,20 +103,13 @@ export class AssistantService {
       );
     }
 
-    // 4) Tool-first grounding: pull verified public facts before answering.
-    const groundedFacts = await this.groundFacts(input.message, input.propertySlug);
-    const systemPrompt = groundedFacts.length
-      ? `${SYSTEM_PROMPT}\n\nVerified facts you may use (do not contradict or go beyond these):\n- ${groundedFacts.join("\n- ")}`
-      : SYSTEM_PROMPT;
-
-    // 5) Replay recent conversation history so follow-ups have context. The
-    //    current user message is already persisted, so it's the last turn here.
-    const turns = await this.conversations.recentForModel(conversationId);
-    const history: GeminiTurn[] = turns.map((t) => ({
-      role: t.role === AIMessageRole.AGENT ? "model" : "user",
-      text: t.content,
-    }));
-    if (history.length === 0) history.push({ role: "user", text: input.message });
+    // 4) Grounding + conversation memory (current-thread replay and, for
+    //    signed-in users, compact context from their past conversations).
+    const { systemPrompt, history, groundedFacts } = await this.prepareModelInput(
+      input,
+      user,
+      conversationId,
+    );
 
     const result = await this.gemini.generateResult(systemPrompt, history);
     if (!result.ok) {
@@ -185,17 +178,12 @@ export class AssistantService {
       return;
     }
 
-    // 4) Grounding + history.
-    const groundedFacts = await this.groundFacts(input.message, input.propertySlug);
-    const systemPrompt = groundedFacts.length
-      ? `${SYSTEM_PROMPT}\n\nVerified facts you may use (do not contradict or go beyond these):\n- ${groundedFacts.join("\n- ")}`
-      : SYSTEM_PROMPT;
-    const turns = await this.conversations.recentForModel(conversationId);
-    const history: GeminiTurn[] = turns.map((t) => ({
-      role: t.role === AIMessageRole.AGENT ? "model" : "user",
-      text: t.content,
-    }));
-    if (history.length === 0) history.push({ role: "user", text: input.message });
+    // 4) Grounding + conversation memory.
+    const { systemPrompt, history, groundedFacts } = await this.prepareModelInput(
+      input,
+      user,
+      conversationId,
+    );
 
     // 5) Stream the model reply; accumulate to persist once at the end.
     let full = "";
@@ -231,6 +219,42 @@ export class AssistantService {
   }
 
   // --- internals -----------------------------------------------------------
+
+  /**
+   * Assemble everything the model needs for one turn: the system prompt with
+   * verified grounded facts, plus two layers of conversational memory —
+   * (a) the current conversation's recent turns replayed as history, and
+   * (b) for signed-in users, compact context from their other recent
+   * conversations, so a new chat can pick up remembered preferences (city,
+   * budget, an earlier question) without treating them as live data.
+   */
+  private async prepareModelInput(
+    input: AssistantInput,
+    user: AuthUser | null,
+    conversationId: string,
+  ): Promise<{ systemPrompt: string; history: GeminiTurn[]; groundedFacts: string[] }> {
+    const [groundedFacts, pastContext, turns] = await Promise.all([
+      this.groundFacts(input.message, input.propertySlug),
+      this.conversations.crossConversationContext(user, conversationId),
+      this.conversations.recentForModel(conversationId),
+    ]);
+
+    let systemPrompt = SYSTEM_PROMPT;
+    if (groundedFacts.length) {
+      systemPrompt += `\n\nVerified facts you may use (do not contradict or go beyond these):\n- ${groundedFacts.join("\n- ")}`;
+    }
+    if (pastContext.length) {
+      systemPrompt += `\n\nCONTEXT FROM THIS USER'S PAST STAYNEX CONVERSATIONS (use only for continuity — e.g. a city, budget, or stay they mentioned before. Never treat it as live availability or verified data):\n- ${pastContext.join("\n- ")}`;
+    }
+
+    const history: GeminiTurn[] = turns.map((t) => ({
+      role: t.role === AIMessageRole.AGENT ? "model" : "user",
+      text: t.content,
+    }));
+    if (history.length === 0) history.push({ role: "user", text: input.message });
+
+    return { systemPrompt, history, groundedFacts };
+  }
 
   private guardrail(message: string): Canned | null {
     const m = message.toLowerCase();
@@ -276,14 +300,18 @@ export class AssistantService {
   private trainedAnswer(message: string): Canned | null {
     const m = message.toLowerCase();
 
-    if (/\bhow\b[^?]*\b(book|booking|pay|payment|paystack|work)\b/.test(m)) {
+    // Require a booking/payment noun so unrelated "how…" questions (e.g. "how
+    // does your AI work") reach the model instead of this canned reply.
+    if (/\bhow\b[^?]*\b(book|booking|pay|payment|paystack|checkout|reserve|reservation)\b/.test(m)) {
       return {
         summary: "Explained booking & payment flow",
         reply:
           "Here's how booking works on Staynex:\n1. Search a city and your dates.\n2. Open a stay and pick a room.\n3. Check availability for those exact dates.\n4. Place a short hold to lock it.\n5. Sign in (or register) and pay securely through our trusted payment provider.\n6. Your booking is confirmed only after Staynex verifies the payment — you'll see the status on your confirmation page.\nI can't confirm payments myself, but I can guide you to each step.",
       };
     }
-    if (/\bwhat\b[^?]*\b(check|look for|consider|know)\b/.test(m)) {
+    // Anchored to a stay/booking noun — a bare "what should I know about X"
+    // must not trigger the pre-booking checklist.
+    if (/\bwhat\b[^?]*\b(check|look for|consider)\b[^?]*\b(stay|book|property|room|choos|reserv)/.test(m)) {
       return {
         summary: "Listed what to check before booking",
         reply:
@@ -442,6 +470,14 @@ export class AssistantService {
       });
       // Reuse only if it exists, isn't deleted, and the caller may access it.
       if (convo && !convo.deletedAt && (convo.userId == null || convo.userId === user?.id)) {
+        // Claim an anonymous conversation once the guest signs in, so it joins
+        // their account history instead of being lost with the session.
+        if (convo.userId == null && user) {
+          await prisma.aIConversation.update({
+            where: { id: convo.id },
+            data: { userId: user.id },
+          });
+        }
         return convo.id;
       }
     }

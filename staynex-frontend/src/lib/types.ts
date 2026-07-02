@@ -387,6 +387,8 @@ export interface AgentConversation {
   title: string | null;
   pinned: boolean;
   updatedAt: string;
+  /** Short excerpt of the latest message, for history-list previews. */
+  preview: string | null;
 }
 
 // --- Phase 5: auth, testimonials, areas ---
@@ -434,7 +436,7 @@ export function isAuthMfaChallenge(
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   GUEST: "Guest",
-  OWNER: "Property owner",
+  OWNER: "Host",
   ADMIN_REVIEWER: "Admin",
   ADMIN_MANAGER: "Super Admin",
 };
@@ -457,7 +459,7 @@ export function isAdminManager(user: AuthUser | null | undefined): boolean {
 /** Destination after auth, driven by capability (not just the compat role). */
 export function capabilityHome(user: AuthUser): string {
   if (isAdminCapable(user)) return "/admin";
-  if (isOwnerCapable(user)) return "/owner/dashboard";
+  if (isOwnerCapable(user)) return "/host/dashboard";
   return "/stays";
 }
 

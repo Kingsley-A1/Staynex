@@ -360,6 +360,8 @@ export interface AgentConversation {
   title: string | null;
   pinned: boolean;
   updatedAt: string;
+  /** Short excerpt of the latest message, for history-list previews. */
+  preview: string | null;
 }
 
 // --- Phase 5: auth, testimonials, areas ---
