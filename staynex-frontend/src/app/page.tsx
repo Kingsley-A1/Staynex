@@ -4,12 +4,12 @@ import { Brandmark } from "@/components/brandmark";
 import { SiteFooter } from "@/components/site-footer";
 import { SearchPanel } from "@/features/booking/search-panel";
 import { TestimonialsSection } from "@/features/reviews/testimonials-section";
-import { HeaderAuthControls } from "@/features/auth/header-auth-controls";
+import { ClientHeaderAuthControls } from "@/features/auth/client-header-auth-controls";
 import { DestinationImageCycle } from "@/features/landing/destination-image-cycle";
 import { formatNairaFromKobo } from "@/lib/format";
 import { getHomeCatalog } from "@/lib/server-catalog";
-import { getServerUser } from "@/lib/server-auth";
-import type { AuthUser, DestinationShowcase, PropertySummary } from "@/lib/types";
+import { OptimizedFillImage } from "@/ui";
+import type { DestinationShowcase, PropertySummary } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Staynex — Book trusted stays",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     "Book trusted stays across Nigeria and beyond. Verified properties, secure payments, and real-time availability.",
 };
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 const DESTINATIONS = [
   {
@@ -74,10 +74,10 @@ const FEATURES = [
    Page
    ========================================================================== */
 export default async function HomePage() {
-  const [user, home] = await Promise.all([getServerUser(), getHomeCatalog()]);
+  const home = await getHomeCatalog();
   return (
     <div className="bg-white">
-      <SiteHeader user={user} />
+      <SiteHeader />
 
       <main id="main">
         <Hero />
@@ -89,7 +89,7 @@ export default async function HomePage() {
         />
         <TestimonialsSection />
         <ValueProps />
-        <OwnerCta />
+        <HostCta />
       </main>
 
       <SiteFooter />
@@ -100,7 +100,7 @@ export default async function HomePage() {
 /* ============================================================================
    Header
    ========================================================================== */
-function SiteHeader({ user }: { user: AuthUser | null }) {
+function SiteHeader() {
   return (
     <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-white">
       <div className="layout-container flex h-16 items-center justify-between gap-4">
@@ -123,7 +123,7 @@ function SiteHeader({ user }: { user: AuthUser | null }) {
           </Link>
         </nav>
 
-        <HeaderAuthControls user={user} />
+        <ClientHeaderAuthControls />
       </div>
     </header>
   );
@@ -134,21 +134,7 @@ function SiteHeader({ user }: { user: AuthUser | null }) {
    ========================================================================== */
 function Hero() {
   return (
-    <section className="relative overflow-hidden">
-      {/* Brand gradient wash — soft colour over a pure-white base reads as premium,
-          not cloudy (the haze came from the off-white base + blurred header, now fixed). */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-32 left-1/2 h-96 w-[48rem] -translate-x-1/2 rounded-full bg-primary-subtle blur-3xl"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-[-8rem] top-24 size-72 rounded-full bg-teal-200/35 blur-3xl"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute right-[-10rem] top-8 size-80 rounded-full bg-amber-200/30 blur-3xl"
-      />
+    <section className="home-hero relative overflow-hidden">
       <div className="layout-container relative py-16 sm:py-20 lg:py-24">
         <div className="mx-auto max-w-3xl text-center">
           <p className="text-overline mb-4">Verified stays · Secure payments</p>
@@ -263,7 +249,7 @@ function FeaturedStays({
         <div className="space-y-10">
           <LiveStaySection
             title="Latest stays"
-            subtitle="Recently approved properties uploaded by owners."
+            subtitle="Recently approved properties uploaded by hosts."
             href="/search"
             linkLabel="Browse all stays"
             items={latest.slice(0, 4)}
@@ -349,10 +335,10 @@ function StayCard({
     >
       <div className="relative h-44 bg-gradient-to-br from-indigo-500 to-indigo-800">
         {property.coverImageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <OptimizedFillImage
             src={property.coverImageUrl}
             alt={property.name}
+            sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
             className="absolute inset-0 h-full w-full object-cover"
           />
         )}
@@ -426,9 +412,9 @@ function ValueProps() {
 }
 
 /* ============================================================================
-   Owner CTA band
+   Host CTA band
    ========================================================================== */
-function OwnerCta() {
+function HostCta() {
   return (
     <section className="layout-container pb-16 sm:pb-20">
       <div className="relative overflow-hidden rounded-2xl bg-primary px-6 py-12 text-center shadow-lg sm:px-12 sm:py-16">
@@ -437,7 +423,7 @@ function OwnerCta() {
           className="pointer-events-none absolute -right-16 -top-16 size-64 rounded-full bg-white/10 blur-2xl"
         />
         <div className="relative mx-auto max-w-2xl">
-          <p className="text-overline text-white/70">For property owners</p>
+          <p className="text-overline text-white/70">For hosts</p>
           <h2 className="mt-3 font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
             Turn your property into a reliable booking channel.
           </h2>

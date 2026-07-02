@@ -39,7 +39,7 @@ export function SiteFooter() {
               className="inline-flex items-center"
               aria-label="Staynex home"
             >
-              <Brandmark priority />
+              <Brandmark />
             </Link>
             <p className="mt-3 max-w-xs text-body-sm text-muted-foreground">
               Book verified stays with real-time availability, secure payments,

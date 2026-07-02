@@ -9,3 +9,4 @@ export { GuestSelector, guestSummary, type GuestCounts } from "./guest-selector"
 export { PropertyCard } from "./property-card";
 export { PropertyCardSkeleton, PropertyCardSkeletonGrid } from "./property-card-skeleton";
 export { RoomGalleryCarousel, type GallerySlide } from "./room-gallery-carousel";
+export { OptimizedFillImage } from "./optimized-fill-image";

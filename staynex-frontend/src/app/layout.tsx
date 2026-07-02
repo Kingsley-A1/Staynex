@@ -3,6 +3,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { Suspense } from "react";
 import "../styles/globals.css";
 import { PageLoadingLine } from "@/components/page-loading-line";
+import { WebVitalsReporter } from "@/components/web-vitals-reporter";
 import {
   DEFAULT_DESCRIPTION,
   SEO_KEYWORDS,
@@ -85,7 +86,8 @@ export default function RootLayout({
       <body>
         <Suspense fallback={null}>
           <PageLoadingLine />
-          <Analytics/>
+          <WebVitalsReporter />
+          <Analytics />
         </Suspense>
         <script
           type="application/ld+json"

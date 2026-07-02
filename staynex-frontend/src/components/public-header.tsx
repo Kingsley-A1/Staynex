@@ -1,10 +1,8 @@
 import Link from "next/link";
 import { Brandmark } from "@/components/brandmark";
-import { HeaderAuthControls } from "@/features/auth/header-auth-controls";
-import { getServerUser } from "@/lib/server-auth";
+import { ClientHeaderAuthControls } from "@/features/auth/client-header-auth-controls";
 
-export async function PublicHeader() {
-  const user = await getServerUser();
+export function PublicHeader() {
   return (
     <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-background/80 backdrop-blur-md">
       <div className="layout-container flex h-16 items-center justify-between gap-4">
@@ -28,7 +26,7 @@ export async function PublicHeader() {
           >
             List your property
           </Link>
-          <HeaderAuthControls user={user} />
+          <ClientHeaderAuthControls />
         </nav>
       </div>
     </header>

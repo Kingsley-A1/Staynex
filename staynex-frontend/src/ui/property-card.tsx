@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatNairaFromKobo } from "@/lib/format";
 import type { PropertySummary } from "@/lib/types";
 import { StatusBadge } from "./badge";
+import { OptimizedFillImage } from "./optimized-fill-image";
 
 export function PropertyCard({
   property,
@@ -20,10 +21,10 @@ export function PropertyCard({
       {/* Visual area ≈ 60% of the card height */}
       <div className="relative aspect-[16/10] bg-gradient-to-br from-indigo-500 to-indigo-800">
         {property.coverImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <OptimizedFillImage
             src={property.coverImageUrl}
             alt={property.name}
+            sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : null}

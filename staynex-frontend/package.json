@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "check": "next typegen && tsc --noEmit"
+    "check": "next typegen && tsc --noEmit",
+    "perf:budget": "node scripts/performance-budget.mjs",
+    "perf:lighthouse:mobile": "npx --yes lighthouse https://www.staynexbookings.ng/ --only-categories=performance --output=html --output-path=./lighthouse-mobile.html --chrome-flags=\"--headless=new --no-sandbox\"",
+    "perf:lighthouse:desktop": "npx --yes lighthouse https://www.staynexbookings.ng/ --only-categories=performance --preset=desktop --output=html --output-path=./lighthouse-desktop.html --chrome-flags=\"--headless=new --no-sandbox\""
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",

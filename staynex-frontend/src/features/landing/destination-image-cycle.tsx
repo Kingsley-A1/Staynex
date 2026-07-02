@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { OptimizedFillImage } from "@/ui";
 
 const LIVE_SLIDES_BEFORE_COVER = 5;
 const SLIDE_INTERVAL_MS = 3600;
@@ -37,11 +38,11 @@ export function DestinationImageCycle({
   }, [slides.length]);
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <OptimizedFillImage
       key={current}
       src={current}
       alt={isLiveProperty ? `Stay in ${city}` : `${city}, Nigeria`}
+      sizes="(min-width: 1024px) 20vw, (min-width: 640px) 33vw, 50vw"
       className="absolute inset-0 h-full w-full object-cover transition-opacity duration-700"
       onError={(event) => {
         if (event.currentTarget.dataset.fallback !== "true") {

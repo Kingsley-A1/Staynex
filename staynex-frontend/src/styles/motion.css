@@ -41,6 +41,8 @@
   --animate-scale-in: scale-in 0.2s var(--ease-emphasized) both;
   --animate-shimmer: shimmer 1.4s ease-in-out infinite;
   --animate-pulse-soft: pulse-soft 1.6s var(--ease-standard) infinite;
+  --animate-slide-in-right: slide-in-right 0.28s var(--ease-decelerate) both;
+  --animate-slide-in-left: slide-in-left 0.28s var(--ease-decelerate) both;
 
   @keyframes fade-in {
     from {
@@ -97,6 +99,26 @@
       background-position: 250% 0;
     }
   }
+  @keyframes slide-in-right {
+    from {
+      opacity: 0;
+      transform: translateX(24px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  @keyframes slide-in-left {
+    from {
+      opacity: 0;
+      transform: translateX(-24px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
 }
 
 /* -----------------------------------------------------------------------------
@@ -145,6 +167,43 @@
 }
 
 /* -----------------------------------------------------------------------------
+   Thinking dots — the assistant's "working" indicator (three soft bouncing
+   dots next to a rotating status word). Sized in em so it scales with text.
+   --------------------------------------------------------------------------- */
+@layer components {
+  .thinking-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .thinking-dots i {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: thinking-dot 1.2s ease-in-out infinite;
+  }
+  .thinking-dots i:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  .thinking-dots i:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+  @keyframes thinking-dot {
+    0%,
+    60%,
+    100% {
+      opacity: 0.3;
+      transform: translateY(0);
+    }
+    30% {
+      opacity: 1;
+      transform: translateY(-2px);
+    }
+  }
+}
+
+/* -----------------------------------------------------------------------------
    Attention border — a subtle circulating gradient on the element's own border
    (not a background wrapper). Use on a surface with a transparent border.
 
@@ -153,12 +212,6 @@
    Uses Staynex blue plus mature cyan/teal/amber accents. Honors reduced motion
    by freezing the border.
    --------------------------------------------------------------------------- */
-@property --attention-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
-
 @layer components {
   .attention-border {
     border: 1px solid transparent;
@@ -166,7 +219,7 @@
       linear-gradient(var(--color-surface-raised), var(--color-surface-raised))
         padding-box,
       conic-gradient(
-          from var(--attention-angle),
+          from 145deg,
           rgba(39, 24, 125, 0.24) 0deg,
           var(--color-primary, #27187d) 36deg,
           #0ea5e9 82deg,
@@ -176,19 +229,13 @@
           var(--color-border, #e7e5f2) 360deg
         )
         border-box;
-    animation: attention-rotate 6s linear infinite;
-    box-shadow: 0 18px 45px rgba(26, 16, 82, 0.08);
+    box-shadow: 0 12px 28px rgba(26, 16, 82, 0.06);
   }
 
-  /* Calm down once the user engages with the control. */
-  .attention-border:focus-within {
-    animation-play-state: paused;
-  }
-
-  @keyframes attention-rotate {
-    to {
-      --attention-angle: 360deg;
-    }
+  .home-hero {
+    background:
+      radial-gradient(70% 55% at 50% 0%, rgba(39, 24, 125, 0.09), transparent 72%),
+      linear-gradient(180deg, #ffffff 0%, #ffffff 72%, var(--color-surface) 100%);
   }
 
   .page-loading-line {
@@ -303,6 +350,11 @@
 
   .skeleton {
     animation: none;
+  }
+  /* Static, fully-visible dots — state stays clear without the bounce. */
+  .thinking-dots i {
+    animation: none;
+    opacity: 0.6;
   }
   /* Freeze the circulating ring to a static, non-distracting border. */
   .attention-border {
