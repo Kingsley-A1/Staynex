@@ -185,6 +185,7 @@ export class AuthService {
       where: { email },
       select: { id: true },
     });
+    const createdByGoogle = !existing;
     const userId = existing
       ? existing.id
       : (
@@ -201,7 +202,9 @@ export class AuthService {
     }
 
     if (intent === "OWNER") await this.grantOwnerCapability(userId);
-    return this.startSession(userId, { revokeExisting: true });
+    const result = await this.startSession(userId, { revokeExisting: true });
+    if (createdByGoogle) await this.sendWelcomeEmail(result.user);
+    return result;
   }
 
   /**
@@ -447,7 +450,9 @@ export class AuthService {
     role: UserRole,
   ): Promise<AuthResult> {
     const userId = await this.createUser(input, role);
-    return this.startSession(userId, { revokeExisting: true });
+    const result = await this.startSession(userId, { revokeExisting: true });
+    await this.sendWelcomeEmail(result.user);
+    return result;
   }
 
   private async createUser(
@@ -597,6 +602,21 @@ export class AuthService {
     }
   }
 
+  private async sendWelcomeEmail(user: AuthUser): Promise<void> {
+    if (!user.email || !this.email.isConfigured()) return;
+    const firstName = user.name?.trim().split(/\s+/)[0];
+    const greeting = firstName ? `Hi ${escapeHtml(firstName)},` : "Hi,";
+    const homeUrl = (
+      process.env.NEXT_PUBLIC_APP_URL || "https://staynexbookings.ng"
+    ).replace(/\/+$/, "");
+    await this.email.send({
+      to: user.email,
+      subject: "Welcome to Staynex",
+      html: `<!doctype html><html><body style="margin:0;background:#F7F7FF;font-family:Arial,Helvetica,sans-serif"><div style="max-width:520px;margin:0 auto;padding:24px"><h1 style="color:#27187D;font-size:22px;margin:0 0 12px">Welcome to Staynex</h1><p style="color:#101014;font-size:15px;line-height:1.5;margin:0 0 12px">${greeting}</p><p style="color:#101014;font-size:15px;line-height:1.5;margin:0 0 16px">Your account is ready. You can now search verified stays, manage bookings, and use secure payments.</p><p style="margin:0 0 20px"><a href="${homeUrl}" style="display:inline-block;background:#27187D;color:#fff;text-decoration:none;border-radius:8px;padding:12px 16px;font-weight:700">Open Staynex</a></p><p style="color:#6E6A83;font-size:12px;margin:0">Staynex — Book trusted stays, confidently.</p></div></body></html>`,
+      text: `${firstName ? `Hi ${firstName},` : "Hi,"}\n\nWelcome to Staynex. Your account is ready.\n\nOpen Staynex: ${homeUrl}`,
+    });
+  }
+
   private assertAdminCodeRate(ip: string): void {
     const now = Date.now();
     const entry = this.adminAttempts.get(ip);
@@ -644,6 +664,15 @@ function safeEquals(a: string, b: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -684,10 +713,7 @@ async function hasEmailMailRoute(domain: string): Promise<boolean> {
   return ipv4.length > 0 || ipv6.length > 0;
 }
 
-async function dnsWithTimeout<T>(
-  lookup: Promise<T>,
-  fallback: T,
-): Promise<T> {
+async function dnsWithTimeout<T>(lookup: Promise<T>, fallback: T): Promise<T> {
   let timeout: NodeJS.Timeout | undefined;
   try {
     return await Promise.race([

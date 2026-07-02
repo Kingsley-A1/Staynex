@@ -19,7 +19,7 @@ type Mode = "login" | "register" | "admin";
 
 // Reusable auth form. As a page it navigates on success; embedded (checkout gate)
 // it calls `onSuccess` instead so the surrounding flow continues. `roleIntent`
-// locks owner-intent registration (used by /owner/register).
+// locks host-intent registration (used by /host/register).
 export function AuthForm({
   mode,
   next,
@@ -187,7 +187,7 @@ export function AuthForm({
       : mode === "admin"
         ? "Create admin account"
         : ownerIntent
-          ? "Create owner account"
+          ? "Create host account"
           : "Create account";
 
   if (registered) {
@@ -267,6 +267,7 @@ export function AuthForm({
         <GoogleAuthButton
           next={next}
           onSuccess={onSuccess}
+          onError={setError}
           intent={ownerIntent ? "OWNER" : undefined}
         />
       )}
@@ -348,7 +349,7 @@ export function AuthForm({
             onChange={(e) => setRole(e.target.value as "GUEST" | "OWNER")}
           >
             <option value="GUEST">A guest booking stays</option>
-            <option value="OWNER">A property owner</option>
+            <option value="OWNER">A host listing my property</option>
           </Select>
         </Field>
       )}

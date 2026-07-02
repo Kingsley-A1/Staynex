@@ -5,6 +5,26 @@ const apiOrigin = (
 ).replace(/\/+$/, "");
 const production = process.env.NODE_ENV === "production";
 
+// Public base of the media bucket (R2 custom domain or dev subdomain). Drives
+// the next/image optimizer allowlist — uploaded photos are served resized and
+// re-encoded (AVIF/WebP) instead of full-size originals.
+function mediaRemotePattern():
+  | { protocol: "https" | "http"; hostname: string }
+  | null {
+  const base = process.env.NEXT_PUBLIC_MEDIA_BASE_URL;
+  if (!base) return null;
+  try {
+    const url = new URL(base);
+    return {
+      protocol: url.protocol === "http:" ? "http" : "https",
+      hostname: url.hostname,
+    };
+  } catch {
+    return null;
+  }
+}
+const mediaPattern = mediaRemotePattern();
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -23,8 +43,32 @@ const contentSecurityPolicy = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  images: {
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 60 * 60 * 24 * 30,
+    remotePatterns: mediaPattern ? [mediaPattern] : [],
+  },
+  async redirects() {
+    // The host workspace moved from /owner/* — keep old links and bookmarks alive.
+    return [
+      {
+        source: "/owner/:path*",
+        destination: "/host/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
+      {
+        source: "/assets/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=2592000, stale-while-revalidate=86400",
+          },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [
@@ -36,7 +80,10 @@ const nextConfig: NextConfig = {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=()",
           },
-          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          {
+            key: "Cross-Origin-Opener-Policy",
+            value: "same-origin-allow-popups",
+          },
           ...(production
             ? [
                 {

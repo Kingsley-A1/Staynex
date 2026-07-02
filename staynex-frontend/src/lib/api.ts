@@ -1,4 +1,4 @@
-// Typed API client for owner/admin surfaces. Calls the NestJS backend over HTTP
+// Typed API client for host/admin surfaces. Calls the NestJS backend over HTTP
 // (the frontend never touches Prisma/DB). Used by client components; server
 // components render from centralized fixtures until the API is wired live.
 
@@ -172,17 +172,17 @@ async function request<T>(
   return (await res.json()) as T;
 }
 
-// All owner endpoints are authenticated by the session cookie (session-only auth).
-export const ownerApi = {
-  listProperties: () => request<PropertySummary[]>("/owner/properties"),
+// All host endpoints are authenticated by the session cookie (session-only auth).
+export const hostApi = {
+  listProperties: () => request<PropertySummary[]>("/host/properties"),
   getProperty: (id: string) =>
-    request<PropertyDetail>(`/owner/properties/${id}`),
+    request<PropertyDetail>(`/host/properties/${id}`),
   createProperty: (body: {
     name: string;
     cityId: string;
     description?: string;
   }) =>
-    request<PropertyDetail>("/owner/properties", {
+    request<PropertyDetail>("/host/properties", {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -190,12 +190,12 @@ export const ownerApi = {
     id: string,
     body: { name?: string; cityId?: string; description?: string },
   ) =>
-    request<PropertyDetail>(`/owner/properties/${id}`, {
+    request<PropertyDetail>(`/host/properties/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   submitProperty: (id: string) =>
-    request<PropertyDetail>(`/owner/properties/${id}/submit`, {
+    request<PropertyDetail>(`/host/properties/${id}/submit`, {
       method: "POST",
     }),
   createRoomType: (body: {
@@ -205,20 +205,25 @@ export const ownerApi = {
     maxGuests: number;
     description?: string;
   }) =>
-    request<unknown>("/owner/room-types", {
+    request<unknown>("/host/room-types", {
       method: "POST",
       body: JSON.stringify(body),
     }),
   updateRoomType: (
     id: string,
-    body: { name?: string; basePriceKobo?: number; maxGuests?: number; description?: string },
+    body: {
+      name?: string;
+      basePriceKobo?: number;
+      maxGuests?: number;
+      description?: string;
+    },
   ) =>
-    request<unknown>(`/owner/room-types/${id}`, {
+    request<unknown>(`/host/room-types/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   addRoomUnit: (body: { roomTypeId: string; code?: string }) =>
-    request<unknown>("/owner/room-units", {
+    request<unknown>("/host/room-units", {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -227,17 +232,50 @@ export const ownerApi = {
     filename: string;
     contentType: string;
   }) =>
-    request<MediaUploadTarget>("/owner/media/upload-url", {
+    request<MediaUploadTarget>("/host/media/upload-url", {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  attachPropertyMedia: (
-    propertyId: string,
-    body: { publicUrl: string; altText?: string; sortOrder?: number },
-  ) =>
-    request<MediaItem>(`/owner/media/property/${propertyId}`, {
+  // Attach is by storage KEY (from requestUpload) — the backend verifies the
+  // object and derives the public URL itself; clients never supply URLs.
+  attachPropertyMedia: (propertyId: string, body: { key: string; altText?: string }) =>
+    request<MediaItem>(`/host/media/property/${propertyId}`, {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+  attachRoomMedia: (roomTypeId: string, body: { key: string; altText?: string }) =>
+    request<MediaItem>(`/host/media/room/${roomTypeId}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  deletePropertyMedia: (mediaId: string) =>
+    request<{ ok: true }>(`/host/media/property-media/${mediaId}`, {
+      method: "DELETE",
+    }),
+  deleteRoomMedia: (mediaId: string) =>
+    request<{ ok: true }>(`/host/media/room-media/${mediaId}`, {
+      method: "DELETE",
+    }),
+  updatePropertyMediaAlt: (mediaId: string, altText: string | null) =>
+    request<MediaItem>(`/host/media/property-media/${mediaId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ altText }),
+    }),
+  updateRoomMediaAlt: (mediaId: string, altText: string | null) =>
+    request<MediaItem>(`/host/media/room-media/${mediaId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ altText }),
+    }),
+  /** Full new order for a gallery — first id becomes the cover. */
+  reorderPropertyMedia: (propertyId: string, mediaIds: string[]) =>
+    request<MediaItem[]>(`/host/media/property/${propertyId}/order`, {
+      method: "PUT",
+      body: JSON.stringify({ mediaIds }),
+    }),
+  reorderRoomMedia: (roomTypeId: string, mediaIds: string[]) =>
+    request<MediaItem[]>(`/host/media/room/${roomTypeId}/order`, {
+      method: "PUT",
+      body: JSON.stringify({ mediaIds }),
     }),
   setCapacity: (body: {
     roomTypeId: string;
@@ -253,8 +291,8 @@ export const ownerApi = {
     request<AvailabilityDay[]>(
       `/availability/room-types/${roomTypeId}?from=${from}&to=${to}`,
     ),
-  listBookings: () => request<OwnerBookingsView>("/owner/bookings"),
-  getBooking: (id: string) => request<BookingRow>(`/owner/bookings/${id}`),
+  listBookings: () => request<OwnerBookingsView>("/host/bookings"),
+  getBooking: (id: string) => request<BookingRow>(`/host/bookings/${id}`),
 };
 
 export const adminApi = {
@@ -333,7 +371,7 @@ export const authApi = {
     name?: string;
     phone: string;
   }) =>
-    request<AuthUser>("/auth/owner/register", {
+    request<AuthUser>("/auth/host/register", {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -390,8 +428,8 @@ export const authApi = {
     request<{ revoked: number }>("/auth/sessions/revoke-others", {
       method: "POST",
     }),
-  // Upgrade a signed-in guest to owner-capable (no duplicate account).
-  becomeOwner: () => request<AuthUser>("/owner/become", { method: "POST" }),
+  // Upgrade a signed-in guest to host-capable (no duplicate account).
+  becomeHost: () => request<AuthUser>("/host/become", { method: "POST" }),
 };
 
 export const settingsApi = {
@@ -422,38 +460,38 @@ interface PayoutMethodInput {
   provider?: string | null;
 }
 
-export const ownerApiSettings = {
-  onboarding: () => request<OwnerOnboardingState>("/owner/onboarding"),
+export const hostApiSettings = {
+  onboarding: () => request<OwnerOnboardingState>("/host/onboarding"),
   completeOnboarding: (skipPayout?: boolean) =>
-    request<OwnerOnboardingState>("/owner/onboarding/complete", {
+    request<OwnerOnboardingState>("/host/onboarding/complete", {
       method: "POST",
       body: JSON.stringify({ skipPayout: skipPayout ?? false }),
     }),
-  settings: () => request<OwnerSettingsView>("/owner/settings"),
+  settings: () => request<OwnerSettingsView>("/host/settings"),
   updateProfile: (body: {
     displayName?: string;
     businessName?: string;
     phone?: string;
   }) =>
-    request<OwnerProfileView>("/owner/settings/profile", {
+    request<OwnerProfileView>("/host/settings/profile", {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   listLocations: () =>
-    request<OwnerLocationView[]>("/owner/settings/locations"),
+    request<OwnerLocationView[]>("/host/settings/locations"),
   createLocation: (body: LocationInput) =>
-    request<OwnerLocationView>("/owner/settings/locations", {
+    request<OwnerLocationView>("/host/settings/locations", {
       method: "POST",
       body: JSON.stringify(body),
     }),
   updateLocation: (id: string, body: Partial<LocationInput>) =>
-    request<OwnerLocationView>(`/owner/settings/locations/${id}`, {
+    request<OwnerLocationView>(`/host/settings/locations/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   deleteLocation: (id: string, replacementLocationId?: string) =>
     request<OwnerLocationView[]>(
-      `/owner/settings/locations/${id}${
+      `/host/settings/locations/${id}${
         replacementLocationId
           ? `?replacementLocationId=${encodeURIComponent(replacementLocationId)}`
           : ""
@@ -461,9 +499,9 @@ export const ownerApiSettings = {
       { method: "DELETE" },
     ),
   getPayoutMethod: () =>
-    request<OwnerPayoutMethodView | null>("/owner/settings/payout-method"),
+    request<OwnerPayoutMethodView | null>("/host/settings/payout-method"),
   savePayoutMethod: (body: PayoutMethodInput) =>
-    request<OwnerPayoutMethodView>("/owner/settings/payout-method", {
+    request<OwnerPayoutMethodView>("/host/settings/payout-method", {
       method: "PUT",
       body: JSON.stringify(body),
     }),
@@ -663,26 +701,57 @@ export const guestApi = {
   getBooking: (id: string) => request<BookingView>(`/bookings/${id}`),
 };
 
-/** Direct PUT of a file to a storage upload target (step 2 of the media flow). */
-export async function uploadToTarget(
+/**
+ * Direct PUT of a file to a storage upload target (step 2 of the media flow).
+ * Uses XHR so callers can render real upload progress — fetch has no
+ * upload-progress events.
+ */
+export function uploadToTarget(
   target: MediaUploadTarget,
-  file: File,
+  file: Blob,
+  onProgress?: (fraction: number) => void,
 ): Promise<void> {
-  let res: Response;
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(target.method, target.uploadUrl);
+    for (const [name, value] of Object.entries(target.headers)) {
+      xhr.setRequestHeader(name, value);
+    }
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress(event.total > 0 ? event.loaded / event.total : 0);
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else {
+        reject(
+          new Error(
+            `Upload failed: ${xhr.status} ${xhr.statusText || "storage rejected the file"}`,
+          ),
+        );
+      }
+    };
+    // Network-level failure before a response — storage unreachable or the
+    // browser blocked it (e.g. missing CORS on the bucket). Config/infra
+    // issue, not something the host caused.
+    xhr.onerror = () => {
+      const host = safeHost(target.uploadUrl);
+      reject(
+        new Error(
+          `Couldn't reach storage${host ? ` (${host})` : ""} to upload this file. ` +
+            "Please try again in a moment, or contact support if this keeps happening.",
+        ),
+      );
+    };
+    xhr.send(file);
+  });
+}
+
+function safeHost(url: string): string {
   try {
-    res = await fetch(target.uploadUrl, {
-      method: target.method,
-      headers: target.headers,
-      body: file,
-    });
+    return new URL(url).host;
   } catch {
-    // The fetch itself failed before a response came back — the storage host
-    // is unreachable or the browser blocked it (e.g. missing CORS on the
-    // bucket). This is a config/infra issue, not something the owner caused.
-    throw new Error(
-      "Couldn't reach storage to upload this file. Please try again in a moment, " +
-        "or contact support if this keeps happening.",
-    );
+    return "";
   }
-  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
 }
