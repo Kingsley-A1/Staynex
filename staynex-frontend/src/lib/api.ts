@@ -209,6 +209,14 @@ export const ownerApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  updateRoomType: (
+    id: string,
+    body: { name?: string; basePriceKobo?: number; maxGuests?: number; description?: string },
+  ) =>
+    request<unknown>(`/owner/room-types/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
   addRoomUnit: (body: { roomTypeId: string; code?: string }) =>
     request<unknown>("/owner/room-units", {
       method: "POST",
@@ -660,10 +668,21 @@ export async function uploadToTarget(
   target: MediaUploadTarget,
   file: File,
 ): Promise<void> {
-  const res = await fetch(target.uploadUrl, {
-    method: target.method,
-    headers: target.headers,
-    body: file,
-  });
+  let res: Response;
+  try {
+    res = await fetch(target.uploadUrl, {
+      method: target.method,
+      headers: target.headers,
+      body: file,
+    });
+  } catch {
+    // The fetch itself failed before a response came back — the storage host
+    // is unreachable or the browser blocked it (e.g. missing CORS on the
+    // bucket). This is a config/infra issue, not something the owner caused.
+    throw new Error(
+      "Couldn't reach storage to upload this file. Please try again in a moment, " +
+        "or contact support if this keeps happening.",
+    );
+  }
   if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
 }

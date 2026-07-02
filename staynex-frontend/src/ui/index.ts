@@ -1,6 +1,7 @@
 export { Button, LinkButton, type ButtonProps, type LinkButtonProps } from "./button";
 export { Badge, ReviewStatusBadge, StatusBadge } from "./badge";
 export { Field, Input, Textarea, Select } from "./field";
+export { CurrencyInput } from "./currency-input";
 export { PasswordInput } from "./password-input";
 export { Stepper, type Step } from "./stepper";
 export { KpiCard } from "./kpi-card";

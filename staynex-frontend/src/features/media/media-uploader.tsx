@@ -4,6 +4,8 @@ import { type ChangeEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ownerApi, uploadToTarget } from "@/lib/api";
 
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
 export function MediaUploader({ propertyId }: { propertyId: string }) {
   const router = useRouter();
   const [status, setStatus] = useState<string | null>(null);
@@ -13,8 +15,19 @@ export function MediaUploader({ propertyId }: { propertyId: string }) {
   async function onChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    setBusy(true);
     setError(null);
+    setStatus(null);
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      setError("That image is larger than 10 MB. Please choose a smaller file.");
+      event.target.value = "";
+      return;
+    }
+    setBusy(true);
     setStatus("Requesting upload URL…");
     try {
       const target = await ownerApi.requestUpload({

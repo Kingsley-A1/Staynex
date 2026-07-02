@@ -19,10 +19,11 @@ export interface StorageProvider {
 export const STORAGE_PROVIDER = "STORAGE_PROVIDER";
 
 /**
- * Credential-free dev/stub provider. Returns a deterministic upload target with
- * NO real R2 credentials and NO S3 SDK dependency, so the end-to-end media flow
- * is wired for Phase 2. Replace with an S3-compatible R2 provider that issues a
- * real presigned PUT before production (see Known limits).
+ * Credential-free dev/local fallback. Used only when R2 credentials are not
+ * configured (see `r2ConfigPresent()` / `MediaModule`), so local development
+ * without cloud storage still exercises the request/attach flow shape. The
+ * `uploadUrl` it returns does not resolve to a real host — do not use this in
+ * any environment where an owner needs uploads to actually succeed.
  */
 @Injectable()
 export class StubStorageProvider implements StorageProvider {

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { RoomGalleryCarousel, StatusBadge } from "@/ui";
+import { LinkButton, RoomGalleryCarousel, StatusBadge } from "@/ui";
 import { PropertyForm } from "@/features/properties/property-form";
 import { ReviewStatusPanel } from "@/features/properties/review-status-panel";
 import { RoomManager } from "@/features/properties/room-manager";
@@ -32,7 +32,14 @@ export default async function EditPropertyPage({
           <h1 className="text-title-lg text-ink">{property.name}</h1>
           <p className="text-muted-foreground">{property.cityName}, Nigeria</p>
         </div>
-        <StatusBadge status={property.status} />
+        <div className="flex items-center gap-3">
+          {property.status === "APPROVED" && (
+            <LinkButton href={`/stays/${property.slug}`} variant="secondary" size="sm">
+              View live listing
+            </LinkButton>
+          )}
+          <StatusBadge status={property.status} />
+        </div>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
