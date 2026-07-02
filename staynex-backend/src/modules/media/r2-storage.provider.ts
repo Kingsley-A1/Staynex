@@ -1,8 +1,19 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  HeadObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { MediaUploadTarget } from "../../../types";
-import type { CreateUploadInput, StorageProvider } from "./storage";
+import type {
+  CreateUploadInput,
+  StorageProvider,
+  StoredObjectInfo,
+  StoredObjectSummary,
+} from "./storage";
 
 const SIGNED_URL_TTL_SECONDS = 900;
 
@@ -73,6 +84,62 @@ export class R2StorageProvider implements StorageProvider {
 
   publicUrl(key: string): string {
     return `${this.publicBase}/${key}`;
+  }
+
+  keyForUrl(url: string): string | null {
+    const prefix = `${this.publicBase}/`;
+    return url.startsWith(prefix) ? url.slice(prefix.length) : null;
+  }
+
+  async headObject(key: string): Promise<StoredObjectInfo | null> {
+    try {
+      const head = await this.client.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+      return {
+        contentType: head.ContentType ?? null,
+        sizeBytes: head.ContentLength ?? 0,
+      };
+    } catch (err) {
+      // NotFound is the expected miss; anything else is worth a log line.
+      if ((err as { name?: string }).name !== "NotFound") {
+        this.logger.warn(
+          `R2 head failed for ${key}: ${err instanceof Error ? err.message : "unknown"}`,
+        );
+      }
+      return null;
+    }
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  async listObjects(
+    prefix: string,
+    olderThan: Date,
+    max: number,
+  ): Promise<StoredObjectSummary[]> {
+    const results: StoredObjectSummary[] = [];
+    let continuationToken: string | undefined;
+    do {
+      const page = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        }),
+      );
+      for (const object of page.Contents ?? []) {
+        if (!object.Key || !object.LastModified) continue;
+        if (object.LastModified < olderThan) {
+          results.push({ key: object.Key, lastModified: object.LastModified });
+          if (results.length >= max) return results;
+        }
+      }
+      continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (continuationToken);
+    return results;
   }
 }
 

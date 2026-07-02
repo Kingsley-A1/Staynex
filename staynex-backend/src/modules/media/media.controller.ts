@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Param, Patch, Post, Put, UseGuards } from "@nestjs/common";
 import type { AuthUser } from "../../../types";
 import { parseBody } from "../../common/http";
 import { RateLimit } from "../../common/rate-limit.guard";
@@ -9,9 +9,14 @@ import {
   SessionGuard,
 } from "../auth/access-control";
 import { MediaService } from "./media.service";
-import { attachMediaSchema, requestUploadSchema } from "./dto";
+import {
+  attachMediaSchema,
+  reorderMediaSchema,
+  requestUploadSchema,
+  updateMediaSchema,
+} from "./dto";
 
-@Controller("owner/media")
+@Controller("host/media")
 @UseGuards(SessionGuard, CapabilitiesGuard)
 @RequireAnyCapability("OWNER")
 export class MediaController {
@@ -36,12 +41,12 @@ export class MediaController {
     keyBy: ["user"],
   })
   async attachProperty(
-    @CurrentUser() owner: AuthUser,
+    @CurrentUser() host: AuthUser,
     @Param("propertyId") propertyId: string,
     @Body() body: unknown,
   ) {
     return this.media.attachPropertyMedia(
-      owner.id,
+      host.id,
       propertyId,
       parseBody(attachMediaSchema, body),
     );
@@ -55,14 +60,82 @@ export class MediaController {
     keyBy: ["user"],
   })
   async attachRoom(
-    @CurrentUser() owner: AuthUser,
+    @CurrentUser() host: AuthUser,
     @Param("roomTypeId") roomTypeId: string,
     @Body() body: unknown,
   ) {
     return this.media.attachRoomMedia(
-      owner.id,
+      host.id,
       roomTypeId,
       parseBody(attachMediaSchema, body),
     );
+  }
+
+  @Put("property/:propertyId/order")
+  async reorderProperty(
+    @CurrentUser() host: AuthUser,
+    @Param("propertyId") propertyId: string,
+    @Body() body: unknown,
+  ) {
+    return this.media.reorderPropertyMedia(
+      host.id,
+      propertyId,
+      parseBody(reorderMediaSchema, body).mediaIds,
+    );
+  }
+
+  @Put("room/:roomTypeId/order")
+  async reorderRoom(
+    @CurrentUser() host: AuthUser,
+    @Param("roomTypeId") roomTypeId: string,
+    @Body() body: unknown,
+  ) {
+    return this.media.reorderRoomMedia(
+      host.id,
+      roomTypeId,
+      parseBody(reorderMediaSchema, body).mediaIds,
+    );
+  }
+
+  @Patch("property-media/:mediaId")
+  async updatePropertyMedia(
+    @CurrentUser() host: AuthUser,
+    @Param("mediaId") mediaId: string,
+    @Body() body: unknown,
+  ) {
+    return this.media.updatePropertyMediaAlt(
+      host.id,
+      mediaId,
+      parseBody(updateMediaSchema, body).altText,
+    );
+  }
+
+  @Patch("room-media/:mediaId")
+  async updateRoomMedia(
+    @CurrentUser() host: AuthUser,
+    @Param("mediaId") mediaId: string,
+    @Body() body: unknown,
+  ) {
+    return this.media.updateRoomMediaAlt(
+      host.id,
+      mediaId,
+      parseBody(updateMediaSchema, body).altText,
+    );
+  }
+
+  @Delete("property-media/:mediaId")
+  async deletePropertyMedia(
+    @CurrentUser() host: AuthUser,
+    @Param("mediaId") mediaId: string,
+  ) {
+    return this.media.deletePropertyMedia(host.id, mediaId);
+  }
+
+  @Delete("room-media/:mediaId")
+  async deleteRoomMedia(
+    @CurrentUser() host: AuthUser,
+    @Param("mediaId") mediaId: string,
+  ) {
+    return this.media.deleteRoomMedia(host.id, mediaId);
   }
 }

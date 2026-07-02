@@ -44,7 +44,8 @@ export interface PropertyReviewPolicyResult {
 }
 
 const MIN_DESCRIPTION_CHARS = 40;
-const MIN_PROPERTY_IMAGES = 4;
+/** Exported: media management enforces this floor on live listings too. */
+export const MIN_PROPERTY_IMAGES = 4;
 const MIN_AVAILABLE_FUTURE_DAYS = 30;
 
 export function evaluatePropertyReview(
