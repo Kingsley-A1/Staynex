@@ -16,7 +16,7 @@ export default async function ApprovalsPage() {
         <p className="text-muted-foreground">
           {data
             ? `${queue.length} propert${queue.length === 1 ? "y" : "ies"} awaiting review.`
-            : "Review properties submitted by owners."}
+            : "Review properties submitted by hosts."}
         </p>
       </header>
 

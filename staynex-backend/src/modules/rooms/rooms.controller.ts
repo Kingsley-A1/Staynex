@@ -23,7 +23,7 @@ import {
   updateRoomTypeSchema,
 } from "./dto";
 
-@Controller("owner")
+@Controller("host")
 @UseGuards(SessionGuard, CapabilitiesGuard)
 @RequireAnyCapability("OWNER")
 export class RoomsController {

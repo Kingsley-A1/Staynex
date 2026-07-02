@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-// Presentational settings primitives (no client state) shared by guest/owner/
-// admin settings and the owner onboarding flow. Settings are composed of small
+// Presentational settings primitives (no client state) shared by guest/host/
+// admin settings and the host onboarding flow. Settings are composed of small
 // cards — never one giant form.
 
 export function SettingsShell({

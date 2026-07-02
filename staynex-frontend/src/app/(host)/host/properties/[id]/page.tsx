@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
-import { LinkButton, RoomGalleryCarousel, StatusBadge } from "@/ui";
+import { LinkButton, StatusBadge } from "@/ui";
 import { PropertyForm } from "@/features/properties/property-form";
 import { ReviewStatusPanel } from "@/features/properties/review-status-panel";
 import { RoomManager } from "@/features/properties/room-manager";
 import { SubmitForReview } from "@/features/properties/submit-for-review";
-import { MediaUploader } from "@/features/media/media-uploader";
-import { getCities, getOwnerProperty } from "@/lib/server-owner";
+import { MediaManager } from "@/features/media/media-manager";
+import { getCities, getHostProperty } from "@/lib/server-host";
 
 export const dynamic = "force-dynamic";
 
@@ -15,15 +15,8 @@ export default async function EditPropertyPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [property, cities] = await Promise.all([getOwnerProperty(id), getCities()]);
+  const [property, cities] = await Promise.all([getHostProperty(id), getCities()]);
   if (!property) notFound();
-
-  const slides = [
-    ...property.media.map((m) => ({ id: m.id, url: m.url, altText: m.altText })),
-    ...property.roomTypes.flatMap((rt) =>
-      rt.media.map((m) => ({ id: m.id, url: m.url, altText: m.altText })),
-    ),
-  ];
 
   return (
     <div className="space-y-6">
@@ -57,11 +50,12 @@ export default async function EditPropertyPage({
 
         <aside className="space-y-6">
           <ReviewStatusPanel property={property} />
-          <section className="space-y-3">
-            <h2 className="text-title-sm text-ink">Gallery preview</h2>
-            <RoomGalleryCarousel slides={slides} label={`${property.name} gallery`} />
-          </section>
-          <MediaUploader propertyId={property.id} />
+          <MediaManager
+            target={{ kind: "property", id: property.id }}
+            media={property.media}
+            heading="Property photos"
+            description="Guests see the cover photo first. At least 4 photos are needed to go live; large photos are resized automatically."
+          />
           <SubmitForReview propertyId={property.id} status={property.status} />
         </aside>
       </div>

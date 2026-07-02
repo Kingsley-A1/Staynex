@@ -1,5 +1,5 @@
 import { PropertyForm } from "@/features/properties/property-form";
-import { getCities } from "@/lib/server-owner";
+import { getCities } from "@/lib/server-host";
 
 export const dynamic = "force-dynamic";
 

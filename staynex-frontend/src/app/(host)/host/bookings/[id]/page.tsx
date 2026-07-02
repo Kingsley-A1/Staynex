@@ -4,7 +4,7 @@ import {
   PaymentStatusBadge,
   PayoutStatusBadge,
 } from "@/components/status-pill";
-import { getOwnerBooking } from "@/lib/server-reports";
+import { getHostBooking } from "@/lib/server-reports";
 import { formatNairaFromKobo, formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -24,12 +24,12 @@ export default async function OwnerBookingDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { data: booking, offline } = await getOwnerBooking(id);
+  const { data: booking, offline } = await getHostBooking(id);
 
   if (!booking) {
     return (
       <div className="space-y-4">
-        <LinkButton href="/owner/bookings" variant="secondary">
+        <LinkButton href="/host/bookings" variant="secondary">
           ← All bookings
         </LinkButton>
         <div className="surface-card p-6 text-center text-muted-foreground" role="status">
@@ -43,7 +43,7 @@ export default async function OwnerBookingDetailPage({
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
-      <LinkButton href="/owner/bookings" variant="secondary">
+      <LinkButton href="/host/bookings" variant="secondary">
         ← All bookings
       </LinkButton>
 

@@ -1,7 +1,7 @@
 import { KpiCard, LinkButton, PropertyCard } from "@/ui";
 import { getOwnerKpis } from "@/features/properties/fixtures";
-import { getOwnerBookings } from "@/lib/server-reports";
-import { getOwnerProperties } from "@/lib/server-owner";
+import { getHostBookings } from "@/lib/server-reports";
+import { getHostProperties } from "@/lib/server-host";
 import { formatNairaFromKobo } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +10,8 @@ export default async function OwnerDashboardPage() {
   const fallback = getOwnerKpis();
   // Live booking KPIs + the owner's own listings for the signed-in owner.
   const [{ data: live }, properties] = await Promise.all([
-    getOwnerBookings(),
-    getOwnerProperties(),
+    getHostBookings(),
+    getHostProperties(),
   ]);
 
   const confirmed = live ? String(live.kpis.confirmedBookings) : "—";
@@ -27,10 +27,10 @@ export default async function OwnerDashboardPage() {
           <p className="text-muted-foreground">Your supply at a glance.</p>
         </div>
         <div className="flex gap-2">
-          <LinkButton href="/owner/bookings" variant="secondary">
+          <LinkButton href="/host/bookings" variant="secondary">
             View bookings
           </LinkButton>
-          <LinkButton href="/owner/properties/new">New property</LinkButton>
+          <LinkButton href="/host/properties/new">New property</LinkButton>
         </div>
       </header>
 
@@ -38,15 +38,15 @@ export default async function OwnerDashboardPage() {
         <KpiCard
           label="Confirmed bookings"
           value={confirmed}
-          href="/owner/bookings"
+          href="/host/bookings"
           hint={live ? undefined : "Connect API for live data"}
         />
-        <KpiCard label="Pending payments" value={pendingPayments} href="/owner/bookings" />
-        <KpiCard label="Available rooms" value={availableRooms} href="/owner/properties" />
+        <KpiCard label="Pending payments" value={pendingPayments} href="/host/bookings" />
+        <KpiCard label="Available rooms" value={availableRooms} href="/host/properties" />
         <KpiCard
           label="Net earnings"
           value={earnings}
-          href="/owner/bookings"
+          href="/host/bookings"
           hint={live ? "After platform fee" : "Connect API for live data"}
         />
       </div>
@@ -56,7 +56,7 @@ export default async function OwnerDashboardPage() {
         {properties && properties.length > 0 ? (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {properties.map((p) => (
-              <PropertyCard key={p.id} property={p} href={`/owner/properties/${p.id}`} />
+              <PropertyCard key={p.id} property={p} href={`/host/properties/${p.id}`} />
             ))}
           </div>
         ) : (
@@ -64,7 +64,7 @@ export default async function OwnerDashboardPage() {
             <p className="text-muted-foreground">
               {properties ? "No properties yet." : "Couldn't load your properties."}
             </p>
-            <LinkButton href="/owner/properties/new" className="mt-4">
+            <LinkButton href="/host/properties/new" className="mt-4">
               {properties ? "Create your first property" : "Add a property"}
             </LinkButton>
           </div>

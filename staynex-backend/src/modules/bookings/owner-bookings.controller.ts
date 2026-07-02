@@ -10,7 +10,7 @@ import { BookingReportsService } from "./booking-reports.service";
 
 // Reads are owner-scoped in the service so one owner can never see another
 // owner's bookings.
-@Controller("owner/bookings")
+@Controller("host/bookings")
 @UseGuards(SessionGuard, CapabilitiesGuard)
 @RequireAnyCapability("OWNER")
 export class OwnerBookingsController {

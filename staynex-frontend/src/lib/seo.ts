@@ -42,7 +42,7 @@ export const PUBLIC_SITEMAP_ROUTES = [
   "/list-your-property",
   "/sign-in",
   "/register",
-  "/owner/register",
+  "/host/register",
   "/terms",
   "/policies",
   "/legal",

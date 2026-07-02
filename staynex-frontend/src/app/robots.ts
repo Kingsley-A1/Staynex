@@ -14,7 +14,7 @@ export default function robots(): MetadataRoute.Robots {
             allow: "/",
             disallow: [
               "/admin/",
-              "/owner/",
+              "/host/",
               "/checkout",
               "/profile",
               "/settings",

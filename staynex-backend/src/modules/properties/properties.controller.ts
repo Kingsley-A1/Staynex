@@ -19,7 +19,7 @@ import {
 import { PropertiesService } from "./properties.service";
 import { createPropertySchema, updatePropertySchema } from "./dto";
 
-@Controller("owner/properties")
+@Controller("host/properties")
 @UseGuards(SessionGuard, CapabilitiesGuard)
 @RequireAnyCapability("OWNER")
 export class PropertiesController {

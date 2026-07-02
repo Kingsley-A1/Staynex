@@ -17,7 +17,7 @@ export default function ListYourPropertyPage() {
     <main className="layout-container py-12">
       <div className="mx-auto max-w-2xl">
         <header className="text-center">
-          <p className="text-overline">For property owners</p>
+          <p className="text-overline">For hosts</p>
           <h1 className="mt-2 text-title-lg text-ink">
             Turn your property into a reliable booking channel
           </h1>
@@ -42,11 +42,11 @@ export default function ListYourPropertyPage() {
         </ol>
 
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <LinkButton href="/owner/register?next=/owner/onboarding">
-            Get started as an owner
+          <LinkButton href="/host/register?next=/host/onboarding">
+            Get started as a host
           </LinkButton>
-          <LinkButton href="/owner/dashboard" variant="secondary">
-            Owner dashboard
+          <LinkButton href="/host/dashboard" variant="secondary">
+            Host dashboard
           </LinkButton>
         </div>
       </div>

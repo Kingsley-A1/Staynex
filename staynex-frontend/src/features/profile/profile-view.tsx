@@ -8,7 +8,7 @@ import type { AppRole, AuthUser } from "@/lib/types";
 
 const ROLE_LABELS: Record<AppRole, string> = {
   GUEST: "Guest",
-  OWNER: "Property owner",
+  OWNER: "Host",
   ADMIN_REVIEWER: "Admin",
   ADMIN_MANAGER: "Super Admin",
 };

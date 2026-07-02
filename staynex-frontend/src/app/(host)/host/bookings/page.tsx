@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { KpiCard } from "@/ui";
 import { BookingStatusBadge, PaymentStatusBadge, PayoutStatusBadge } from "@/components/status-pill";
-import { getOwnerBookings } from "@/lib/server-reports";
+import { getHostBookings } from "@/lib/server-reports";
 import { formatNairaFromKobo, formatDate, formatOccupancy } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function OwnerBookingsPage() {
   // Session-only auth: the backend scopes every row to the signed-in owner.
-  const { data, offline } = await getOwnerBookings();
+  const { data, offline } = await getHostBookings();
 
   return (
     <div className="space-y-8">
@@ -51,7 +51,7 @@ export default async function OwnerBookingsPage() {
                 {data.bookings.map((b) => (
                   <li key={b.id}>
                     <Link
-                      href={`/owner/bookings/${b.id}`}
+                      href={`/host/bookings/${b.id}`}
                       className="surface-card flex flex-col gap-3 p-4 transition-colors hover:bg-secondary sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0">

@@ -31,7 +31,7 @@ import {
   updateLocationSchema,
 } from "./dto";
 
-@Controller("owner")
+@Controller("host")
 @UseGuards(SessionGuard, CapabilitiesGuard)
 export class OwnerController {
   constructor(

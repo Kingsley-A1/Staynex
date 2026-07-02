@@ -3,16 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, LinkButton } from "@/ui";
-import { apiErrorMessage, authApi, catalogApi, ownerApiSettings } from "@/lib/api";
+import { apiErrorMessage, authApi, catalogApi, hostApiSettings } from "@/lib/api";
 import {
   type AuthUser,
   type CityOption,
   isOwnerCapable,
   type OwnerOnboardingState,
 } from "@/lib/types";
-import { OwnerLocationsManager, OwnerPayoutCard, OwnerProfileCard } from "./owner-cards";
+import { HostLocationsManager, HostPayoutCard, HostProfileCard } from "./host-cards";
 
-export function OwnerOnboarding() {
+export function HostOnboarding() {
   const router = useRouter();
   const [me, setMe] = useState<AuthUser | null | undefined>(undefined);
   const [state, setState] = useState<OwnerOnboardingState | null>(null);
@@ -25,7 +25,7 @@ export function OwnerOnboarding() {
     const user = await authApi.me();
     setMe(user);
     if (isOwnerCapable(user)) {
-      const [s, c] = await Promise.all([ownerApiSettings.onboarding(), catalogApi.cities()]);
+      const [s, c] = await Promise.all([hostApiSettings.onboarding(), catalogApi.cities()]);
       setState(s);
       setCities(c);
     }
@@ -36,13 +36,13 @@ export function OwnerOnboarding() {
   }, [load]);
 
   const reloadState = useCallback(async () => {
-    setState(await ownerApiSettings.onboarding());
+    setState(await hostApiSettings.onboarding());
   }, []);
 
-  async function becomeOwner() {
+  async function becomeHost() {
     setUpgrading(true);
     try {
-      await authApi.becomeOwner();
+      await authApi.becomeHost();
       await load();
     } finally {
       setUpgrading(false);
@@ -53,7 +53,7 @@ export function OwnerOnboarding() {
     setFinishing(true);
     setFinishError(null);
     try {
-      setState(await ownerApiSettings.completeOnboarding(skipPayout));
+      setState(await hostApiSettings.completeOnboarding(skipPayout));
     } catch (err) {
       setFinishError(apiErrorMessage(err, "Couldn't finish onboarding. Complete the steps above."));
     } finally {
@@ -69,10 +69,10 @@ export function OwnerOnboarding() {
     return (
       <Gate
         title="Sign in to continue"
-        body="Create an owner account or sign in to set up your hosting profile."
+        body="Create a host account or sign in to set up your hosting profile."
       >
-        <LinkButton href="/owner/register?next=/owner/onboarding">Create owner account</LinkButton>
-        <LinkButton href="/sign-in?next=/owner/onboarding" variant="secondary">
+        <LinkButton href="/host/register?next=/host/onboarding">Create host account</LinkButton>
+        <LinkButton href="/sign-in?next=/host/onboarding" variant="secondary">
           Sign in
         </LinkButton>
       </Gate>
@@ -85,7 +85,7 @@ export function OwnerOnboarding() {
         title="Become a host"
         body="You're signed in as a guest. Upgrade this account to start hosting — no need to create a new one."
       >
-        <Button onClick={becomeOwner} disabled={upgrading}>
+        <Button onClick={becomeHost} disabled={upgrading}>
           {upgrading ? "Please wait…" : "Continue as owner"}
         </Button>
       </Gate>
@@ -115,8 +115,8 @@ export function OwnerOnboarding() {
             </p>
           </div>
           <div className="flex flex-wrap justify-center gap-2">
-            <LinkButton href="/owner/properties/new">Create your first property</LinkButton>
-            <LinkButton href="/owner/settings" variant="secondary">
+            <LinkButton href="/host/properties/new">Create your first property</LinkButton>
+            <LinkButton href="/host/settings" variant="secondary">
               Manage settings
             </LinkButton>
           </div>
@@ -140,9 +140,9 @@ export function OwnerOnboarding() {
         />
       </ol>
 
-      <OwnerProfileCard profile={state.profile} onChanged={reloadState} />
-      <OwnerLocationsManager locations={state.locations} cities={cities} onChanged={reloadState} />
-      <OwnerPayoutCard payoutMethod={state.payoutMethod} onChanged={reloadState} />
+      <HostProfileCard profile={state.profile} onChanged={reloadState} />
+      <HostLocationsManager locations={state.locations} cities={cities} onChanged={reloadState} />
+      <HostPayoutCard payoutMethod={state.payoutMethod} onChanged={reloadState} />
 
       <div className="surface-card space-y-3 p-6">
         <h2 className="text-title-sm text-ink">Finish onboarding</h2>
@@ -164,7 +164,7 @@ export function OwnerOnboarding() {
               </Button>
               <button
                 type="button"
-                onClick={() => router.push("/owner/dashboard")}
+                onClick={() => router.push("/host/dashboard")}
                 className="text-sm font-medium text-muted-foreground hover:text-ink"
               >
                 Go to dashboard

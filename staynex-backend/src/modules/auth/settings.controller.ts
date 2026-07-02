@@ -5,8 +5,8 @@ import { CurrentUser, SessionGuard } from "./access-control";
 import { AuthService } from "./auth.service";
 import { updateProfileSchema } from "./dto";
 
-// Basic account settings for any signed-in user. Owner/admin-specific settings
-// live under /owner/settings and /admin. Kept thin — logic stays in AuthService.
+// Basic account settings for any signed-in user. Host/admin-specific settings
+// live under /host/settings and /admin. Kept thin — logic stays in AuthService.
 @Controller("settings")
 @UseGuards(SessionGuard)
 export class SettingsController {

@@ -3,8 +3,9 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, CurrencyInput, Field, Input } from "@/ui";
-import { ownerApi } from "@/lib/api";
+import { hostApi } from "@/lib/api";
 import { formatNairaFromKobo } from "@/lib/format";
+import { MediaManager } from "@/features/media/media-manager";
 import type { RoomTypeDetail } from "@/lib/types";
 
 export function RoomManager({
@@ -22,6 +23,7 @@ export function RoomManager({
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [justSavedId, setJustSavedId] = useState<string | null>(null);
+  const [photosOpenId, setPhotosOpenId] = useState<string | null>(null);
 
   // Clear the "Saved" flash a couple seconds after it appears.
   useEffect(() => {
@@ -35,7 +37,7 @@ export function RoomManager({
     setPending(true);
     setError(null);
     try {
-      await ownerApi.createRoomType({
+      await hostApi.createRoomType({
         propertyId,
         name,
         basePriceKobo: Number(priceNaira) * 100,
@@ -55,7 +57,7 @@ export function RoomManager({
   async function addUnit(roomTypeId: string) {
     setError(null);
     try {
-      await ownerApi.addRoomUnit({ roomTypeId });
+      await hostApi.addRoomUnit({ roomTypeId });
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add unit");
@@ -81,37 +83,54 @@ export function RoomManager({
               }}
             />
           ) : (
-            <li
-              key={rt.id}
-              className="surface-card flex flex-wrap items-center justify-between gap-3 p-4"
-            >
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="font-semibold text-ink">{rt.name}</p>
-                  {justSavedId === rt.id && (
-                    <span className="text-caption font-medium text-success" role="status">
-                      Saved
-                    </span>
-                  )}
+            <li key={rt.id} className="surface-card space-y-3 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-ink">{rt.name}</p>
+                    {justSavedId === rt.id && (
+                      <span className="text-caption font-medium text-success" role="status">
+                        Saved
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-caption">
+                    {formatNairaFromKobo(rt.basePriceKobo)} / night · up to {rt.maxGuests} guests ·{" "}
+                    {rt.unitCount} unit{rt.unitCount === 1 ? "" : "s"}
+                  </p>
                 </div>
-                <p className="text-caption">
-                  {formatNairaFromKobo(rt.basePriceKobo)} / night · up to {rt.maxGuests} guests ·{" "}
-                  {rt.unitCount} unit{rt.unitCount === 1 ? "" : "s"}
-                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setPhotosOpenId((current) => (current === rt.id ? null : rt.id))
+                    }
+                  >
+                    {photosOpenId === rt.id ? "Hide photos" : `Photos (${rt.media.length})`}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingId(rt.id)}
+                  >
+                    Edit
+                  </Button>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => addUnit(rt.id)}>
+                    Add unit
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setEditingId(rt.id)}
-                >
-                  Edit
-                </Button>
-                <Button type="button" variant="secondary" size="sm" onClick={() => addUnit(rt.id)}>
-                  Add unit
-                </Button>
-              </div>
+              {photosOpenId === rt.id && (
+                <MediaManager
+                  target={{ kind: "room", id: rt.id }}
+                  media={rt.media}
+                  heading={`${rt.name} photos`}
+                  description="Shown in the room gallery on your listing page."
+                />
+              )}
             </li>
           ),
         )}
@@ -185,7 +204,7 @@ function RoomTypeEditCard({
     setPending(true);
     setError(null);
     try {
-      await ownerApi.updateRoomType(roomType.id, {
+      await hostApi.updateRoomType(roomType.id, {
         name,
         basePriceKobo: Number(priceNaira) * 100,
         maxGuests: Number(maxGuests),

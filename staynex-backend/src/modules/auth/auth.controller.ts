@@ -78,9 +78,9 @@ export class AuthController {
     return result.user;
   }
 
-  @Post("owner/register")
+  @Post("host/register")
   @RateLimit({
-    bucket: "auth:owner-register",
+    bucket: "auth:host-register",
     limit: 6,
     windowMs: AUTH_WINDOW_MS,
     keyBy: ["ip", "email"],

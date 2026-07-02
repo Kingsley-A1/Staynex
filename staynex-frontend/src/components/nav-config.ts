@@ -1,4 +1,4 @@
-// Central role navigation data — reused by the owner/admin dashboard shells and
+// Central role navigation data — reused by the host/admin dashboard shells and
 // the guest nav so navigation isn't duplicated per layout. Workspace items carry
 // an icon (drawn from components/icons.tsx) and an optional section label so the
 // collapsible sidebar can group + show an icon rail when collapsed.
@@ -23,12 +23,12 @@ export const GUEST_NAV: NavItem[] = [
   { href: "/settings", label: "Settings" },
 ];
 
-export const OWNER_NAV: WorkspaceNavItem[] = [
-  { href: "/owner/dashboard", label: "Dashboard", icon: "overview", section: "Workspace" },
-  { href: "/owner/properties", label: "Properties", icon: "properties", section: "Workspace" },
-  { href: "/owner/bookings", label: "Bookings", icon: "bookings", section: "Workspace" },
-  { href: "/owner/onboarding", label: "Onboarding", icon: "onboarding", section: "Account" },
-  { href: "/owner/settings", label: "Settings", icon: "settings", section: "Account" },
+export const HOST_NAV: WorkspaceNavItem[] = [
+  { href: "/host/dashboard", label: "Dashboard", icon: "overview", section: "Workspace" },
+  { href: "/host/properties", label: "Properties", icon: "properties", section: "Workspace" },
+  { href: "/host/bookings", label: "Bookings", icon: "bookings", section: "Workspace" },
+  { href: "/host/onboarding", label: "Onboarding", icon: "onboarding", section: "Account" },
+  { href: "/host/settings", label: "Settings", icon: "settings", section: "Account" },
 ];
 
 export const ADMIN_NAV: WorkspaceNavItem[] = [

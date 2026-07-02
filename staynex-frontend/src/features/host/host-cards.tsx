@@ -4,7 +4,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Button, Field, Input, Select } from "@/ui";
 import { EditableCard } from "@/features/settings/editable-card";
 import { SettingsCard, SettingsRow } from "@/features/settings/settings-shell";
-import { apiErrorMessage, areasApi, ownerApiSettings } from "@/lib/api";
+import { apiErrorMessage, areasApi, hostApiSettings } from "@/lib/api";
 import {
   type AreaOption,
   type CityOption,
@@ -26,7 +26,7 @@ interface LocationInput {
 
 // --- Business profile -------------------------------------------------------
 
-export function OwnerProfileCard({
+export function HostProfileCard({
   profile,
   onChanged,
 }: {
@@ -44,7 +44,7 @@ export function OwnerProfileCard({
   }
 
   async function save() {
-    await ownerApiSettings.updateProfile({
+    await hostApiSettings.updateProfile({
       displayName: displayName.trim() || undefined,
       businessName: businessName.trim() || undefined,
       phone: phone.trim() || undefined,
@@ -109,7 +109,7 @@ export function OwnerProfileCard({
 
 // --- Payout method ----------------------------------------------------------
 
-export function OwnerPayoutCard({
+export function HostPayoutCard({
   payoutMethod,
   onChanged,
 }: {
@@ -129,7 +129,7 @@ export function OwnerPayoutCard({
   }
 
   async function save() {
-    await ownerApiSettings.savePayoutMethod({
+    await hostApiSettings.savePayoutMethod({
       bankName: bankName.trim(),
       accountName: accountName.trim(),
       accountNumber: accountNumber.trim(),
@@ -216,7 +216,7 @@ export function OwnerPayoutCard({
 
 // --- Locations --------------------------------------------------------------
 
-export function OwnerLocationsManager({
+export function HostLocationsManager({
   locations,
   cities,
   onChanged,
@@ -230,13 +230,13 @@ export function OwnerLocationsManager({
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function add(input: LocationInput) {
-    await ownerApiSettings.createLocation(input);
+    await hostApiSettings.createLocation(input);
     setAdding(false);
     await onChanged();
   }
 
   async function update(id: string, input: LocationInput) {
-    await ownerApiSettings.updateLocation(id, input);
+    await hostApiSettings.updateLocation(id, input);
     setEditingId(null);
     await onChanged();
   }
@@ -330,7 +330,7 @@ function LocationRow({
     setBusy(true);
     setError(null);
     try {
-      await ownerApiSettings.deleteLocation(location.id, replacementId || undefined);
+      await hostApiSettings.deleteLocation(location.id, replacementId || undefined);
       await onDeleted();
     } catch (err) {
       setError(apiErrorMessage(err, "Couldn't delete this location."));

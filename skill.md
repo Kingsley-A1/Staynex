@@ -106,7 +106,7 @@ Public routes should support:
 - `/policies`
 - `/list-your-property`
 
-Owner routes should support onboarding, properties, rooms, availability, bookings, earnings, settings, and support.
+Host routes (`/host/*` — the property-owner workspace; user-facing copy says "host") should support onboarding, properties, rooms, availability, bookings, earnings, settings, and support.
 
 Admin routes should support overview, property approval, owners, guests, bookings, payments, users, audit logs, AI logs, and platform settings.
 

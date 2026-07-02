@@ -2,21 +2,21 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { LinkButton } from "@/ui";
-import { catalogApi, ownerApiSettings } from "@/lib/api";
+import { catalogApi, hostApiSettings } from "@/lib/api";
 import type { CityOption, OwnerSettingsView } from "@/lib/types";
-import { OwnerLocationsManager, OwnerPayoutCard, OwnerProfileCard } from "./owner-cards";
+import { HostLocationsManager, HostPayoutCard, HostProfileCard } from "./host-cards";
 
-export function OwnerSettings() {
+export function HostSettings() {
   const [data, setData] = useState<OwnerSettingsView | null | undefined>(undefined);
   const [cities, setCities] = useState<CityOption[]>([]);
 
   const reload = useCallback(async () => {
-    setData(await ownerApiSettings.settings());
+    setData(await hostApiSettings.settings());
   }, []);
 
   useEffect(() => {
     let active = true;
-    Promise.all([ownerApiSettings.settings(), catalogApi.cities()])
+    Promise.all([hostApiSettings.settings(), catalogApi.cities()])
       .then(([d, c]) => {
         if (!active) return;
         setData(d);
@@ -35,18 +35,18 @@ export function OwnerSettings() {
     return (
       <div className="surface-card space-y-3 p-6 text-center">
         <p className="text-muted-foreground">
-          You need an owner account to manage these settings.
+          You need a host account to manage these settings.
         </p>
-        <LinkButton href="/owner/register?next=/owner/onboarding">Become a host</LinkButton>
+        <LinkButton href="/host/register?next=/host/onboarding">Become a host</LinkButton>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <OwnerProfileCard profile={data.profile} onChanged={reload} />
-      <OwnerLocationsManager locations={data.locations} cities={cities} onChanged={reload} />
-      <OwnerPayoutCard payoutMethod={data.payoutMethod} onChanged={reload} />
+      <HostProfileCard profile={data.profile} onChanged={reload} />
+      <HostLocationsManager locations={data.locations} cities={cities} onChanged={reload} />
+      <HostPayoutCard payoutMethod={data.payoutMethod} onChanged={reload} />
     </div>
   );
 }
