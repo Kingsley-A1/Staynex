@@ -23,10 +23,17 @@ function clampBps(bps: number): number {
 
 /**
  * Resolve the active commission rate (bps) from the environment, clamped to a
- * sane range. Boot-time validation lives in `config/env.ts`; this stays
- * defensive so a bad value can never produce a negative/over-100% split.
+ * sane range. `PLATFORM_FEE` is the human-friendly knob — a percentage
+ * (e.g. 10 or 12.5) — and takes precedence; the legacy `PLATFORM_COMMISSION_BPS`
+ * remains as a fallback. Boot-time validation lives in `config/env.ts`; this
+ * stays defensive so a bad value can never produce a negative/over-100% split.
  */
 export function resolveCommissionBps(env: NodeJS.ProcessEnv = process.env): number {
+  const feePercent = env.PLATFORM_FEE;
+  if (feePercent != null && feePercent !== "") {
+    const percent = Number(feePercent);
+    if (Number.isFinite(percent)) return clampBps(percent * 100);
+  }
   const raw = env.PLATFORM_COMMISSION_BPS;
   if (raw == null || raw === "") return DEFAULT_COMMISSION_BPS;
   const n = Number(raw);

@@ -90,6 +90,10 @@ enum PaymentStatus {
   PENDING
   SUCCESS
   FAILED
+  /// Provider captured funds but the platform cannot honor a booking (late
+  /// success with no remaining capacity, underpayment, currency mismatch).
+  /// Terminal path out is an admin-issued refund -> REFUNDED. Never silent.
+  REQUIRES_REFUND
   REFUNDED
 }
 
@@ -112,6 +116,24 @@ enum NotificationStatus {
   SENT
   FAILED
   READ
+}
+
+/// What a notification is about — drives inbox grouping, dedupe, and deep links.
+enum NotificationType {
+  BOOKING_CONFIRMED
+  BOOKING_REFUNDED
+  PAYOUT_PAID
+  PAYOUT_FAILED
+  PAYMENT_EXCEPTION
+  PROPERTY_REVIEW
+  CHECKIN_REMINDER
+  GENERAL
+}
+
+enum DevicePlatform {
+  WEB
+  ANDROID
+  IOS
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +164,7 @@ model User {
   bookings         Booking[]
   bookingHolds     BookingHold[]
   notifications    Notification[]
+  deviceTokens     DeviceToken[]
   aiConversations  AIConversation[]
   auditLogs        AuditLog[]           @relation("AuditActor")
   sessions         Session[]
@@ -527,6 +550,11 @@ model BookingHold {
   adults     Int      @default(1)
   children   Int      @default(0)
   infants    Int      @default(0)
+  /// Price snapshot taken when the hold is created (kobo). Checkout charges
+  /// this snapshot, so a host price edit mid-flow can never change what the
+  /// guest was quoted. 0 only on legacy pre-snapshot rows.
+  nightlyPriceKobo Int @default(0)
+  totalKobo        Int @default(0)
   expiresAt  DateTime
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -590,6 +618,9 @@ model Payment {
   status            PaymentStatus @default(PENDING)
   /// Set once when the payment is verified SUCCESS.
   paidAt            DateTime?
+  /// Last provider verification time — debounces status-page polling so the
+  /// platform never hammers Paystack's verify API.
+  lastVerifiedAt    DateTime?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -597,6 +628,30 @@ model Payment {
   payout  Payout?
 
   @@index([status])
+}
+
+/// Immutable money audit trail: one row per provider webhook delivery, per
+/// provider verification that changed state, and per admin money action —
+/// always with the processing outcome. Nothing that touches funds may resolve
+/// invisibly (payment-review P1).
+model PaymentEvent {
+  id        String   @id @default(cuid())
+  provider  String   @default("paystack")
+  /// e.g. charge.success, charge.failed, refund.processed, sync.verify, admin.refund
+  eventType String
+  reference String?
+  /// Processing result: CONFIRMED, DUPLICATE, REVIVED, REQUIRES_REFUND,
+  /// UNDERPAID, CURRENCY_MISMATCH, UNKNOWN_REFERENCE, RECORDED, FAILED, ...
+  outcome   String
+  /// Short human-readable explanation for the admin timeline.
+  detail    String?
+  /// Raw provider payload (webhook deliveries only).
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([reference])
+  @@index([outcome])
+  @@index([createdAt])
 }
 
 // Guest rating + testimonial, always tied to a real booking (bookingId unique →
@@ -643,6 +698,11 @@ model Payout {
   approvedAt        DateTime?
   /// Set when the payout has actually been paid to the owner (manual in Phase A).
   paidAt            DateTime?
+  /// Set when an admin marks the payout FAILED (reason lives in `note`).
+  failedAt          DateTime?
+  /// Settlement note: bank-transfer reference on PAID, reason on FAILED,
+  /// clawback explanation when a refund cancels the payout.
+  note              String?
   /// Admin who last actioned this payout (manual settlement marker).
   processedByUserId String?
   createdAt         DateTime     @default(now())
@@ -673,16 +733,44 @@ model Notification {
   email     String?
   channel   NotificationChannel
   status    NotificationStatus  @default(QUEUED)
+  type      NotificationType    @default(GENERAL)
   title     String
   body      String
+  /// In-app deep link (e.g. /host/bookings/xyz).
+  linkUrl   String?
+  /// Set when the user opens/acknowledges an IN_APP notification.
+  readAt    DateTime?
+  /// Idempotency key so a trigger firing twice can never double-notify.
+  dedupeKey String?             @unique
+  /// Outbox: delivery attempts made so far (EMAIL/PUSH retry bookkeeping).
+  attempts  Int                 @default(0)
+  /// Outbox: the exact deliverable (email {to,subject,html,text} or push
+  /// {title,body,linkUrl}) so the retry dispatcher can re-send verbatim.
+  payload   Json?
   createdAt DateTime            @default(now())
   updatedAt DateTime            @updatedAt
 
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, readAt])
   @@index([userId])
   @@index([bookingId])
   @@index([status])
+}
+
+/// A push-capable device (FCM registration token) tied to a signed-in user.
+/// Tokens are upserted on login/opt-in and pruned when FCM reports them dead.
+model DeviceToken {
+  id         String         @id @default(cuid())
+  userId     String
+  token      String         @unique
+  platform   DevicePlatform @default(WEB)
+  lastSeenAt DateTime       @default(now())
+  createdAt  DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model AuditLog {

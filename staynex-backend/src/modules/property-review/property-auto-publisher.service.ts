@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { readPositiveIntEnv } from "../../common/env";
 import { PropertyReviewService } from "./property-review.service";
 
 const PUBLISH_INTERVAL_MS = readPositiveIntEnv("PROPERTY_AUTO_PUBLISH_INTERVAL_MS", 30_000);
@@ -37,11 +38,4 @@ export class PropertyAutoPublisherService implements OnModuleInit, OnModuleDestr
       this.running = false;
     }
   }
-}
-
-function readPositiveIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (!raw) return fallback;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }

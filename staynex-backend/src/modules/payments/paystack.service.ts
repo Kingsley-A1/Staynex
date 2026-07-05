@@ -106,6 +106,37 @@ export class PaystackService {
     };
   }
 
+  /**
+   * Request a full refund of a transaction. Paystack processes refunds
+   * asynchronously — an accepted request means "refund initiated", and the
+   * terminal `refund.processed` webhook follows. Throws on rejection so the
+   * caller never records a refund that was not accepted.
+   */
+  async refundTransaction(reference: string): Promise<void> {
+    const res = await fetch("https://api.paystack.co/refund", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.secret()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ transaction: reference }),
+    });
+
+    const json = (await res.json().catch(() => null)) as {
+      status: boolean;
+      message: string;
+    } | null;
+    if (!res.ok || !json?.status) {
+      this.logger.error(
+        `Paystack refund failed for ${reference}: ${json?.message ?? res.status}`,
+      );
+      throw new ServiceUnavailableException(
+        `Refund was not accepted by the payment provider${json?.message ? ` — ${json.message}` : ""}`,
+      );
+    }
+    this.logger.log(`Paystack refund initiated for ${reference}.`);
+  }
+
   /** Verify the `x-paystack-signature` HMAC-SHA512 over the raw request body. */
   verifySignature(rawBody: Buffer, signature: string | undefined): boolean {
     if (!signature) return false;

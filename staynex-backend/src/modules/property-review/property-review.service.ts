@@ -1,5 +1,7 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { prisma } from "../../../db";
+import { addUtcDays, utcToday } from "../../common/dates";
+import { readNonNegativeIntEnv } from "../../common/env";
 import { AuditService } from "../audit/audit.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import {
@@ -9,7 +11,7 @@ import {
   type PropertyReviewPolicyResult,
 } from "./property-review-policy";
 
-const AUTO_PUBLISH_DELAY_MS = readPositiveIntEnv(
+const AUTO_PUBLISH_DELAY_MS = readNonNegativeIntEnv(
   "PROPERTY_AUTO_PUBLISH_DELAY_MS",
   2 * 60_000,
 );
@@ -362,17 +364,6 @@ export class PropertyReviewService {
   }
 }
 
-function utcToday(): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-}
-
-function addUtcDays(date: Date, days: number): Date {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-}
-
 function countAvailableDays(
   roomTypes: Array<{
     availability: Array<{ date: Date; totalUnits: number; bookedUnits: number; heldUnits: number }>;
@@ -387,11 +378,4 @@ function countAvailableDays(
     }
   }
   return dates.size;
-}
-
-function readPositiveIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (!raw) return fallback;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
