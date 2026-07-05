@@ -32,8 +32,11 @@ export const envSchema = z.object({
   PAYSTACK_PUBLIC_KEY: optionalString,
   // Public base URL of the web app, used for the Paystack payment callback.
   NEXT_PUBLIC_APP_URL: optionalString,
-  // Platform commission in basis points (1 bps = 0.01%; 1000 = 10%). Snapshotted
-  // onto each payment at checkout. Defaults to 10% when unset.
+  // Platform commission as a percentage (e.g. 10 or 12.5). Snapshotted onto
+  // each payment at checkout. Takes precedence over PLATFORM_COMMISSION_BPS.
+  PLATFORM_FEE: z.coerce.number().min(0).max(100).optional(),
+  // Legacy: commission in basis points (1 bps = 0.01%; 1000 = 10%). Used only
+  // when PLATFORM_FEE is unset. Defaults to 10% when both are unset.
   PLATFORM_COMMISSION_BPS: z.coerce
     .number()
     .int()
@@ -44,10 +47,15 @@ export const envSchema = z.object({
   // degrades to a logged "queued, not sent" state when unconfigured.
   RESEND_API_KEY: optionalString,
   EMAIL_FROM: optionalString,
-  // Push (Firebase Cloud Messaging). Foundation only — push is a documented
-  // placeholder until these are provided.
-  FCM_SERVER_KEY: optionalString,
+  // Push (Firebase Cloud Messaging, HTTP v1). Either provide the whole
+  // service-account JSON in FIREBASE_SERVICE_ACCOUNT_KEY (raw or base64), or the
+  // discrete trio FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY.
+  // Optional so the API boots without push; PushService degrades to an honest
+  // "not delivered" state when unconfigured or incomplete.
+  FIREBASE_SERVICE_ACCOUNT_KEY: optionalString,
   FIREBASE_PROJECT_ID: optionalString,
+  FIREBASE_CLIENT_EMAIL: optionalString,
+  FIREBASE_PRIVATE_KEY: optionalString,
   // AI assistant (Google Gemini). Optional; AiModule fails gracefully (clear
   // "unavailable" state) when missing.
   GEMINI_API_KEY: optionalString,

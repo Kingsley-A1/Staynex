@@ -10,7 +10,7 @@ export interface GeminiTurn {
 // resolves on its own. If sustained 429s become a problem, gemini-2.5-flash or
 // the newer Gemini 3 Flash (recommended free-tier model in 2026) are drop-in
 // model swaps — see docs/staynex-ai-plan.md.
-const MODEL = "gemini-2.0-flash";
+const MODEL = "gemini-2.5-flash";
 const BASE = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}`;
 const ENDPOINT = `${BASE}:generateContent`;
 const STREAM_ENDPOINT = `${BASE}:streamGenerateContent`;
@@ -93,7 +93,7 @@ export class GeminiService {
                 role: t.role,
                 parts: [{ text: t.text }],
               })),
-              generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
+              generationConfig: { temperature: 0.9, maxOutputTokens: 512 },
             }),
           },
         );

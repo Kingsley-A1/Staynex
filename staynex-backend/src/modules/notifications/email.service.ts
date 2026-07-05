@@ -1,10 +1,18 @@
 import { Injectable, Logger } from "@nestjs/common";
 
+export interface EmailAttachment {
+  filename: string;
+  /** Base64-encoded file content (Resend accepts base64 in `content`). */
+  content: string;
+  contentType?: string;
+}
+
 export interface EmailMessage {
   to: string;
   subject: string;
   html: string;
   text?: string;
+  attachments?: EmailAttachment[];
 }
 
 export interface EmailSendResult {
@@ -81,6 +89,15 @@ export class EmailService {
           subject: message.subject,
           html: message.html,
           ...(message.text ? { text: message.text } : {}),
+          ...(message.attachments?.length
+            ? {
+                attachments: message.attachments.map((a) => ({
+                  filename: a.filename,
+                  content: a.content,
+                  ...(a.contentType ? { content_type: a.contentType } : {}),
+                })),
+              }
+            : {}),
         }),
       });
 
