@@ -8,7 +8,9 @@
 import { cookies } from "next/headers";
 import { API_BASE } from "@/lib/api-base";
 import type {
-  AdminBookingsView,
+  AdminBookingsPage,
+  AdminPaymentExceptionRow,
+  AdminPaymentsPage,
   AdminPayoutsView,
   AdminTestimonialRow,
   AiLogRow,
@@ -19,6 +21,7 @@ import type {
   PropertyDetail,
   PropertySummary,
 } from "@/lib/types";
+import { adminListQueryString, type AdminListQuery } from "@/lib/api";
 
 export interface Loaded<T> {
   data: T | null;
@@ -53,7 +56,14 @@ export const getAdminApprovals = () => load<PropertySummary[]>("/admin/approvals
 
 export const getAdminApproval = (id: string) => load<PropertyDetail>(`/admin/approvals/${id}`);
 
-export const getAdminBookings = () => load<AdminBookingsView>("/admin/bookings");
+export const getAdminBookings = (query?: AdminListQuery) =>
+  load<AdminBookingsPage>(`/admin/bookings${adminListQueryString(query)}`);
+
+export const getAdminPayments = (query?: AdminListQuery) =>
+  load<AdminPaymentsPage>(`/admin/payments${adminListQueryString(query)}`);
+
+export const getAdminPaymentExceptions = () =>
+  load<AdminPaymentExceptionRow[]>("/admin/payments/exceptions");
 
 export const getAdminPayouts = () => load<AdminPayoutsView>("/admin/payouts");
 

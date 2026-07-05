@@ -3,10 +3,14 @@
 // components render from centralized fixtures until the API is wired live.
 
 import type {
-  AdminBookingsView,
+  AdminBookingsPage,
+  AdminPaymentExceptionRow,
+  AdminPaymentRow,
+  AdminPaymentsPage,
   AdminPayoutRow,
   AdminPayoutsView,
   AdminTestimonialRow,
+  AvailabilityDriftRow,
   AdminUserDetail,
   AdminUserRow,
   AgentConversation,
@@ -28,6 +32,7 @@ import type {
   HoldSummary,
   MediaItem,
   MediaUploadTarget,
+  NotificationsPage,
   OwnerBookingsView,
   OwnerLocationView,
   OwnerOnboardingState,
@@ -295,6 +300,25 @@ export const hostApi = {
   getBooking: (id: string) => request<BookingRow>(`/host/bookings/${id}`),
 };
 
+/** Search/filter/pagination inputs for the admin money lists. */
+export interface AdminListQuery {
+  q?: string;
+  status?: string;
+  cursor?: string;
+  take?: number;
+}
+
+export function adminListQueryString(query?: AdminListQuery): string {
+  if (!query) return "";
+  const params = new URLSearchParams();
+  if (query.q) params.set("q", query.q);
+  if (query.status) params.set("status", query.status);
+  if (query.cursor) params.set("cursor", query.cursor);
+  if (query.take) params.set("take", String(query.take));
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
 export const adminApi = {
   queue: () => request<PropertySummary[]>("/admin/approvals"),
   getForReview: (id: string) =>
@@ -307,10 +331,38 @@ export const adminApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  bookings: () => request<AdminBookingsView>("/admin/bookings"),
+  bookings: (query?: AdminListQuery) =>
+    request<AdminBookingsPage>(`/admin/bookings${adminListQueryString(query)}`),
+  payments: (query?: AdminListQuery) =>
+    request<AdminPaymentsPage>(`/admin/payments${adminListQueryString(query)}`),
+  paymentExceptions: () =>
+    request<AdminPaymentExceptionRow[]>("/admin/payments/exceptions"),
+  reverifyPayment: (reference: string) =>
+    request<AdminPaymentRow>(
+      `/admin/payments/${encodeURIComponent(reference)}/reverify`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+  refundPayment: (reference: string, note?: string) =>
+    request<AdminPaymentRow>(
+      `/admin/payments/${encodeURIComponent(reference)}/refund`,
+      { method: "POST", body: JSON.stringify(note ? { note } : {}) },
+    ),
+  availabilityDrift: () =>
+    request<AvailabilityDriftRow[]>("/admin/reconciliation/availability"),
   payouts: () => request<AdminPayoutsView>("/admin/payouts"),
-  markPayoutPaid: (id: string) =>
-    request<AdminPayoutRow>(`/admin/payouts/${id}/paid`, { method: "POST" }),
+  markPayoutPaid: (
+    id: string,
+    body: { note?: string; overrideEligibility?: boolean } = {},
+  ) =>
+    request<AdminPayoutRow>(`/admin/payouts/${id}/paid`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  markPayoutFailed: (id: string, reason: string) =>
+    request<AdminPayoutRow>(`/admin/payouts/${id}/failed`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
   auditLogs: () => request<AuditLogRow[]>("/admin/audit-logs"),
   aiLogs: () => request<AiLogRow[]>("/admin/ai-logs"),
   testimonials: (status?: string) =>
@@ -667,6 +719,27 @@ export const agentApi = {
     }),
   remove: (id: string) =>
     request<{ ok: true }>(`/ai/conversations/${id}`, { method: "DELETE" }),
+};
+
+export const notificationsApi = {
+  list: (cursor?: string) =>
+    request<NotificationsPage>(
+      `/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+    ),
+  markRead: (ids?: string[]) =>
+    request<{ updated: number }>("/notifications/read", {
+      method: "POST",
+      body: JSON.stringify(ids && ids.length > 0 ? { ids } : {}),
+    }),
+  registerDevice: (token: string, platform: "WEB" | "ANDROID" | "IOS" = "WEB") =>
+    request<{ ok: true }>("/notifications/devices", {
+      method: "POST",
+      body: JSON.stringify({ token, platform }),
+    }),
+  removeDevice: (token: string) =>
+    request<{ ok: true }>(`/notifications/devices/${encodeURIComponent(token)}`, {
+      method: "DELETE",
+    }),
 };
 
 type BookingDates = {

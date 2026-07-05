@@ -164,6 +164,8 @@ export type PaymentState =
   | "PENDING"
   | "SUCCESS"
   | "FAILED"
+  /** Funds captured but the booking can't be honored — needs an admin refund. */
+  | "REQUIRES_REFUND"
   | "REFUNDED";
 
 export interface AvailabilityQuote {
@@ -213,14 +215,42 @@ export interface BookingView {
   checkIn: string;
   checkOut: string;
   nights: number;
+  adults: number;
+  children: number;
+  infants: number;
   amountKobo: number;
   currency: string;
   propertyName: string;
   propertySlug: string;
   cityName: string;
   roomName: string;
+  /** Internal unit code — provisional; the physical room is set at check-in. */
+  unitCode: string | null;
   paymentStatus: PaymentState;
   paymentReference: string | null;
+}
+
+/**
+ * Public booking-verification card (GET /verify/:reference). Live server truth
+ * a receptionist can trust over any screenshot. No amount, no card data.
+ * Mirrors the backend VoucherVerification shape.
+ */
+export interface VoucherVerification {
+  valid: boolean;
+  status: "CONFIRMED" | "PENDING" | "CANCELLED" | "NOT_FOUND";
+  reference: string;
+  guestName: string | null;
+  guestEmailMasked: string | null;
+  propertyName: string | null;
+  cityName: string | null;
+  areaName: string | null;
+  roomTypeName: string | null;
+  unitCode: string | null;
+  checkIn: string | null;
+  checkOut: string | null;
+  nights: number | null;
+  guests: { adults: number; children: number; infants: number } | null;
+  confirmedAt: string | null;
 }
 
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
@@ -236,6 +266,7 @@ export const PAYMENT_STATE_LABELS: Record<PaymentState, string> = {
   PENDING: "Pending",
   SUCCESS: "Paid",
   FAILED: "Failed",
+  REQUIRES_REFUND: "Refund required",
   REFUNDED: "Refunded",
 };
 
@@ -295,6 +326,7 @@ export interface AdminPaymentRow {
   reference: string | null;
   bookingId: string;
   propertyName: string;
+  guestEmail: string | null;
   amountKobo: number;
   grossAmountKobo: number;
   platformFeeKobo: number;
@@ -307,9 +339,83 @@ export interface AdminPaymentRow {
   createdAt: string;
 }
 
-export interface AdminBookingsView {
-  bookings: BookingRow[];
-  payments: AdminPaymentRow[];
+/** Cursor-paginated admin list page (cursor is opaque; null = end). */
+export interface AdminBookingsPage {
+  rows: BookingRow[];
+  nextCursor: string | null;
+}
+
+export interface AdminPaymentsPage {
+  rows: AdminPaymentRow[];
+  nextCursor: string | null;
+}
+
+/** One entry in a payment's money audit timeline. */
+export interface AdminPaymentEventRow {
+  id: string;
+  eventType: string;
+  outcome: string;
+  detail: string | null;
+  createdAt: string;
+}
+
+/**
+ * A payment where funds moved but the platform owes a human action
+ * (REQUIRES_REFUND). This queue must trend to empty.
+ */
+export interface AdminPaymentExceptionRow {
+  reference: string | null;
+  bookingId: string;
+  bookingStatus: BookingStatus;
+  propertyName: string;
+  guestEmail: string | null;
+  grossAmountKobo: number;
+  currency: string;
+  status: PaymentState;
+  createdAt: string;
+  updatedAt: string;
+  events: AdminPaymentEventRow[];
+}
+
+/** A calendar day whose counters disagree with live holds/bookings. */
+export interface AvailabilityDriftRow {
+  roomTypeId: string;
+  roomName: string;
+  propertyName: string;
+  date: string;
+  totalUnits: number;
+  heldUnits: number;
+  expectedHeldUnits: number;
+  bookedUnits: number;
+  expectedBookedUnits: number;
+}
+
+// --- Notifications ---
+
+export type NotificationTypeValue =
+  | "BOOKING_CONFIRMED"
+  | "BOOKING_REFUNDED"
+  | "PAYOUT_PAID"
+  | "PAYOUT_FAILED"
+  | "PAYMENT_EXCEPTION"
+  | "PROPERTY_REVIEW"
+  | "CHECKIN_REMINDER"
+  | "GENERAL";
+
+export interface NotificationRow {
+  id: string;
+  type: NotificationTypeValue;
+  title: string;
+  body: string;
+  linkUrl: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationsPage {
+  rows: NotificationRow[];
+  nextCursor: string | null;
+  unreadCount: number;
 }
 
 export interface AdminPayoutRow {
@@ -325,10 +431,17 @@ export interface AdminPayoutRow {
   ownerPayoutKobo: number;
   currency: string;
   status: PayoutStatusValue;
+  /** Settlement destination (masked) — where the admin actually sends money. */
+  bankName: string | null;
+  accountName: string | null;
+  accountNumberLast4: string | null;
+  /** Settlement reference on PAID, reason on FAILED, clawback note on refunds. */
+  note: string | null;
   /** When the payout becomes eligible to settle (checkIn + 24h). */
   eligibleAt: string;
   approvedAt: string | null;
   paidAt: string | null;
+  failedAt: string | null;
   createdAt: string;
 }
 
@@ -363,7 +476,7 @@ export interface AiLogRow {
   createdAt: string;
 }
 
-// --- Phase 4: AI assistant ---
+// ---  AI assistant ---
 
 export interface AssistantReply {
   conversationId: string;

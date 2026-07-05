@@ -14,6 +14,7 @@ import type {
   PropertyDetail,
   PropertySummary,
   PublicTestimonial,
+  VoucherVerification,
 } from "@/lib/types";
 
 export interface SearchParams {
@@ -97,6 +98,24 @@ export async function getBookingServer(id: string): Promise<BookingView | null> 
     const res = await fetch(`${API_BASE}/bookings/${id}`, { cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json()) as BookingView;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Public booking verification (the QR target). Backend authority — a null
+ * result means unreachable, distinct from a NOT_FOUND card the API returns.
+ */
+export async function getVoucherVerification(
+  reference: string,
+): Promise<VoucherVerification | null> {
+  try {
+    const res = await fetch(`${API_BASE}/verify/${encodeURIComponent(reference)}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as VoucherVerification;
   } catch {
     return null;
   }
