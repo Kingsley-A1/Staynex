@@ -17,6 +17,7 @@ import { PropertiesModule } from "./modules/properties/properties.module";
 import { ReviewsModule } from "./modules/reviews/reviews.module";
 import { RoomsModule } from "./modules/rooms/rooms.module";
 import { UsersModule } from "./modules/users/users.module";
+import { VouchersModule } from "./modules/vouchers/voucher.module";
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { UsersModule } from "./modules/users/users.module";
     AdminModule,
     AiModule,
     AuditModule,
+    VouchersModule,
   ],
 })
 export class AppModule {}

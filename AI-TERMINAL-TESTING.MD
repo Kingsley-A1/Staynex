@@ -10,7 +10,7 @@ The backend does the important work:
 
 - Resolves identity from the `staynex_session` cookie when present.
 - Allows anonymous use when no session cookie is present.
-- Requires CSRF protection on unsafe methods such as `POST`, `PATCH`, and `DELETE`.
+- Requires CSRF(Cross Site Request Forgery) protection on unsafe methods such as `POST`, `PATCH`, and `DELETE`.
 - Stores conversations and messages in the database.
 - Applies guardrails before the model is called.
 - Returns deterministic answers for common booking-flow questions.
@@ -132,7 +132,7 @@ $body = @{
 } | ConvertTo-Json
 
 $reply = Invoke-RestMethod `
-  -Uri "$Api/ai/assistant" `
+  -Uri "$Api/ai/assistant/stream" `
   -Method POST `
   -WebSession $StaynexSession `
   -Headers @{ "X-CSRF-Token" = $csrf } `

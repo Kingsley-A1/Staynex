@@ -1,4 +1,3 @@
-@AGENT Always remember to check the payment status before proceeding with any transactions, remind me of this in the future.
 
 ==========================
 

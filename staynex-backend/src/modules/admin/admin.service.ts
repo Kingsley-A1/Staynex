@@ -1,13 +1,20 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../../db";
 import type {
-  AdminBookingsView,
+  AdminBookingsPage,
+  AdminPaymentExceptionRow,
+  AdminPaymentRow,
+  AdminPaymentsPage,
   AdminPayoutRow,
   AdminPayoutsView,
   AuthUser,
   AiLogRow,
   ApprovalActionResult,
   AuditLogRow,
+  AvailabilityDriftRow,
+  BookingStatus,
+  PaymentState,
   PropertyDetail,
   PropertyStatus,
   PropertySummary,
@@ -20,6 +27,8 @@ import {
   toPaymentRow,
   toPayoutRow,
 } from "../bookings/report-mappers";
+import { BookingMaintenanceService } from "../bookings/booking-maintenance.service";
+import { BookingsService } from "../bookings/bookings.service";
 import {
   propertyDetailInclude,
   propertySummaryInclude,
@@ -29,7 +38,9 @@ import {
 import { AuditService } from "../audit/audit.service";
 import { auditActorId } from "../auth/auth.service";
 import { NotificationsService } from "../notifications/notifications.service";
-import type { ApprovalActionInput } from "./dto";
+import { PaymentEventsService } from "../payments/payment-events.service";
+import { PaystackService } from "../payments/paystack.service";
+import type { AdminListQuery, ApprovalActionInput, MarkPayoutPaidInput } from "./dto";
 
 const DECISION_STATUS: Record<ApprovalActionInput["decision"], PropertyStatus> = {
   APPROVE: "APPROVED",
@@ -52,12 +63,59 @@ const DECISION_REVIEW_STATUS: Record<
   REQUEST_CHANGES: "MANUAL_REVIEW",
 };
 
-/** Admin property approval. Every decision is an override and is audited. */
+const BOOKING_STATUSES: BookingStatus[] = [
+  "HOLD",
+  "PENDING_PAYMENT",
+  "CONFIRMED",
+  "CANCELLED",
+  "EXPIRED",
+];
+const PAYMENT_STATUSES: PaymentState[] = [
+  "INITIATED",
+  "PENDING",
+  "SUCCESS",
+  "FAILED",
+  "REQUIRES_REFUND",
+  "REFUNDED",
+];
+
+/** Opaque list cursor: createdAt ISO + row id, newest-first pagination. */
+function encodeCursor(createdAt: Date, id: string): string {
+  return `${createdAt.toISOString()}_${id}`;
+}
+
+function decodeCursor(cursor: string | undefined): { createdAt: Date; id: string } | null {
+  if (!cursor) return null;
+  const split = cursor.lastIndexOf("_");
+  if (split <= 0) return null;
+  const createdAt = new Date(cursor.slice(0, split));
+  const id = cursor.slice(split + 1);
+  if (Number.isNaN(createdAt.getTime()) || !id) return null;
+  return { createdAt, id };
+}
+
+/** Keyset condition for newest-first (createdAt desc, id desc) pagination. */
+function afterCursor(cursor: { createdAt: Date; id: string } | null) {
+  if (!cursor) return undefined;
+  return {
+    OR: [
+      { createdAt: { lt: cursor.createdAt } },
+      { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+    ],
+  };
+}
+
+/** Admin authority: property approval + payment/payout operations. Every money
+ * override is audited and leaves a PaymentEvent trail. */
 @Injectable()
 export class AdminService {
   constructor(
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    private readonly bookings: BookingsService,
+    private readonly maintenance: BookingMaintenanceService,
+    private readonly paystack: PaystackService,
+    private readonly paymentEvents: PaymentEventsService,
   ) {}
 
   async approvalQueue(): Promise<PropertySummary[]> {
@@ -146,23 +204,209 @@ export class AdminService {
     return { id: updated.id, status: updated.status as PropertyStatus };
   }
 
-  // --- Phase 4: platform-wide operational visibility (read-only) ------------
+  // --- Money operations: bookings/payments lists, exceptions, actions ------
 
-  /** Recent bookings + payments across the whole platform. */
-  async bookingsOverview(): Promise<AdminBookingsView> {
-    const [bookings, payments] = await Promise.all([
-      prisma.booking.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 100,
-        include: bookingRowInclude,
-      }),
-      prisma.payment.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 100,
-        include: paymentRowInclude,
-      }),
-    ]);
-    return { bookings: bookings.map(toBookingRow), payments: payments.map(toPaymentRow) };
+  /** Bookings, newest first, searchable by guest/property/reference/id. */
+  async listBookings(query: AdminListQuery): Promise<AdminBookingsPage> {
+    const status = BOOKING_STATUSES.find((s) => s === query.status);
+    const where: Prisma.BookingWhereInput = {
+      ...(status ? { status } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { id: query.q },
+              { guestEmail: { contains: query.q, mode: "insensitive" } },
+              { payment: { reference: { contains: query.q, mode: "insensitive" } } },
+              {
+                roomUnit: {
+                  roomType: {
+                    property: { name: { contains: query.q, mode: "insensitive" } },
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+    const cursorWhere = afterCursor(decodeCursor(query.cursor));
+    const rows = await prisma.booking.findMany({
+      where: cursorWhere ? { AND: [where, cursorWhere] } : where,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: query.take + 1,
+      include: bookingRowInclude,
+    });
+    const page = rows.slice(0, query.take);
+    const last = page[page.length - 1];
+    return {
+      rows: page.map(toBookingRow),
+      nextCursor: rows.length > query.take && last ? encodeCursor(last.createdAt, last.id) : null,
+    };
+  }
+
+  /** Payments, newest first, searchable by reference/guest/property. */
+  async listPayments(query: AdminListQuery): Promise<AdminPaymentsPage> {
+    const status = PAYMENT_STATUSES.find((s) => s === query.status);
+    const where: Prisma.PaymentWhereInput = {
+      ...(status ? { status } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { reference: { contains: query.q, mode: "insensitive" } },
+              { booking: { guestEmail: { contains: query.q, mode: "insensitive" } } },
+              {
+                booking: {
+                  roomUnit: {
+                    roomType: {
+                      property: { name: { contains: query.q, mode: "insensitive" } },
+                    },
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+    const cursorWhere = afterCursor(decodeCursor(query.cursor));
+    const rows = await prisma.payment.findMany({
+      where: cursorWhere ? { AND: [where, cursorWhere] } : where,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: query.take + 1,
+      include: paymentRowInclude,
+    });
+    const page = rows.slice(0, query.take);
+    const last = page[page.length - 1];
+    return {
+      rows: page.map(toPaymentRow),
+      nextCursor: rows.length > query.take && last ? encodeCursor(last.createdAt, last.id) : null,
+    };
+  }
+
+  /**
+   * The exception queue: every payment where funds moved but the platform
+   * owes a human action (REQUIRES_REFUND). This list must trend to empty —
+   * its existence is the fix for the silent-loss class of failures (P1).
+   */
+  async paymentExceptions(): Promise<AdminPaymentExceptionRow[]> {
+    const payments = await prisma.payment.findMany({
+      where: { status: "REQUIRES_REFUND" },
+      orderBy: { updatedAt: "desc" },
+      take: 100,
+      include: {
+        booking: {
+          include: {
+            roomUnit: {
+              include: { roomType: { include: { property: { select: { name: true } } } } },
+            },
+          },
+        },
+      },
+    });
+
+    const references = payments
+      .map((p) => p.reference)
+      .filter((r): r is string => Boolean(r));
+    const events = references.length
+      ? await prisma.paymentEvent.findMany({
+          where: { reference: { in: references } },
+          orderBy: { createdAt: "desc" },
+        })
+      : [];
+    const eventsByRef = new Map<string, typeof events>();
+    for (const event of events) {
+      if (!event.reference) continue;
+      const list = eventsByRef.get(event.reference) ?? [];
+      if (list.length < 5) list.push(event);
+      eventsByRef.set(event.reference, list);
+    }
+
+    return payments.map((p) => ({
+      reference: p.reference,
+      bookingId: p.bookingId,
+      bookingStatus: p.booking.status as BookingStatus,
+      propertyName: p.booking.roomUnit.roomType.property.name,
+      guestEmail: p.booking.guestEmail,
+      grossAmountKobo: p.grossAmountKobo > 0 ? p.grossAmountKobo : p.amount,
+      currency: p.currency,
+      status: p.status as PaymentState,
+      createdAt: p.createdAt.toISOString(),
+      updatedAt: p.updatedAt.toISOString(),
+      events: (p.reference ? (eventsByRef.get(p.reference) ?? []) : []).map((e) => ({
+        id: e.id,
+        eventType: e.eventType,
+        outcome: e.outcome,
+        detail: e.detail,
+        createdAt: e.createdAt.toISOString(),
+      })),
+    }));
+  }
+
+  /** Audited support action: force a fresh provider verification. */
+  async reverifyPayment(admin: AuthUser, reference: string): Promise<AdminPaymentRow> {
+    const exists = await prisma.payment.findUnique({
+      where: { reference },
+      select: { id: true },
+    });
+    if (!exists) throw new NotFoundException("Payment not found");
+
+    await this.bookings.syncPaymentStatus(reference, { force: true });
+    await this.audit.record({
+      actorUserId: auditActorId(admin),
+      action: "PAYMENT_REVERIFIED",
+      entityType: "Payment",
+      entityId: exists.id,
+      propertyId: null,
+    });
+    return this.paymentRowByReference(reference);
+  }
+
+  /**
+   * Audited refund: the provider must accept the refund request before any
+   * local state changes. Then payment -> REFUNDED, the booking is cancelled
+   * with capacity released, and an unsettled payout is clawed back.
+   */
+  async refundPayment(
+    admin: AuthUser,
+    reference: string,
+    note: string | undefined,
+  ): Promise<AdminPaymentRow> {
+    const payment = await prisma.payment.findUnique({
+      where: { reference },
+      select: { id: true, status: true },
+    });
+    if (!payment) throw new NotFoundException("Payment not found");
+    if (payment.status === "REFUNDED") {
+      throw new BadRequestException("This payment is already refunded.");
+    }
+    if (payment.status !== "SUCCESS" && payment.status !== "REQUIRES_REFUND") {
+      throw new BadRequestException(
+        `Only captured payments can be refunded (status is ${payment.status}).`,
+      );
+    }
+
+    // Provider first: if Paystack rejects, nothing changes locally.
+    await this.paystack.refundTransaction(reference);
+
+    const initiator = `admin ${admin.email ?? admin.id}${note ? ` — ${note}` : ""}`;
+    const result = await this.bookings.applyRefund(reference, initiator);
+    await this.paymentEvents.record({
+      eventType: "admin.refund",
+      reference,
+      outcome: result.outcome,
+      detail: result.detail,
+    });
+    await this.audit.record({
+      actorUserId: auditActorId(admin),
+      action: "PAYMENT_REFUND_ISSUED",
+      entityType: "Payment",
+      entityId: payment.id,
+      propertyId: null,
+    });
+    return this.paymentRowByReference(reference);
+  }
+
+  /** On-demand availability reconciliation (also runs on an interval). */
+  async availabilityDrift(): Promise<AvailabilityDriftRow[]> {
+    return this.maintenance.reconcileAvailability();
   }
 
   // --- Phase A: owner payout settlement (manual) ---------------------------
@@ -204,28 +448,51 @@ export class AdminService {
 
   /**
    * Manually mark a payout as settled (Phase A: paid out-of-band by an admin).
-   * Every settlement is an admin override and is audited (skill.md §9).
+   * Settling before `eligibleAt` requires an explicit override plus a note —
+   * the eligibility gate exists in data and is now enforced in the transition
+   * (payment-review P11). Every settlement is audited (skill.md §9).
    */
-  async markPayoutPaid(admin: AuthUser, payoutId: string): Promise<AdminPayoutRow> {
+  async markPayoutPaid(
+    admin: AuthUser,
+    payoutId: string,
+    input: MarkPayoutPaidInput,
+  ): Promise<AdminPayoutRow> {
     const existing = await prisma.payout.findUnique({
       where: { id: payoutId },
-      select: { id: true, status: true, propertyId: true },
+      select: { id: true, status: true, propertyId: true, eligibleAt: true },
     });
     if (!existing) throw new NotFoundException("Payout not found");
     if (existing.status === "PAID") throw new BadRequestException("Payout is already marked paid");
     if (existing.status === "FAILED") throw new BadRequestException("This payout is marked failed");
 
     const now = new Date();
+    const early = existing.eligibleAt.getTime() > now.getTime();
+    if (early && !input.overrideEligibility) {
+      throw new BadRequestException(
+        `This payout is not eligible until ${existing.eligibleAt.toISOString()}. ` +
+          "To settle early, confirm the override and add a note.",
+      );
+    }
+    if (early && !input.note?.trim()) {
+      throw new BadRequestException("Early settlement requires a note explaining why.");
+    }
+
     const updated = await prisma.$transaction(async (tx) => {
       const next = await tx.payout.update({
         where: { id: payoutId },
-        data: { status: "PAID", approvedAt: now, paidAt: now, processedByUserId: admin.id },
+        data: {
+          status: "PAID",
+          approvedAt: now,
+          paidAt: now,
+          processedByUserId: admin.id,
+          ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+        },
         include: payoutRowInclude,
       });
       await this.audit.record(
         {
           actorUserId: auditActorId(admin),
-          action: "PAYOUT_MARKED_PAID",
+          action: early ? "PAYOUT_MARKED_PAID_EARLY" : "PAYOUT_MARKED_PAID",
           entityType: "Payout",
           entityId: payoutId,
           propertyId: existing.propertyId,
@@ -234,6 +501,50 @@ export class AdminService {
       );
       return next;
     });
+    // Tell the host their money is on the way (best-effort, deduped).
+    await this.notifications.onPayoutSettled(payoutId);
+    return toPayoutRow(updated);
+  }
+
+  /** Mark a payout FAILED with a mandatory reason (audited). */
+  async markPayoutFailed(
+    admin: AuthUser,
+    payoutId: string,
+    reason: string,
+  ): Promise<AdminPayoutRow> {
+    const existing = await prisma.payout.findUnique({
+      where: { id: payoutId },
+      select: { id: true, status: true, propertyId: true },
+    });
+    if (!existing) throw new NotFoundException("Payout not found");
+    if (existing.status !== "PENDING" && existing.status !== "PROCESSING") {
+      throw new BadRequestException(`Only unsettled payouts can be failed (status is ${existing.status}).`);
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const next = await tx.payout.update({
+        where: { id: payoutId },
+        data: {
+          status: "FAILED",
+          failedAt: new Date(),
+          note: reason,
+          processedByUserId: admin.id,
+        },
+        include: payoutRowInclude,
+      });
+      await this.audit.record(
+        {
+          actorUserId: auditActorId(admin),
+          action: "PAYOUT_MARKED_FAILED",
+          entityType: "Payout",
+          entityId: payoutId,
+          propertyId: existing.propertyId,
+        },
+        tx,
+      );
+      return next;
+    });
+    await this.notifications.onPayoutFailed(payoutId, reason);
     return toPayoutRow(updated);
   }
 
@@ -261,5 +572,14 @@ export class AdminService {
       summary: r.summary,
       createdAt: r.createdAt.toISOString(),
     }));
+  }
+
+  private async paymentRowByReference(reference: string): Promise<AdminPaymentRow> {
+    const payment = await prisma.payment.findUnique({
+      where: { reference },
+      include: paymentRowInclude,
+    });
+    if (!payment) throw new NotFoundException("Payment not found");
+    return toPaymentRow(payment);
   }
 }

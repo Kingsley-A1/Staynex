@@ -14,7 +14,7 @@ import type { DestinationShowcase, PropertySummary } from "@/lib/types";
 export const metadata: Metadata = {
   title: "Staynex — Book trusted stays",
   description:
-    "Book trusted stays across Nigeria and beyond. Verified properties, secure payments, and real-time availability.",
+    "Book trusted Hotels, Resorts, Shortlets across Nigeria and beyond. Verified properties, secure payments, and real-time availability.",
 };
 
 export const revalidate = 300;
@@ -145,7 +145,7 @@ function Hero() {
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-md leading-relaxed text-muted-foreground">
             Search verified hotels, resorts, and apartments with real-time
-            availability and secure payments — from Calabar to anywhere you go.
+            availability, seamless payments, engineerd secure by default.
           </p>
         </div>
 

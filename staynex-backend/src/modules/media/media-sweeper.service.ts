@@ -6,6 +6,7 @@ import {
   OnModuleInit,
 } from "@nestjs/common";
 import { prisma } from "../../../db";
+import { readPositiveIntEnv } from "../../common/env";
 import { r2ConfigPresent } from "./r2-storage.provider";
 import { MEDIA_SCOPES } from "./dto";
 import { STORAGE_PROVIDER, type StorageProvider } from "./storage";
@@ -90,11 +91,4 @@ export class MediaSweeperService implements OnModuleInit, OnModuleDestroy {
     ]);
     return Boolean(property ?? room);
   }
-}
-
-function readPositiveIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (!raw) return fallback;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
