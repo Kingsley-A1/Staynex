@@ -40,6 +40,7 @@ export const PUBLIC_SITEMAP_ROUTES = [
   "/search",
   "/reviews",
   "/list-your-property",
+  "/docs",
   "/sign-in",
   "/register",
   "/host/register",
