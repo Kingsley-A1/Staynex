@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { authApi } from "@/lib/api";
-import { type AuthUser, capabilityHome } from "@/lib/types";
+import { authDestination } from "@/features/auth/navigate";
+import type { AuthUser } from "@/lib/types";
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
@@ -35,7 +35,6 @@ export function GoogleAuthButton({
   onError?: (message: string) => void;
   intent?: "GUEST" | "OWNER";
 }) {
-  const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   // Render the Google button at the wrapper's own width so it lines up with the
@@ -68,8 +67,10 @@ export function GoogleAuthButton({
         const user = await authApi.google(idToken, intent);
         if (onSuccess) onSuccess(user);
         else {
-          router.push(next || capabilityHome(user));
-          router.refresh();
+          // Full-page navigation, NOT router.push — see goHome() in
+          // auth-form.tsx: a stale pre-sign-in router-cache entry for the
+          // target route would bounce the user back to /sign-in.
+          window.location.assign(authDestination(user, next));
         }
       } catch (err) {
         const message =
@@ -122,7 +123,7 @@ export function GoogleAuthButton({
     return () => {
       cancelled = true;
     };
-  }, [next, onSuccess, onError, router, intent, width]);
+  }, [next, onSuccess, onError, intent, width]);
 
   if (!CLIENT_ID) return null;
 

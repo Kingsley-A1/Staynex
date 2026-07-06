@@ -1,21 +1,25 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Field, Input, PasswordInput, Select } from "@/ui";
 import { GoogleAuthButton } from "@/features/auth/google-auth-button";
+import { authDestination } from "@/features/auth/navigate";
 import { ApiError, apiErrorMessage, authApi } from "@/lib/api";
 import {
   type AuthMfaChallenge,
   type AuthUser,
-  capabilityHome,
   isAdminCapable,
   isAuthMfaChallenge,
   isOwnerCapable,
 } from "@/lib/types";
 
 type Mode = "login" | "register" | "admin";
+
+/** Carry the intended destination across the sign-in/register cross-links. */
+function withNext(path: string, next: string | undefined): string {
+  return next ? `${path}?next=${encodeURIComponent(next)}` : path;
+}
 
 // Reusable auth form. As a page it navigates on success; embedded (checkout gate)
 // it calls `onSuccess` instead so the surrounding flow continues. `roleIntent`
@@ -33,7 +37,6 @@ export function AuthForm({
   compact?: boolean;
   roleIntent?: "OWNER";
 }) {
-  const router = useRouter();
   const ownerIntent = mode === "register" && roleIntent === "OWNER";
 
   const [email, setEmail] = useState("");
@@ -64,10 +67,12 @@ export function AuthForm({
   }
 
   function goHome(user: AuthUser) {
-    // router.refresh() re-renders server components (e.g. the auth-aware header)
-    // so the now-signed-in state is reflected immediately.
-    router.push(next || capabilityHome(user));
-    router.refresh();
+    // Full-page navigation, NOT router.push: the client router cache can hold
+    // a pre-sign-in RSC payload for the target route whose baked-in
+    // redirect-to-/sign-in would bounce the now-authenticated user straight
+    // back to the auth page. A document load always reaches the server with
+    // the fresh session cookie and re-renders everything signed in.
+    window.location.assign(authDestination(user, next));
   }
 
   function handleSuccess(user: AuthUser) {
@@ -385,7 +390,10 @@ export function AuthForm({
       {mode === "login" && (
         <p className="text-center text-caption">
           New to Staynex?{" "}
-          <Link href="/register" className="font-semibold text-primary">
+          <Link
+            href={withNext("/register", next)}
+            className="font-semibold text-primary"
+          >
             Create an account
           </Link>
         </p>
@@ -393,7 +401,10 @@ export function AuthForm({
       {mode === "register" && (
         <p className="text-center text-caption">
           Already have an account?{" "}
-          <Link href="/sign-in" className="font-semibold text-primary">
+          <Link
+            href={withNext("/sign-in", next)}
+            className="font-semibold text-primary"
+          >
             Sign in
           </Link>
         </p>

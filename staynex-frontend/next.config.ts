@@ -43,6 +43,12 @@ const contentSecurityPolicy = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  experimental: {
+    // Required for the forbidden() gate in lib/server-authorization.ts —
+    // without it forbidden() throws at runtime (500) instead of rendering
+    // app/forbidden.tsx for signed-in users who lack the capability.
+    authInterrupts: true,
+  },
   images: {
     formats: ["image/avif", "image/webp"],
     minimumCacheTTL: 60 * 60 * 24 * 30,

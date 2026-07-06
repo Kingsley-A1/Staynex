@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AuthForm } from "@/features/auth/auth-form";
+import { sanitizeNextPath } from "@/features/auth/navigate";
+import { getServerUser } from "@/lib/server-auth";
+import { isOwnerCapable } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Become a host — Staynex",
@@ -13,6 +17,15 @@ export default async function OwnerRegisterPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const { next } = await searchParams;
+
+  // A signed-in host already has the account this page creates — send them
+  // straight on to onboarding (or wherever they were headed) instead of
+  // showing a registration form that would only reject their email as taken.
+  const user = await getServerUser();
+  if (user && isOwnerCapable(user)) {
+    redirect(sanitizeNextPath(next) ?? "/host/onboarding");
+  }
+
   return (
     <main className="layout-container py-12">
       <div className="mx-auto max-w-md space-y-6">
