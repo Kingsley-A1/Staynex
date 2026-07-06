@@ -458,7 +458,7 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email }),
     }),
-  resetPassword: (body: { token: string; password: string }) =>
+  resetPassword: (body: { email: string; code: string; password: string }) =>
     request<{ ok: true }>("/auth/password/reset", {
       method: "POST",
       body: JSON.stringify(body),

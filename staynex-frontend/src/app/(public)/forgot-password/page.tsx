@@ -10,7 +10,7 @@ export default function ForgotPasswordPage() {
         <header className="text-center">
           <h1 className="text-title-lg text-ink">Reset your password</h1>
           <p className="mt-1 text-muted-foreground">
-            Enter your email and we'll send a link to set a new one.
+            Enter your email and we'll send a 6-digit code to set a new one.
           </p>
         </header>
         <ForgotPasswordForm />

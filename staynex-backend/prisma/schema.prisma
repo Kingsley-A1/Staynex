@@ -289,12 +289,16 @@ model OwnerPayoutMethod {
 
 // Single-use, hashed, expiring password-reset token. The raw token is only ever
 // emailed to the user; the DB stores its SHA-256 hash.
+// Password recovery. `tokenHash` holds the scrypt hash of a 6-digit code
+// (looked up by userId, not by hash), and `attempts` caps brute-force guesses
+// against that short code — mirrors MfaChallenge.
 model PasswordResetToken {
   id        String    @id @default(cuid())
   userId    String
   tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
+  attempts  Int       @default(0)
   createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

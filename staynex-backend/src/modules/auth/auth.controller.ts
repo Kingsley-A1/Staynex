@@ -190,7 +190,7 @@ export class AuthController {
   })
   async resetPassword(@Body() body: unknown) {
     const input = parseBody(resetPasswordSchema, body);
-    return this.auth.resetPassword(input.token, input.password);
+    return this.auth.resetPassword(input.email, input.code, input.password);
   }
 
   @Patch("profile")

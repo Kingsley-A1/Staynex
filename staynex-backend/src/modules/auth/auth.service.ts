@@ -38,7 +38,8 @@ export const ADMIN_SESSION_TTL_MS = readPositiveIntEnv(
   "ADMIN_SESSION_TTL_MS",
   1000 * 60 * 60 * 12,
 ); // 12 hours
-const RESET_TOKEN_TTL_MS = 1000 * 60 * 60; // 1 hour, single-use
+const RESET_CODE_TTL_MS = 1000 * 60 * 15; // 15 minutes, single-use
+const RESET_MAX_ATTEMPTS = 5; // brute-force cap for the 6-digit reset code
 const MFA_CODE_TTL_MS = 1000 * 60 * 10; // 10 minutes, single-use
 const MFA_MAX_ATTEMPTS = 5;
 const EMAIL_DNS_TIMEOUT_MS = 3000;
@@ -305,46 +306,70 @@ export class AuthService {
       select: { id: true, email: true, name: true },
     });
     if (user?.email) {
-      const rawToken = randomBytes(32).toString("hex");
-      const tokenHash = sha256(rawToken);
-      const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
-      // One outstanding token at a time: drop previous unused ones first.
+      const code = generateSixDigitCode();
+      const expiresAt = new Date(Date.now() + RESET_CODE_TTL_MS);
+      // One outstanding code at a time: drop previous unused ones first.
       await prisma.passwordResetToken.deleteMany({
         where: { userId: user.id, usedAt: null },
       });
       await prisma.passwordResetToken.create({
-        data: { userId: user.id, tokenHash, expiresAt },
+        // tokenHash stores the scrypt hash of the code; lookup is by userId, so
+        // the short code is never a database key and can't be enumerated.
+        data: { userId: user.id, tokenHash: hashPassword(code), expiresAt },
       });
-      await this.sendResetEmail(user.email, user.name, rawToken);
+      await this.sendResetEmail(user.email, user.name, code);
     }
     return { ok: true };
   }
 
-  /** Complete password recovery with a single-use, unexpired token. */
+  /**
+   * Complete recovery with the 6-digit code sent to the user's email. Verified
+   * against the user's newest active code, with a per-code attempts cap (the
+   * code is short, so unlimited guesses would be brute-forceable). All failure
+   * modes return one generic message so nothing about the account leaks.
+   */
   async resetPassword(
-    token: string,
+    email: string,
+    code: string,
     newPassword: string,
   ): Promise<{ ok: true }> {
-    const tokenHash = sha256(token);
-    const record = await prisma.passwordResetToken.findUnique({
-      where: { tokenHash },
+    const invalid = () =>
+      new UnauthorizedException("This code is invalid or has expired");
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
     });
-    if (!record || record.usedAt || record.expiresAt.getTime() <= Date.now()) {
-      throw new UnauthorizedException(
-        "This reset link is invalid or has expired",
-      );
+    if (!user) throw invalid();
+
+    const record = await prisma.passwordResetToken.findFirst({
+      where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!record || record.attempts >= RESET_MAX_ATTEMPTS) throw invalid();
+
+    if (!verifyPassword(code, record.tokenHash)) {
+      await prisma.passwordResetToken.update({
+        where: { id: record.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw invalid();
     }
+
+    // Atomically claim the code so a racing request can't reuse it.
+    const claimed = await prisma.passwordResetToken.updateMany({
+      where: { id: record.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    if (claimed.count !== 1) throw invalid();
+
     await prisma.$transaction([
       prisma.user.update({
-        where: { id: record.userId },
+        where: { id: user.id },
         data: { passwordHash: hashPassword(newPassword) },
       }),
-      prisma.passwordResetToken.update({
-        where: { id: record.id },
-        data: { usedAt: new Date() },
-      }),
       // Invalidate existing sessions so a reset always re-authenticates.
-      prisma.session.deleteMany({ where: { userId: record.userId } }),
+      prisma.session.deleteMany({ where: { userId: user.id } }),
     ]);
     return { ok: true };
   }
@@ -539,7 +564,7 @@ export class AuthService {
         "This account cannot receive verification codes",
       );
 
-    const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+    const code = generateSixDigitCode();
     const expiresAt = new Date(Date.now() + MFA_CODE_TTL_MS);
     await prisma.mfaChallenge.deleteMany({
       where: { userId, usedAt: null, expiresAt: { gt: new Date() } },
@@ -560,23 +585,19 @@ export class AuthService {
   private async sendResetEmail(
     email: string,
     name: string | null,
-    rawToken: string,
+    code: string,
   ): Promise<void> {
-    const base = (
-      process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-    ).replace(/\/+$/, "");
-    const url = `${base}/reset-password?token=${rawToken}`;
     if (this.email.isConfigured()) {
-      const greeting = name ? `Hi ${name},` : "Hi,";
+      const greeting = name ? `Hi ${escapeHtml(name)},` : "Hi,";
       await this.email.send({
         to: email,
-        subject: "Reset your Staynex password",
-        html: `<p>${greeting}</p><p>We received a request to reset your Staynex password. This link expires in 1 hour and can be used once.</p><p><a href="${url}">Reset your password</a></p><p>If you didn't request this, you can safely ignore this email.</p>`,
-        text: `${greeting}\n\nReset your Staynex password (expires in 1 hour, single use):\n${url}\n\nIf you didn't request this, ignore this email.`,
+        subject: "Your Staynex password reset code",
+        html: resetCodeEmailHtml(greeting, code),
+        text: `${name ? `Hi ${name},` : "Hi,"}\n\nYour Staynex password reset code (expires in 15 minutes, single use):\n\n${code}\n\nEnter it on the password reset page to set a new password. If you didn't request this, ignore this email.`,
       });
     } else if (process.env.NODE_ENV !== "production") {
-      // Dev-safe: no email provider configured, so surface the link in logs only.
-      this.logger.warn(`Password reset link (dev only) for ${email}: ${url}`);
+      // Dev-safe: no email provider configured, so surface the code in logs only.
+      this.logger.warn(`Password reset code (dev only) for ${email}: ${code}`);
     }
   }
 
@@ -671,6 +692,16 @@ function escapeHtml(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+/** A zero-padded 6-digit numeric code (used for MFA and password reset). */
+function generateSixDigitCode(): string {
+  return randomInt(0, 1_000_000).toString().padStart(6, "0");
+}
+
+/** Branded reset email with the code shown large and spaced for easy typing. */
+function resetCodeEmailHtml(greeting: string, code: string): string {
+  return `<!doctype html><html><body style="margin:0;background:#F7F7FF;font-family:Arial,Helvetica,sans-serif"><div style="max-width:520px;margin:0 auto;padding:24px"><h1 style="color:#27187D;font-size:20px;margin:0 0 8px">Reset your password</h1><p style="color:#101014;font-size:14px;line-height:1.5;margin:0 0 12px">${greeting}</p><p style="color:#101014;font-size:14px;line-height:1.5;margin:0 0 8px">Enter this code on the Staynex password reset page to set a new password. It expires in 15 minutes and can be used once.</p><div style="margin:16px 0;padding:16px;text-align:center;background:#fff;border:1px solid #E7E5F2;border-radius:12px"><span style="font-size:32px;font-weight:700;letter-spacing:8px;color:#27187D">${code}</span></div><p style="color:#6E6A83;font-size:12px;margin:12px 0 0">If you didn't request this, you can safely ignore this email — your password won't change.</p><p style="color:#6E6A83;font-size:12px;margin:12px 0 0">Staynex — Book trusted stays, confidently.</p></div></body></html>`;
 }
 
 function sha256(value: string): string {
