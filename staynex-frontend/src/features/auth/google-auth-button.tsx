@@ -38,9 +38,23 @@ export function GoogleAuthButton({
   const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  // Render the Google button at the wrapper's own width so it lines up with the
+  // email/password inputs and never overflows on small screens. GIS caps at
+  // 400px, so we clamp to that.
+  const [width, setWidth] = useState(0);
 
   useEffect(() => {
-    if (!CLIENT_ID) return;
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setWidth(el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!CLIENT_ID || width === 0) return;
     let cancelled = false;
 
     function fail(message: string) {
@@ -82,11 +96,13 @@ export function GoogleAuthButton({
           void handleCredential(resp.credential);
         },
       });
+      // Re-render clears any prior button so a resize doesn't stack buttons.
+      ref.current.innerHTML = "";
       g.accounts.id.renderButton(ref.current, {
         theme: "outline",
         size: "large",
         text: "continue_with",
-        width: 320,
+        width: Math.max(200, Math.min(400, Math.round(width))),
         logo_alignment: "center",
       });
     }
@@ -106,13 +122,13 @@ export function GoogleAuthButton({
     return () => {
       cancelled = true;
     };
-  }, [next, onSuccess, onError, router, intent]);
+  }, [next, onSuccess, onError, router, intent, width]);
 
   if (!CLIENT_ID) return null;
 
   return (
     <div className="space-y-3">
-      <div ref={ref} className="flex min-h-10 justify-center" />
+      <div ref={ref} className="flex min-h-10 w-full justify-center overflow-hidden" />
       {error && (
         <p className="text-center text-sm text-error" role="alert">
           {error}
