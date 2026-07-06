@@ -176,6 +176,13 @@ export function AssistantWidget() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
+  // Close the whole assistant on route changes so it never lingers over a new
+  // page after a navigation (in-message links, nav, back/forward).
+  useEffect(() => {
+    setOpen(false);
+    setHistoryOpen(false);
+  }, [pathname]);
+
   // Escape closes the drawer first, then the panel.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -336,10 +343,11 @@ export function AssistantWidget() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls="staynex-ai-panel"
+        aria-label={open ? "Close AI assistant" : "Open AI assistant"}
         className="fixed bottom-4 right-4 z-40 inline-flex h-11 animate-scale-in items-center gap-2 whitespace-nowrap rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg transition-colors hover:bg-primary-hover"
       >
         <SparkIcon />
-        {open ? "Close" : "Staynex AI"}
+        {open ? "Close" : "AI"}
       </button>
 
       {open && (
