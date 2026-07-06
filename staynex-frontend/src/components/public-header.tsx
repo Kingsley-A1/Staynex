@@ -11,7 +11,7 @@ export function PublicHeader() {
           aria-label="Staynex Bookings home"
           className="inline-flex items-center"
         >
-          <Brandmark priority />
+          <Brandmark priority hideSuffixOnMobile />
         </Link>
         <nav className="flex items-center gap-2 text-sm font-medium">
           <Link

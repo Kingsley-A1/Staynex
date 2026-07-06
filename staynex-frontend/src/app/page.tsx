@@ -110,7 +110,7 @@ function SiteHeader() {
           className="flex items-center"
           aria-label="Staynex Bookings home"
         >
-          <Brandmark priority />
+          <Brandmark priority hideSuffixOnMobile />
         </Link>
 
         <nav className="hidden items-center gap-8 text-sm font-medium text-muted-foreground md:flex">

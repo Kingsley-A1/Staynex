@@ -83,7 +83,7 @@ export function DashboardChrome({
                 <Image src="/icon.png" alt="Staynex Bookings" fill sizes="32px" className="object-cover" />
               </span>
             ) : (
-              <Brandmark iconClassName="size-7" textClassName="text-base" />
+              <Brandmark iconClassName="size-7" textClassName="text-base" hideSuffixOnMobile />
             )}
           </Link>
           <button
@@ -119,7 +119,7 @@ export function DashboardChrome({
             aria-label="Staynex Bookings home"
             className="inline-flex items-center lg:hidden"
           >
-            <Brandmark iconClassName="size-7" textClassName="text-base" />
+            <Brandmark iconClassName="size-7" textClassName="text-base" hideSuffixOnMobile />
           </Link>
           <div className="flex items-center gap-3">
             <NotificationCenter />

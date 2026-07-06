@@ -15,11 +15,18 @@ export function Brandmark({
   iconClassName = "size-8",
   textClassName = "text-lg sm:text-xl",
   priority = false,
+  hideSuffixOnMobile = false,
 }: {
   className?: string;
   iconClassName?: string;
   textClassName?: string;
   priority?: boolean;
+  /**
+   * Hide the "Bookings" suffix below `sm`. Used in tight mobile headers where
+   * the extra word (and its font-swap reflow) causes layout shift; the footer
+   * keeps the full name. See [[header-mobile-no-bookings]].
+   */
+  hideSuffixOnMobile?: boolean;
 }) {
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
@@ -37,8 +44,11 @@ export function Brandmark({
           textClassName,
         )}
       >
-        <span className="text-primary">Staynex</span>{" "}
-        <span className="text-ink">Bookings</span>
+        <span className="text-primary">Staynex</span>
+        <span className={cn("text-ink", hideSuffixOnMobile && "hidden sm:inline")}>
+          {" "}
+          Bookings
+        </span>
       </span>
     </span>
   );
