@@ -27,6 +27,7 @@ export const HOST_NAV: WorkspaceNavItem[] = [
   { href: "/host/dashboard", label: "Dashboard", icon: "overview", section: "Workspace" },
   { href: "/host/properties", label: "Properties", icon: "properties", section: "Workspace" },
   { href: "/host/bookings", label: "Bookings", icon: "bookings", section: "Workspace" },
+  { href: "/host/notifications", label: "Notifications", icon: "notifications", section: "Workspace" },
   { href: "/host/onboarding", label: "Onboarding", icon: "onboarding", section: "Account" },
   { href: "/host/settings", label: "Settings", icon: "settings", section: "Account" },
 ];
@@ -37,6 +38,7 @@ export const ADMIN_NAV: WorkspaceNavItem[] = [
   { href: "/admin/bookings", label: "Bookings & payments", icon: "bookings", section: "Operations" },
   { href: "/admin/payouts", label: "Payouts", icon: "payouts", section: "Operations" },
   { href: "/admin/users", label: "Users", icon: "users", section: "People" },
+  { href: "/admin/notifications", label: "Notifications", icon: "notifications", section: "People" },
   { href: "/admin/testimonials", label: "Testimonials", icon: "testimonials", section: "Trust" },
   { href: "/admin/audit", label: "Audit log", icon: "audit", section: "Trust" },
   { href: "/admin/ai-logs", label: "AI logs", icon: "ai", section: "Trust" },

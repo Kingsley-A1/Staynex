@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authApi } from "@/lib/api";
+import { NotificationCenter } from "@/components/notification-center";
 import {
   type AuthUser,
   capabilityHome,
@@ -82,6 +83,7 @@ function AccountMenu({ user }: { user: AuthUser }) {
       >
         Find a stay
       </Link>
+      <NotificationCenter />
       <div className="relative" ref={ref}>
         <button
           type="button"
