@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { Brandmark } from "@/components/brandmark";
 import { MobileNav } from "@/components/mobile-nav";
 import { NotificationCenter } from "@/components/notification-center";
 import { NAV_ICONS, IconChevronLeft } from "@/components/icons";
@@ -76,15 +77,13 @@ export function DashboardChrome({
             collapsed ? "flex-col justify-center gap-2 py-2" : "justify-between px-4",
           )}
         >
-          <Link href="/" aria-label="Staynex home" className="inline-flex items-center">
+          <Link href="/" aria-label="Staynex Bookings home" className="inline-flex items-center">
             {collapsed ? (
               <span className="relative block size-8 overflow-hidden rounded-md">
-                <Image src="/icon.png" alt="Staynex" fill sizes="32px" className="object-cover" />
+                <Image src="/icon.png" alt="Staynex Bookings" fill sizes="32px" className="object-cover" />
               </span>
             ) : (
-              <span className="relative block h-8 w-28">
-                <Image src="/assets/logo.png" alt="Staynex" fill sizes="112px" className="object-contain object-left" />
-              </span>
+              <Brandmark iconClassName="size-7" textClassName="text-base" />
             )}
           </Link>
           <button
@@ -117,10 +116,10 @@ export function DashboardChrome({
         <header className="flex h-16 items-center justify-between gap-3 border-b border-border bg-surface-raised px-4 lg:justify-end">
           <Link
             href="/"
-            aria-label="Staynex home"
-            className="relative block h-9 w-32 lg:hidden"
+            aria-label="Staynex Bookings home"
+            className="inline-flex items-center lg:hidden"
           >
-            <Image src="/assets/logo.png" alt="Staynex" fill sizes="128px" className="object-contain object-left" />
+            <Brandmark iconClassName="size-7" textClassName="text-base" />
           </Link>
           <div className="flex items-center gap-3">
             <NotificationCenter />

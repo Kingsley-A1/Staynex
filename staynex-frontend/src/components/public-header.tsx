@@ -8,10 +8,10 @@ export function PublicHeader() {
       <div className="layout-container flex h-16 items-center justify-between gap-4">
         <Link
           href="/"
-          aria-label="Staynex home"
+          aria-label="Staynex Bookings home"
           className="inline-flex items-center"
         >
-          <Brandmark className="h-9 w-32" priority />
+          <Brandmark priority />
         </Link>
         <nav className="flex items-center gap-2 text-sm font-medium">
           <Link

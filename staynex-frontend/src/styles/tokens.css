@@ -56,6 +56,9 @@
     "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji",
     "Segoe UI Emoji";
   --font-display: var(--font-sans);
+  /* Brand wordmark only (utility: font-brand). --font-brand-src is injected by
+     next/font in layout.tsx; falls back to the system stack before it loads. */
+  --font-brand: var(--font-brand-src, "Plus Jakarta Sans"), var(--font-sans);
   --font-mono:
     "SF Mono", ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
