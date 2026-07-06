@@ -119,6 +119,12 @@ function formatDateTime(iso: string | null): string {
   });
 }
 
+/** "paystack" -> "Paystack" for a receipt that reads cleanly. */
+function formatProvider(provider: string | null): string {
+  if (!provider) return "Card";
+  return provider.charAt(0).toUpperCase() + provider.slice(1);
+}
+
 function guestsLabel(adults: number, children: number, infants: number): string {
   const parts: string[] = [`${adults} adult${adults === 1 ? "" : "s"}`];
   if (children > 0) parts.push(`${children} child${children === 1 ? "" : "ren"}`);
@@ -228,7 +234,7 @@ function VoucherDoc({ data, qr }: { data: VoucherData; qr: string }) {
               Status: <Text style={styles.metaStrong}>{confirmed ? "Paid in full" : "Pending"}</Text>
             </Text>
             <Text style={styles.metaRow}>
-              Method: <Text style={styles.metaStrong}>{data.provider || "Card"}</Text>
+              Method: <Text style={styles.metaStrong}>{formatProvider(data.provider)}</Text>
             </Text>
             <Text style={styles.metaRow}>
               Paid on: <Text style={styles.metaStrong}>{formatDateTime(data.paidAt)}</Text>
