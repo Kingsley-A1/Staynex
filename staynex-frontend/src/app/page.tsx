@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Brandmark } from "@/components/brandmark";
+import { AnimatedGradient } from "@/components/animated-gradient";
 import { SiteFooter } from "@/components/site-footer";
 import { SearchPanel } from "@/features/booking/search-panel";
 import { TestimonialsSection } from "@/features/reviews/testimonials-section";
@@ -104,8 +105,12 @@ function SiteHeader() {
   return (
     <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-white">
       <div className="layout-container flex h-16 items-center justify-between gap-4">
-        <Link href="/" className="flex items-center" aria-label="Staynex home">
-          <Brandmark />
+        <Link
+          href="/"
+          className="flex items-center"
+          aria-label="Staynex Bookings home"
+        >
+          <Brandmark priority />
         </Link>
 
         <nav className="hidden items-center gap-8 text-sm font-medium text-muted-foreground md:flex">
@@ -135,7 +140,8 @@ function SiteHeader() {
 function Hero() {
   return (
     <section className="home-hero relative overflow-hidden">
-      <div className="layout-container relative py-16 sm:py-20 lg:py-24">
+      <AnimatedGradient />
+      <div className="layout-container relative z-10 py-16 sm:py-20 lg:py-24">
         <div className="mx-auto max-w-3xl text-center">
           <p className="text-overline mb-4">Verified stays · Secure payments</p>
           <h1 className="font-display text-3xl font-bold tracking-tighter text-ink sm:text-4xl lg:text-5xl">
