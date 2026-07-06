@@ -26,6 +26,9 @@ export default async function OwnerBookingDetailPage({
   const { id } = await params;
   const { data: booking, offline } = await getHostBooking(id);
 
+  const verified =
+    booking?.status === "CONFIRMED" && booking.paymentStatus === "SUCCESS";
+
   if (!booking) {
     return (
       <div className="space-y-4">
@@ -52,8 +55,43 @@ export default async function OwnerBookingDetailPage({
         <div className="flex flex-wrap items-center gap-2">
           <BookingStatusBadge status={booking.status} />
           <PaymentStatusBadge status={booking.paymentStatus} />
+          {verified && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-success-border bg-success-surface px-2.5 py-0.5 text-xs font-semibold text-success">
+              <span aria-hidden>✓</span> Verified
+            </span>
+          )}
         </div>
       </header>
+
+      {/* Host-side check-in proof: the same live card the guest's QR opens. */}
+      {verified && booking.paymentReference && (
+        <section className="surface-card flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden
+              className="grid size-10 shrink-0 place-items-center rounded-full bg-success-surface text-lg font-bold text-success"
+            >
+              ✓
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink">Verified booking</p>
+              <p className="text-caption text-muted-foreground">
+                Payment is confirmed on Staynex. Open the live card to check the guest in — it&apos;s
+                the same one the guest&apos;s QR opens.
+              </p>
+            </div>
+          </div>
+          <LinkButton
+            href={`/verify/${booking.paymentReference}`}
+            variant="secondary"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0"
+          >
+            Open verification
+          </LinkButton>
+        </section>
+      )}
 
       <div className="surface-card divide-y divide-border px-5 py-2 text-sm">
         <Row label="Room" value={booking.roomName} />
