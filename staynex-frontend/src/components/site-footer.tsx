@@ -19,8 +19,9 @@ const footerColumns = [
     ],
   },
   {
-    title: "Legal",
+    title: "Support",
     links: [
+      ["Docs", "/docs"],
       ["Terms", "/terms"],
       ["Policies", "/policies"],
       ["Legal", "/legal"],
@@ -29,19 +30,22 @@ const footerColumns = [
 ] as const;
 
 export function SiteFooter() {
+  const year = new Date().getFullYear();
+
   return (
     <footer className="border-t border-border bg-surface-raised">
-      <div className="layout-container py-12">
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="col-span-2 lg:col-span-2">
+      <div className="layout-container py-12 sm:py-14">
+        {/* Brand + navigation */}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 lg:grid-cols-[2fr_1fr_1fr_1fr]">
+          <div className="col-span-2 sm:col-span-3 lg:col-span-1">
             <Link
               href="/"
               className="inline-flex items-center"
-              aria-label="Staynex home"
+              aria-label="Staynex Bookings home"
             >
               <Brandmark />
             </Link>
-            <p className="mt-3 max-w-xs text-body-sm text-muted-foreground">
+            <p className="mt-4 max-w-xs text-body-sm text-muted-foreground">
               Book verified stays with real-time availability, secure payments,
               and reliable support.
             </p>
@@ -50,7 +54,7 @@ export function SiteFooter() {
           {footerColumns.map((column) => (
             <nav key={column.title} aria-label={column.title}>
               <h2 className="text-overline">{column.title}</h2>
-              <ul className="mt-3 space-y-2.5">
+              <ul className="mt-4 space-y-2.5">
                 {column.links.map(([label, href]) => (
                   <li key={label}>
                     <Link
@@ -66,31 +70,36 @@ export function SiteFooter() {
           ))}
         </div>
 
-        <div className="mt-10 flex flex-col gap-5 border-t border-border pt-6 text-caption lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-            <p>© {new Date().getFullYear()} Staynex. All rights reserved.</p>
-            <p className="inline-flex items-center gap-1.5">
-              <IconGlobe className="size-4" />
-              Nigeria · Expanding worldwide
-            </p>
-          </div>
+        {/* Meta row */}
+        <div className="mt-12 flex flex-col items-center gap-3 border-t border-border pt-8 text-caption sm:flex-row sm:justify-between">
+          <p>© {year} Staynex Bookings. All rights reserved.</p>
+          <p className="inline-flex items-center gap-1.5">
+            <IconGlobe className="size-4" />
+            Nigeria · Expanding worldwide
+          </p>
+        </div>
 
+        {/* Down footer — partner attribution, centered and clean */}
+        <div className="mt-8 flex justify-center">
           <a
             href="https://bespoketech.com.ng"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex flex-wrap items-center gap-2 rounded-md text-muted-foreground transition-colors hover:text-ink"
+            className="group inline-flex flex-col items-center gap-1.5 rounded-md text-center transition-colors"
           >
-            <span>Designed and Developed by</span>
-            <Image
-              src="/assets/parteners/bespoke-technologies-logo-main.png"
-              alt=""
-              width={132}
-              height={36}
-              className="h-7 w-auto object-contain"
-            />
-            <span className="font-semibold text-ink">Bespoke Technologies</span>
-            <span className="text-muted-foreground">bespoketech.com.ng</span>
+            <span className="text-caption">Designed &amp; developed by</span>
+            <span className="inline-flex items-center gap-2">
+              <Image
+                src="/assets/parteners/bespoke-technologies-logo-main.png"
+                alt=""
+                width={120}
+                height={32}
+                className="h-6 w-auto object-contain"
+              />
+              <span className="text-sm font-semibold text-ink transition-colors group-hover:text-primary">
+                Bespoke Technologies
+              </span>
+            </span>
           </a>
         </div>
       </div>
