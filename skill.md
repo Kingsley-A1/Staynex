@@ -2,7 +2,9 @@
 name: staynex-project-standard
 description: Staynex operating standard for agents working on the hospitality booking platform. Use for product decisions, architecture, frontend, backend, database, AI, security, QA, documentation, or implementation work in the Staynex repository.
 ---
+
 RULE: _No hardcoding_
+
 # Staynex Project Standard
 
 Staynex is a hospitality booking platform starting from Calabar and built for international expansion. Treat this file as the single source of truth for agent behavior in this repository.
@@ -215,9 +217,9 @@ Representative demo properties:
 
 ## 11. AI Agent Rules
 
-Name: `Staynex Agent`
+Name: `Staynex AI`
 
-Staynex Agent is a professional AI agent that helps people find available stays on Staynex and guides them confidently through the booking journey: search, view a stay, check availability, hold, sign in, pay with Paystack, and confirmation. It may compare stays, explain room differences, read policies, navigate booking steps, and help owners improve listings.
+Staynex AI is a professional AI agent that helps people find available stays on Staynex and guides them confidently through the booking journey: search, view a stay, check availability, hold, sign in, pay with Paystack, and confirmation. It may compare stays, explain room differences, read policies, navigate booking steps, and help owners improve listings.
 
 The agent must not:
 

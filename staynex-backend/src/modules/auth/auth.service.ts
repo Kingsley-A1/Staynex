@@ -20,6 +20,12 @@ import { resolve4, resolve6, resolveMx } from "node:dns/promises";
 import { prisma } from "../../../db";
 import type { AppCapability, AuthUser } from "../../../types";
 import { EmailService } from "../notifications/email.service";
+import {
+  getStaynexAppOrigin,
+  renderAdminMfaEmail,
+  renderPasswordResetEmail,
+  renderWelcomeEmail,
+} from "../notifications/templates";
 import type {
   AdminRegisterInput,
   CompleteMfaInput,
@@ -588,12 +594,15 @@ export class AuthService {
     code: string,
   ): Promise<void> {
     if (this.email.isConfigured()) {
-      const greeting = name ? `Hi ${escapeHtml(name)},` : "Hi,";
+      const rendered = renderPasswordResetEmail({
+        appOrigin: getStaynexAppOrigin(),
+        name,
+        code,
+        expiresInMinutes: RESET_CODE_TTL_MS / 60_000,
+      });
       await this.email.send({
         to: email,
-        subject: "Your Staynex password reset code",
-        html: resetCodeEmailHtml(greeting, code),
-        text: `${name ? `Hi ${name},` : "Hi,"}\n\nYour Staynex password reset code (expires in 15 minutes, single use):\n\n${code}\n\nEnter it on the password reset page to set a new password. If you didn't request this, ignore this email.`,
+        ...rendered,
       });
     } else if (process.env.NODE_ENV !== "production") {
       // Dev-safe: no email provider configured, so surface the code in logs only.
@@ -607,12 +616,15 @@ export class AuthService {
     code: string,
   ): Promise<void> {
     if (this.email.isConfigured()) {
-      const greeting = name ? `Hi ${name},` : "Hi,";
+      const rendered = renderAdminMfaEmail({
+        appOrigin: getStaynexAppOrigin(),
+        name,
+        code,
+        expiresInMinutes: MFA_CODE_TTL_MS / 60_000,
+      });
       await this.email.send({
         to: email,
-        subject: "Your Staynex admin verification code",
-        html: `<p>${greeting}</p><p>Use this code to finish signing in to Staynex Admin. It expires in 10 minutes.</p><p><strong>${code}</strong></p><p>If you didn't request this, reset your password and contact platform support.</p>`,
-        text: `${greeting}\n\nUse this code to finish signing in to Staynex Admin. It expires in 10 minutes:\n${code}\n\nIf you didn't request this, reset your password and contact platform support.`,
+        ...rendered,
       });
     } else if (process.env.NODE_ENV !== "production") {
       this.logger.warn(`Admin MFA code (dev only) for ${email}: ${code}`);
@@ -625,16 +637,13 @@ export class AuthService {
 
   private async sendWelcomeEmail(user: AuthUser): Promise<void> {
     if (!user.email || !this.email.isConfigured()) return;
-    const firstName = user.name?.trim().split(/\s+/)[0];
-    const greeting = firstName ? `Hi ${escapeHtml(firstName)},` : "Hi,";
-    const homeUrl = (
-      process.env.NEXT_PUBLIC_APP_URL || "https://staynexbookings.ng"
-    ).replace(/\/+$/, "");
+    const rendered = renderWelcomeEmail({
+      appOrigin: getStaynexAppOrigin(),
+      name: user.name,
+    });
     await this.email.send({
       to: user.email,
-      subject: "Welcome to Staynex",
-      html: `<!doctype html><html><body style="margin:0;background:#F7F7FF;font-family:Arial,Helvetica,sans-serif"><div style="max-width:520px;margin:0 auto;padding:24px"><h1 style="color:#27187D;font-size:22px;margin:0 0 12px">Welcome to Staynex</h1><p style="color:#101014;font-size:15px;line-height:1.5;margin:0 0 12px">${greeting}</p><p style="color:#101014;font-size:15px;line-height:1.5;margin:0 0 16px">Your account is ready. You can now search verified stays, manage bookings, and use secure payments.</p><p style="margin:0 0 20px"><a href="${homeUrl}" style="display:inline-block;background:#27187D;color:#fff;text-decoration:none;border-radius:8px;padding:12px 16px;font-weight:700">Open Staynex</a></p><p style="color:#6E6A83;font-size:12px;margin:0">Staynex — Book trusted stays, confidently.</p></div></body></html>`,
-      text: `${firstName ? `Hi ${firstName},` : "Hi,"}\n\nWelcome to Staynex. Your account is ready.\n\nOpen Staynex: ${homeUrl}`,
+      ...rendered,
     });
   }
 
@@ -685,23 +694,9 @@ function safeEquals(a: string, b: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
 /** A zero-padded 6-digit numeric code (used for MFA and password reset). */
 function generateSixDigitCode(): string {
   return randomInt(0, 1_000_000).toString().padStart(6, "0");
-}
-
-/** Branded reset email with the code shown large and spaced for easy typing. */
-function resetCodeEmailHtml(greeting: string, code: string): string {
-  return `<!doctype html><html><body style="margin:0;background:#F7F7FF;font-family:Arial,Helvetica,sans-serif"><div style="max-width:520px;margin:0 auto;padding:24px"><h1 style="color:#27187D;font-size:20px;margin:0 0 8px">Reset your password</h1><p style="color:#101014;font-size:14px;line-height:1.5;margin:0 0 12px">${greeting}</p><p style="color:#101014;font-size:14px;line-height:1.5;margin:0 0 8px">Enter this code on the Staynex password reset page to set a new password. It expires in 15 minutes and can be used once.</p><div style="margin:16px 0;padding:16px;text-align:center;background:#fff;border:1px solid #E7E5F2;border-radius:12px"><span style="font-size:32px;font-weight:700;letter-spacing:8px;color:#27187D">${code}</span></div><p style="color:#6E6A83;font-size:12px;margin:12px 0 0">If you didn't request this, you can safely ignore this email — your password won't change.</p><p style="color:#6E6A83;font-size:12px;margin:12px 0 0">Staynex — Book trusted stays, confidently.</p></div></body></html>`;
 }
 
 function sha256(value: string): string {

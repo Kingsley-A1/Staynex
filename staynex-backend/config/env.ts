@@ -59,6 +59,7 @@ export const envSchema = z.object({
   // AI assistant (Google Gemini). Optional; AiModule fails gracefully (clear
   // "unavailable" state) when missing.
   GEMINI_API_KEY: optionalString,
+  GEMINI_MODEL: optionalString,
   // 6-digit access codes. Backend derives admin privilege from the code;
   // the client never chooses its own admin role.
   ADMIN_REVIEWER_ACCESS_CODE: z.preprocess(

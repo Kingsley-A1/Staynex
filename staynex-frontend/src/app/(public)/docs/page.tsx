@@ -271,12 +271,12 @@ const DOCS: DocGroup[] = [
     sections: [
       {
         id: "assistant",
-        title: "The Staynex Agent",
+        title: "The Staynex AI",
         summary: "An AI assistant that helps you find and book stays.",
         blocks: [
           {
             kind: "p",
-            text: "The Staynex Agent helps you search stays, compare rooms, understand policies, and move through the booking steps with confidence. It is a guide — it will not invent availability, confirm payments, or promise refunds. For anything that affects money or a confirmed booking, it points you to the verified step in the product.",
+            text: "The Staynex AI helps you search stays, compare rooms, understand policies, and move through the booking steps with confidence. It is a guide — it will not invent availability, confirm payments, or promise refunds. For anything that affects money or a confirmed booking, it points you to the verified step in the product.",
           },
         ],
       },

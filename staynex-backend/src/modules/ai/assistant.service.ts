@@ -4,7 +4,12 @@ import { prisma } from "../../../db";
 import type { AssistantReply, AuthUser } from "../../../types";
 import { CatalogService } from "../catalog/catalog.service";
 import { ConversationsService } from "./conversations.service";
-import { GeminiRateLimitError, GeminiService, type GeminiTurn } from "./gemini.service";
+import { GeminiService, type GeminiTurn } from "./gemini.service";
+import {
+  completeReliably,
+  recoveryMessage,
+  type AssistantRecovery,
+} from "./assistant-reliability";
 import { retrieveKnowledge } from "./staynex-knowledge";
 import type { AssistantInput } from "./dto";
 
@@ -17,6 +22,8 @@ export type AssistantStreamEvent =
       refused: boolean;
       unavailable: boolean;
       groundedFacts: string[];
+      recovery: AssistantRecovery;
+      requestId: string;
     };
 
 const SYSTEM_PROMPT = `You are "Staynex AI", a super-intelligent assistant built directly into the Staynex hospitality booking platform. You were engineered by a team of perfectionist engineers at Bespoke Technologies (bespoketech.com.ng), led by Kingsley Maduabuchi, with one goal: to make your booking experience on Staynex stand out. You are an AI — never claim to be human — but you are sharp, warm, and genuinely helpful.
@@ -64,17 +71,38 @@ export class AssistantService {
     private readonly conversations: ConversationsService,
   ) {}
 
-  async ask(input: AssistantInput, user: AuthUser | null): Promise<AssistantReply> {
-    const conversationId = await this.ensureConversation(input.conversationId, user, input.message);
-    await this.conversations.saveMessage(conversationId, AIMessageRole.USER, input.message);
+  async ask(
+    input: AssistantInput,
+    user: AuthUser | null,
+    requestId = "untracked",
+  ): Promise<AssistantReply> {
+    const conversationId = await this.ensureConversation(
+      input.conversationId,
+      user,
+      input.message,
+    );
+    await this.conversations.saveMessage(
+      conversationId,
+      AIMessageRole.USER,
+      input.message,
+    );
     await this.conversations.ensureTitle(conversationId, input.message);
 
     const respond = async (
       reply: string,
       actionType: string,
-      flags: { refused?: boolean; unavailable?: boolean; groundedFacts?: string[] } = {},
+      flags: {
+        refused?: boolean;
+        unavailable?: boolean;
+        groundedFacts?: string[];
+        recovery?: AssistantRecovery;
+      } = {},
     ): Promise<AssistantReply> => {
-      await this.conversations.saveMessage(conversationId, AIMessageRole.AGENT, reply);
+      await this.conversations.saveMessage(
+        conversationId,
+        AIMessageRole.AGENT,
+        reply,
+      );
       await this.log(conversationId, actionType, summarize(input.message));
       return {
         conversationId,
@@ -82,12 +110,15 @@ export class AssistantService {
         refused: flags.refused ?? false,
         unavailable: flags.unavailable ?? false,
         groundedFacts: flags.groundedFacts ?? [],
+        recovery: flags.recovery ?? "none",
+        requestId,
       };
     };
 
     // 1) Deterministic safety gate — never reaches the model for unsafe asks.
     const blocked = this.guardrail(input.message);
-    if (blocked) return respond(blocked.reply, blocked.summary, { refused: true });
+    if (blocked)
+      return respond(blocked.reply, blocked.summary, { refused: true });
 
     // 2) Trained, deterministic answers for the common booking-journey questions
     //    (work even when the model is unavailable; never invent availability).
@@ -99,30 +130,32 @@ export class AssistantService {
       return respond(
         "Staynex AI is temporarily unavailable. You can still search stays, view rooms, and book directly on the property page.",
         "UNAVAILABLE",
-        { unavailable: true },
+        { unavailable: true, recovery: "provider_unconfigured" },
       );
     }
 
     // 4) Grounding + conversation memory (current-thread replay and, for
     //    signed-in users, compact context from their past conversations).
-    const { systemPrompt, history, groundedFacts } = await this.prepareModelInput(
-      input,
-      user,
-      conversationId,
-    );
+    const { systemPrompt, history, groundedFacts } =
+      await this.prepareModelInput(input, user, conversationId);
 
     const result = await this.gemini.generateResult(systemPrompt, history);
     if (!result.ok) {
-      const reply =
-        result.reason === "rate_limited"
-          ? "Staynex AI is handling a lot of questions right now. Please try again in a moment — meanwhile you can search stays and book directly on the property page."
-          : "Staynex AI couldn't respond right now. Please try again, or continue booking directly on the property page.";
-      return respond(reply, "UNAVAILABLE", { unavailable: true, groundedFacts });
+      const reply = recoveryMessage(result.reason);
+      return respond(reply, `UNAVAILABLE_${result.reason.toUpperCase()}`, {
+        unavailable: true,
+        groundedFacts,
+        recovery: result.reason,
+      });
     }
 
-    return respond(result.text, groundedFacts.length ? "AGENT_REPLY_GROUNDED" : "AGENT_REPLY", {
-      groundedFacts,
-    });
+    return respond(
+      result.text,
+      groundedFacts.length ? "AGENT_REPLY_GROUNDED" : "AGENT_REPLY",
+      {
+        groundedFacts,
+      },
+    );
   }
 
   /**
@@ -131,18 +164,39 @@ export class AssistantService {
    * metadata. Deterministic outcomes (guardrail / canned / unavailable) emit their
    * full text as a single chunk. The complete reply is persisted once, at the end.
    */
-  async *askStream(input: AssistantInput, user: AuthUser | null): AsyncGenerator<AssistantStreamEvent> {
-    const conversationId = await this.ensureConversation(input.conversationId, user, input.message);
-    await this.conversations.saveMessage(conversationId, AIMessageRole.USER, input.message);
+  async *askStream(
+    input: AssistantInput,
+    user: AuthUser | null,
+    requestId = "untracked",
+  ): AsyncGenerator<AssistantStreamEvent> {
+    const conversationId = await this.ensureConversation(
+      input.conversationId,
+      user,
+      input.message,
+    );
+    await this.conversations.saveMessage(
+      conversationId,
+      AIMessageRole.USER,
+      input.message,
+    );
     await this.conversations.ensureTitle(conversationId, input.message);
 
     const summary = summarize(input.message);
     const finalize = async (
       reply: string,
       actionType: string,
-      flags: { refused?: boolean; unavailable?: boolean; groundedFacts?: string[] } = {},
+      flags: {
+        refused?: boolean;
+        unavailable?: boolean;
+        groundedFacts?: string[];
+        recovery?: AssistantRecovery;
+      } = {},
     ): Promise<AssistantStreamEvent> => {
-      await this.conversations.saveMessage(conversationId, AIMessageRole.AGENT, reply);
+      await this.conversations.saveMessage(
+        conversationId,
+        AIMessageRole.AGENT,
+        reply,
+      );
       await this.log(conversationId, actionType, summary);
       return {
         type: "done",
@@ -150,6 +204,8 @@ export class AssistantService {
         refused: flags.refused ?? false,
         unavailable: flags.unavailable ?? false,
         groundedFacts: flags.groundedFacts ?? [],
+        recovery: flags.recovery ?? "none",
+        requestId,
       };
     };
 
@@ -174,48 +230,65 @@ export class AssistantService {
       const reply =
         "Staynex AI is temporarily unavailable. You can still search stays, view rooms, and book directly on the property page.";
       yield { type: "chunk", text: reply };
-      yield await finalize(reply, "UNAVAILABLE", { unavailable: true });
+      yield await finalize(reply, "UNAVAILABLE_PROVIDER_UNCONFIGURED", {
+        unavailable: true,
+        recovery: "provider_unconfigured",
+      });
       return;
     }
 
     // 4) Grounding + conversation memory.
-    const { systemPrompt, history, groundedFacts } = await this.prepareModelInput(
-      input,
-      user,
-      conversationId,
-    );
+    const { systemPrompt, history, groundedFacts } =
+      await this.prepareModelInput(input, user, conversationId);
 
-    // 5) Stream the model reply; accumulate to persist once at the end.
-    let full = "";
-    try {
-      for await (const delta of this.gemini.streamText(systemPrompt, history)) {
-        full += delta;
-        yield { type: "chunk", text: delta };
+    // 5) Stream the model reply. A pre-token transport failure falls back to
+    // Gemini's JSON endpoint inside this same turn, so persistence stays once.
+    for await (const event of completeReliably(
+      this.gemini,
+      systemPrompt,
+      history,
+    )) {
+      if (event.type === "chunk") {
+        yield event;
+        continue;
       }
-    } catch (err) {
-      if (full.length === 0) {
-        const reply =
-          err instanceof GeminiRateLimitError
-            ? "Staynex AI is handling a lot of questions right now. Please try again in a moment — meanwhile you can search stays and book directly on the property page."
-            : "Staynex AI couldn't respond right now. Please try again, or continue booking directly on the property page.";
+
+      if (event.recovery !== "none" && !event.text) {
+        const reply = recoveryMessage(event.recovery);
         yield { type: "chunk", text: reply };
-        yield await finalize(reply, "UNAVAILABLE", { unavailable: true, groundedFacts });
+        yield await finalize(
+          reply,
+          `UNAVAILABLE_${event.recovery.toUpperCase()}`,
+          {
+            unavailable: true,
+            groundedFacts,
+            recovery: event.recovery,
+          },
+        );
         return;
       }
-      // Partial reply already streamed — finalize what we have below.
-    }
 
-    if (full.trim().length === 0) {
-      const reply =
-        "Staynex AI couldn't respond right now. Please try again, or continue booking directly on the property page.";
-      yield { type: "chunk", text: reply };
-      yield await finalize(reply, "UNAVAILABLE", { unavailable: true, groundedFacts });
+      if (event.partial) {
+        yield await finalize(event.text, "PARTIAL_RESPONSE", {
+          unavailable: true,
+          groundedFacts,
+          recovery: "partial_response",
+        });
+        return;
+      }
+
+      const baseAction = groundedFacts.length
+        ? "AGENT_REPLY_GROUNDED"
+        : "AGENT_REPLY";
+      yield await finalize(
+        event.text,
+        event.usedFallback ? `${baseAction}_FALLBACK` : baseAction,
+        {
+          groundedFacts,
+        },
+      );
       return;
     }
-
-    yield await finalize(full, groundedFacts.length ? "AGENT_REPLY_GROUNDED" : "AGENT_REPLY", {
-      groundedFacts,
-    });
   }
 
   // --- internals -----------------------------------------------------------
@@ -232,7 +305,11 @@ export class AssistantService {
     input: AssistantInput,
     user: AuthUser | null,
     conversationId: string,
-  ): Promise<{ systemPrompt: string; history: GeminiTurn[]; groundedFacts: string[] }> {
+  ): Promise<{
+    systemPrompt: string;
+    history: GeminiTurn[];
+    groundedFacts: string[];
+  }> {
     const [groundedFacts, pastContext, turns] = await Promise.all([
       this.groundFacts(input.message, input.propertySlug),
       this.conversations.crossConversationContext(user, conversationId),
@@ -251,7 +328,8 @@ export class AssistantService {
       role: t.role === AIMessageRole.AGENT ? "model" : "user",
       text: t.content,
     }));
-    if (history.length === 0) history.push({ role: "user", text: input.message });
+    if (history.length === 0)
+      history.push({ role: "user", text: input.message });
 
     return { systemPrompt, history, groundedFacts };
   }
@@ -266,27 +344,40 @@ export class AssistantService {
           "I can't promise or process refunds. Refunds follow Staynex policy and are handled by the Staynex support team — please contact support for your specific booking.",
       };
     }
-    if (/\b(confirm|verify|approve|mark)\b[^.?!]{0,24}\b(payment|paid|transaction)\b/.test(m)) {
+    if (
+      /\b(confirm|verify|approve|mark)\b[^.?!]{0,24}\b(payment|paid|transaction)\b/.test(
+        m,
+      )
+    ) {
       return {
         summary: "Refused: manual payment confirmation",
         reply:
           "I can't confirm or verify payments. A booking is only confirmed after Staynex verifies your payment. Check your payment status page for the live result.",
       };
     }
-    if (/\b(guarantee|promise)\b[^.?!]{0,24}\b(availab|room|book|date)/.test(m)) {
+    if (
+      /\b(guarantee|promise)\b[^.?!]{0,24}\b(availab|room|book|date)/.test(m)
+    ) {
       return {
         summary: "Refused: availability guarantee",
         reply:
           "I can't guarantee availability. Please pick your dates on the property page and check availability there — that's the only verified source.",
       };
     }
-    if (/\b(other guests?|another user|someone else'?s|card number|cvv|owner'?s (phone|email|number))\b/.test(m)) {
+    if (
+      /\b(other guests?|another user|someone else'?s|card number|cvv|owner'?s (phone|email|number))\b/.test(
+        m,
+      )
+    ) {
       return {
         summary: "Refused: private data request",
-        reply: "I can't share private account, payment-card, or other users' information.",
+        reply:
+          "I can't share private account, payment-card, or other users' information.",
       };
     }
-    if (/\b(sue|lawsuit|legally liable|legal advice|take you to court)\b/.test(m)) {
+    if (
+      /\b(sue|lawsuit|legally liable|legal advice|take you to court)\b/.test(m)
+    ) {
       return {
         summary: "Refused: legal claim",
         reply:
@@ -302,7 +393,11 @@ export class AssistantService {
 
     // Require a booking/payment noun so unrelated "how…" questions (e.g. "how
     // does your AI work") reach the model instead of this canned reply.
-    if (/\bhow\b[^?]*\b(book|booking|pay|payment|paystack|checkout|reserve|reservation)\b/.test(m)) {
+    if (
+      /\bhow\b[^?]*\b(book|booking|pay|payment|paystack|checkout|reserve|reservation)\b/.test(
+        m,
+      )
+    ) {
       return {
         summary: "Explained booking & payment flow",
         reply:
@@ -311,7 +406,11 @@ export class AssistantService {
     }
     // Anchored to a stay/booking noun — a bare "what should I know about X"
     // must not trigger the pre-booking checklist.
-    if (/\bwhat\b[^?]*\b(check|look for|consider)\b[^?]*\b(stay|book|property|room|choos|reserv)/.test(m)) {
+    if (
+      /\bwhat\b[^?]*\b(check|look for|consider)\b[^?]*\b(stay|book|property|room|choos|reserv)/.test(
+        m,
+      )
+    ) {
       return {
         summary: "Listed what to check before booking",
         reply:
@@ -333,7 +432,10 @@ export class AssistantService {
    *  4. Policy / company / FAQ → curated knowledge base.
    * Never returns private data, and never asserts date-exact availability.
    */
-  private async groundFacts(message: string, propertySlug?: string): Promise<string[]> {
+  private async groundFacts(
+    message: string,
+    propertySlug?: string,
+  ): Promise<string[]> {
     const facts: string[] = [];
 
     if (propertySlug) {
@@ -354,7 +456,9 @@ export class AssistantService {
   private async propertyFacts(propertySlug: string): Promise<string[]> {
     try {
       const property = await this.catalog.getPublicProperty(propertySlug);
-      const facts: string[] = [`Property: ${property.name} in ${property.cityName}.`];
+      const facts: string[] = [
+        `Property: ${property.name} in ${property.cityName}.`,
+      ];
       if (property.description) facts.push(`About: ${property.description}`);
       for (const rt of property.roomTypes) {
         facts.push(
@@ -430,7 +534,9 @@ export class AssistantService {
       const cities = await this.catalog.cities();
       const lower = message.toLowerCase();
       const city = cities.find(
-        (c) => lower.includes(c.name.toLowerCase()) || lower.includes(c.slug.toLowerCase()),
+        (c) =>
+          lower.includes(c.name.toLowerCase()) ||
+          lower.includes(c.slug.toLowerCase()),
       );
       if (!city) return [];
 
@@ -446,7 +552,10 @@ export class AssistantService {
         `Approved Staynex stays in ${city.name} (suggest these; the user opens a page to check live availability):`,
       ];
       for (const p of top) {
-        const price = p.fromPriceKobo != null ? `from ${formatNaira(p.fromPriceKobo)}/night` : "price on request";
+        const price =
+          p.fromPriceKobo != null
+            ? `from ${formatNaira(p.fromPriceKobo)}/night`
+            : "price on request";
         facts.push(`• ${p.name} — ${price} (page: /stays/${p.slug})`);
       }
       facts.push(
@@ -469,7 +578,11 @@ export class AssistantService {
         select: { id: true, userId: true, deletedAt: true },
       });
       // Reuse only if it exists, isn't deleted, and the caller may access it.
-      if (convo && !convo.deletedAt && (convo.userId == null || convo.userId === user?.id)) {
+      if (
+        convo &&
+        !convo.deletedAt &&
+        (convo.userId == null || convo.userId === user?.id)
+      ) {
         // Claim an anonymous conversation once the guest signs in, so it joins
         // their account history instead of being lost with the session.
         if (convo.userId == null && user) {
@@ -487,8 +600,14 @@ export class AssistantService {
     return created.id;
   }
 
-  private async log(conversationId: string, actionType: string, summary: string): Promise<void> {
-    await prisma.aIActionLog.create({ data: { conversationId, actionType, summary } });
+  private async log(
+    conversationId: string,
+    actionType: string,
+    summary: string,
+  ): Promise<void> {
+    await prisma.aIActionLog.create({
+      data: { conversationId, actionType, summary },
+    });
   }
 }
 

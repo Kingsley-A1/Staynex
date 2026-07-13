@@ -821,7 +821,7 @@ model AIConversation {
   @@index([userId])
 }
 
-// Persisted Staynex Agent chat messages (history is DB-backed, not faked in
+// Persisted Staynex AI chat messages (history is DB-backed, not faked in
 // component state). Conversations are private to their owner.
 model AIMessage {
   id             String        @id @default(cuid())

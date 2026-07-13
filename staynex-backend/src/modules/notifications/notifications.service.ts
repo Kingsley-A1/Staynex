@@ -6,13 +6,25 @@ import { VoucherService } from "../vouchers/voucher.service";
 import { DeviceTokensService } from "./device-tokens.service";
 import { EmailAttachment, EmailService } from "./email.service";
 import { PushService } from "./push.service";
+import {
+  getStaynexAppOrigin,
+  formatAmount,
+  renderBookingConfirmedEmail,
+  renderBookingRefundedEmail,
+  renderCheckInReminderEmail,
+  renderPayoutFailedEmail,
+  renderPayoutSettledEmail,
+  renderPropertyApprovedEmail,
+  renderPropertyAutoReviewScheduledEmail,
+  renderPropertyChangesRequestedEmail,
+  renderPropertyPublishedEmail,
+  renderPropertyRejectedEmail,
+  renderPropertyReviewNeedsChangesEmail,
+  type RenderedEmail,
+} from "./templates";
 
 function iso(date: Date): string {
   return date.toISOString().slice(0, 10);
-}
-
-function naira(kobo: number): string {
-  return `₦${Math.round(kobo / 100).toLocaleString("en-NG")}`;
 }
 
 /** Outbox payloads — the exact deliverable, stored so retries re-send verbatim. */
@@ -21,6 +33,9 @@ interface EmailPayload {
   subject: string;
   html: string;
   text?: string;
+  /** Stored voucher-aware copy, selected only when PDF rendering succeeds. */
+  voucherAttachedHtml?: string;
+  voucherAttachedText?: string;
   /**
    * When set, the canonical voucher PDF for this reference is (re)rendered at
    * send time and attached. Stored (not the bytes) so the outbox row stays
@@ -146,11 +161,17 @@ export class NotificationsService {
       return;
     }
     const attachments = await this.resolveAttachments(payload);
+    const voucherAttached = attachments.length > 0;
     const result = await this.email.send({
       to: payload.to,
       subject: payload.subject,
-      html: payload.html,
-      ...(payload.text ? { text: payload.text } : {}),
+      html:
+        voucherAttached && payload.voucherAttachedHtml
+          ? payload.voucherAttachedHtml
+          : payload.html,
+      ...((voucherAttached ? payload.voucherAttachedText : payload.text)
+        ? { text: voucherAttached ? payload.voucherAttachedText : payload.text }
+        : {}),
       ...(attachments.length ? { attachments } : {}),
     });
     await prisma.notification.update({
@@ -252,26 +273,25 @@ export class NotificationsService {
 
       const property = booking.roomUnit.roomType.property;
       const stay = `${iso(booking.checkIn)} → ${iso(booking.checkOut)}`;
-      const reference = booking.payment.reference ?? booking.id;
+      const reference = booking.payment.reference;
       const emailPayload: EmailPayload | undefined = booking.guestEmail
-        ? {
-            to: booking.guestEmail,
-            subject: `Your Staynex booking is confirmed — ${property.name}`,
-            html: confirmationEmailHtml({
-              propertyName: property.name,
-              cityName: property.city.name,
-              roomName: booking.roomUnit.roomType.name,
-              checkIn: iso(booking.checkIn),
-              checkOut: iso(booking.checkOut),
-              amount: naira(booking.payment.amount),
-              reference,
-              hasVoucher: Boolean(booking.payment.reference),
-            }),
-            // Attach the canonical PDF receipt (regenerated at send time).
-            ...(booking.payment.reference
-              ? { attachVoucherReference: booking.payment.reference }
-              : {}),
-          }
+        ? bookingConfirmationPayload(booking.guestEmail, {
+            appOrigin: getStaynexAppOrigin(),
+            confirmed: true,
+            paymentVerified: true,
+            bookingId: booking.id,
+            guestName: booking.user?.name,
+            propertyName: property.name,
+            city: property.city.name,
+            roomType: booking.roomUnit.roomType.name,
+            checkIn: booking.checkIn,
+            checkOut: booking.checkOut,
+            guestCount: booking.adults + booking.children + booking.infants,
+            paidAmountMinor: booking.payment.amount,
+            currency: booking.payment.currency,
+            reference,
+            voucherAttached: false,
+          })
         : undefined;
 
       // Guest: full fan-out for account holders, email-only for anonymous.
@@ -316,31 +336,37 @@ export class NotificationsService {
   async onPaymentRefunded(bookingId: string): Promise<void> {
     try {
       const booking = await loadBooking(bookingId);
-      if (!booking?.payment) return;
+      if (!booking?.payment || booking.payment.status !== "REFUNDED") return;
       const property = booking.roomUnit.roomType.property;
-      const amount = naira(booking.payment.amount);
-      const reference = booking.payment.reference ?? booking.id;
-      const body =
-        `Your payment of ${amount} for ${property.name} has been refunded to your payment method. ` +
-        `Reference: ${reference}. Refunds typically arrive within a few business days.`;
+      const reference = booking.payment.reference;
+      const amount = formatAmount(
+        booking.payment.amount,
+        booking.payment.currency,
+      );
+      const body = `Your payment of ${amount} for ${property.name} has been recorded as refunded.`;
       const emailPayload: EmailPayload | undefined = booking.guestEmail
-        ? {
-            to: booking.guestEmail,
-            subject: "Your Staynex refund is on the way",
-            html: simpleEmailHtml("Your refund is on the way", [
-              body,
-              "You don't need to do anything — contact support if it hasn't arrived in 7 days.",
-            ]),
-            text: body,
-          }
+        ? toEmailPayload(
+            booking.guestEmail,
+            renderBookingRefundedEmail({
+              appOrigin: getStaynexAppOrigin(),
+              refunded: true,
+              guestName: booking.user?.name,
+              propertyName: property.name,
+              refundedAmountMinor: booking.payment.amount,
+              currency: booking.payment.currency,
+              reference,
+            }),
+          )
         : undefined;
 
       if (booking.userId) {
         await this.notifyUser(booking.userId, {
           type: "BOOKING_REFUNDED",
-          title: "Refund on the way",
-          body: `${amount} for ${property.name} is being refunded.`,
-          linkUrl: `/payment/status?reference=${encodeURIComponent(reference)}`,
+          title: "Payment refunded",
+          body: `${amount} for ${property.name} was refunded.`,
+          linkUrl: reference
+            ? `/payment/status?reference=${encodeURIComponent(reference)}`
+            : undefined,
           bookingId: booking.id,
           dedupeKey: `refund:guest:${booking.payment.id}`,
           email: emailPayload,
@@ -348,7 +374,7 @@ export class NotificationsService {
       } else if (emailPayload) {
         await this.notifyEmailOnly({
           type: "BOOKING_REFUNDED",
-          title: "Refund on the way",
+          title: "Payment refunded",
           body,
           bookingId: booking.id,
           dedupeKey: `refund:guest:${booking.payment.id}`,
@@ -359,7 +385,7 @@ export class NotificationsService {
       await this.notifyUser(property.ownerId, {
         type: "BOOKING_REFUNDED",
         title: "Booking refunded",
-        body: `${booking.roomUnit.roomType.name} at ${property.name} (${iso(booking.checkIn)} → ${iso(booking.checkOut)}) was refunded and cancelled.`,
+        body: `${booking.roomUnit.roomType.name} at ${property.name} (${iso(booking.checkIn)} → ${iso(booking.checkOut)}) had its payment refunded.`,
         linkUrl: `/host/bookings/${booking.id}`,
         bookingId: booking.id,
         dedupeKey: `refund:host:${booking.payment.id}`,
@@ -375,11 +401,11 @@ export class NotificationsService {
 
   async onPayoutSettled(payoutId: string): Promise<void> {
     const payout = await loadPayout(payoutId);
-    if (!payout) return;
+    if (!payout || payout.status !== "PAID") return;
     const destination = payout.owner.payoutMethod
       ? ` to your ${payout.owner.payoutMethod.bankName} account ····${payout.owner.payoutMethod.accountNumberLast4}`
       : "";
-    const body = `${naira(payout.amount)} for ${payout.property.name} has been sent${destination}.`;
+    const body = `${formatAmount(payout.amount, payout.currency)} for ${payout.property.name} has been settled${destination}.`;
     await this.notifyUser(payout.ownerId, {
       type: "PAYOUT_PAID",
       title: "Payout sent",
@@ -387,23 +413,27 @@ export class NotificationsService {
       linkUrl: "/host/bookings",
       dedupeKey: `payout-paid:${payout.id}`,
       email: payout.owner.email
-        ? {
-            to: payout.owner.email,
-            subject: "Your Staynex payout has been sent",
-            html: simpleEmailHtml("Payout sent", [
-              body,
-              payout.note ? `Settlement note: ${payout.note}` : "",
-            ]),
-            text: body,
-          }
+        ? toEmailPayload(
+            payout.owner.email,
+            renderPayoutSettledEmail({
+              appOrigin: getStaynexAppOrigin(),
+              settled: true,
+              ownerName: payout.owner.name,
+              propertyName: payout.property.name,
+              amountMinor: payout.amount,
+              currency: payout.currency,
+              destination: payout.owner.payoutMethod,
+              settlementNote: payout.note,
+            }),
+          )
         : undefined,
     });
   }
 
   async onPayoutFailed(payoutId: string, reason: string): Promise<void> {
     const payout = await loadPayout(payoutId);
-    if (!payout) return;
-    const body = `The payout of ${naira(payout.amount)} for ${payout.property.name} could not be settled: ${reason}`;
+    if (!payout || payout.status !== "FAILED") return;
+    const body = `The payout of ${formatAmount(payout.amount, payout.currency)} for ${payout.property.name} could not be settled: ${reason}`;
     await this.notifyUser(payout.ownerId, {
       type: "PAYOUT_FAILED",
       title: "Payout needs attention",
@@ -411,15 +441,18 @@ export class NotificationsService {
       linkUrl: "/host/settings",
       dedupeKey: `payout-failed:${payout.id}`,
       email: payout.owner.email
-        ? {
-            to: payout.owner.email,
-            subject: "Your Staynex payout needs attention",
-            html: simpleEmailHtml("Payout needs attention", [
-              body,
-              "Please check your payout details in Host settings, or contact support.",
-            ]),
-            text: body,
-          }
+        ? toEmailPayload(
+            payout.owner.email,
+            renderPayoutFailedEmail({
+              appOrigin: getStaynexAppOrigin(),
+              failed: true,
+              ownerName: payout.owner.name,
+              propertyName: payout.property.name,
+              amountMinor: payout.amount,
+              currency: payout.currency,
+              failureReason: payout.note,
+            }),
+          )
         : undefined,
     });
   }
@@ -427,13 +460,22 @@ export class NotificationsService {
   // --- payment exceptions -----------------------------------------------------
 
   /** Funds moved but a human action is owed — alert every admin. */
-  async onPaymentException(reference: string | null, detail: string): Promise<void> {
+  async onPaymentException(
+    reference: string | null,
+    detail: string,
+  ): Promise<void> {
     try {
       const admins = await prisma.user.findMany({
         where: {
           OR: [
             { role: { in: ["ADMIN_REVIEWER", "ADMIN_MANAGER"] } },
-            { capabilities: { some: { capability: { in: ["ADMIN_REVIEWER", "ADMIN_MANAGER"] } } } },
+            {
+              capabilities: {
+                some: {
+                  capability: { in: ["ADMIN_REVIEWER", "ADMIN_MANAGER"] },
+                },
+              },
+            },
           ],
         },
         select: { id: true },
@@ -444,7 +486,9 @@ export class NotificationsService {
           title: "Payment exception — action required",
           body: `${reference ?? "unknown reference"}: ${detail}`,
           linkUrl: "/admin/bookings",
-          dedupeKey: reference ? `payment-exception:${reference}:${admin.id}` : undefined,
+          dedupeKey: reference
+            ? `payment-exception:${reference}:${admin.id}`
+            : undefined,
         });
       }
     } catch (err) {
@@ -466,10 +510,14 @@ export class NotificationsService {
     const arrivals = await prisma.booking.findMany({
       where: { status: "CONFIRMED", checkIn: { gte: tomorrow, lt: dayAfter } },
       include: {
+        payment: { select: { reference: true } },
+        user: { select: { name: true } },
         roomUnit: {
           include: {
             roomType: {
-              include: { property: { include: { city: { select: { name: true } } } } },
+              include: {
+                property: { include: { city: { select: { name: true } } } },
+              },
             },
           },
         },
@@ -480,6 +528,22 @@ export class NotificationsService {
     for (const booking of arrivals) {
       const property = booking.roomUnit.roomType.property;
       const guestBody = `You check in at ${property.name} (${property.city.name}) tomorrow, ${iso(booking.checkIn)}. Have a great stay!`;
+      const reminderEmail = booking.guestEmail
+        ? toEmailPayload(
+            booking.guestEmail,
+            renderCheckInReminderEmail({
+              appOrigin: getStaynexAppOrigin(),
+              bookingId: booking.id,
+              guestName: booking.user?.name,
+              propertyName: property.name,
+              city: property.city.name,
+              roomType: booking.roomUnit.roomType.name,
+              checkIn: booking.checkIn,
+              reference: booking.payment?.reference,
+              hasVoucher: Boolean(booking.payment?.reference),
+            }),
+          )
+        : undefined;
       if (booking.userId) {
         await this.notifyUser(booking.userId, {
           type: "CHECKIN_REMINDER",
@@ -488,14 +552,7 @@ export class NotificationsService {
           linkUrl: `/booking/confirmed?booking=${booking.id}`,
           bookingId: booking.id,
           dedupeKey: `checkin-reminder:guest:${booking.id}`,
-          email: booking.guestEmail
-            ? {
-                to: booking.guestEmail,
-                subject: `Check-in tomorrow — ${property.name}`,
-                html: simpleEmailHtml("Your check-in is tomorrow", [guestBody]),
-                text: guestBody,
-              }
-            : undefined,
+          email: reminderEmail,
         });
       } else if (booking.guestEmail) {
         await this.notifyEmailOnly({
@@ -504,12 +561,7 @@ export class NotificationsService {
           body: guestBody,
           bookingId: booking.id,
           dedupeKey: `checkin-reminder:guest:${booking.id}`,
-          email: {
-            to: booking.guestEmail,
-            subject: `Check-in tomorrow — ${property.name}`,
-            html: simpleEmailHtml("Your check-in is tomorrow", [guestBody]),
-            text: guestBody,
-          },
+          email: reminderEmail!,
         });
       }
 
@@ -528,20 +580,48 @@ export class NotificationsService {
 
   // --- property review lifecycle ------------------------------------------------
 
-  async onPropertyAutoReviewScheduled(propertyId: string, scheduledAt: Date): Promise<void> {
+  async onPropertyAutoReviewScheduled(
+    propertyId: string,
+    scheduledAt: Date,
+  ): Promise<void> {
     await this.notifyPropertyOwner(propertyId, {
       title: "Property passed auto-review",
       body: `Your property passed Staynex checks and is scheduled to go live at ${scheduledAt.toISOString()}.`,
-      emailSubject: "Your Staynex property is scheduled to go live",
+      valid: (property) =>
+        property.reviewStatus === "SCHEDULED" &&
+        property.scheduledPublishAt?.getTime() === scheduledAt.getTime(),
+      render: (property) =>
+        renderPropertyAutoReviewScheduledEmail({
+          appOrigin: getStaynexAppOrigin(),
+          scheduled: true,
+          propertyId: property.id,
+          ownerName: property.owner.name,
+          propertyName: property.name,
+          scheduledAt,
+        }),
     });
   }
 
-  async onPropertyReviewNeedsChanges(propertyId: string, failedLabels: string[]): Promise<void> {
-    const issues = failedLabels.length ? failedLabels.join(", ") : "listing readiness";
+  async onPropertyReviewNeedsChanges(
+    propertyId: string,
+    failedLabels: string[],
+  ): Promise<void> {
+    const issues = failedLabels.length
+      ? failedLabels.join(", ")
+      : "listing readiness";
     await this.notifyPropertyOwner(propertyId, {
       title: "Property review needs changes",
       body: `Update these items before auto-publish can release your listing: ${issues}.`,
-      emailSubject: "Your Staynex property needs changes",
+      valid: (property) => property.reviewStatus === "FAILED",
+      render: (property) =>
+        renderPropertyReviewNeedsChangesEmail({
+          appOrigin: getStaynexAppOrigin(),
+          needsChanges: true,
+          propertyId: property.id,
+          ownerName: property.owner.name,
+          propertyName: property.name,
+          failedLabels,
+        }),
     });
   }
 
@@ -549,7 +629,16 @@ export class NotificationsService {
     await this.notifyPropertyOwner(propertyId, {
       title: "Property is live",
       body: "Your property passed review and is now public on Staynex.",
-      emailSubject: "Your Staynex property is live",
+      valid: (property) =>
+        property.status === "APPROVED" && property.reviewStatus === "PUBLISHED",
+      render: (property) =>
+        renderPropertyPublishedEmail({
+          appOrigin: getStaynexAppOrigin(),
+          published: true,
+          propertyId: property.id,
+          ownerName: property.owner.name,
+          propertyName: property.name,
+        }),
     });
   }
 
@@ -559,18 +648,53 @@ export class NotificationsService {
     note?: string,
   ): Promise<void> {
     const copy = manualDecisionCopy(decision, note);
-    await this.notifyPropertyOwner(propertyId, copy);
+    await this.notifyPropertyOwner(propertyId, {
+      title: copy.title,
+      body: copy.body,
+      valid: (property) =>
+        decision === "APPROVE"
+          ? property.status === "APPROVED" &&
+            property.reviewStatus === "PUBLISHED"
+          : decision === "REQUEST_CHANGES"
+            ? property.status === "DRAFT" &&
+              property.reviewStatus === "MANUAL_REVIEW"
+            : property.status === "REJECTED" &&
+              property.reviewStatus === "FAILED",
+      render: (property) => {
+        const base = {
+          appOrigin: getStaynexAppOrigin(),
+          propertyId: property.id,
+          ownerName: property.owner.name,
+          propertyName: property.name,
+          reviewerNote: note,
+        };
+        if (decision === "APPROVE")
+          return renderPropertyApprovedEmail({ ...base, approved: true });
+        if (decision === "REQUEST_CHANGES")
+          return renderPropertyChangesRequestedEmail({
+            ...base,
+            changesRequested: true,
+          });
+        return renderPropertyRejectedEmail({ ...base, rejected: true });
+      },
+    });
   }
 
   // --- internals ------------------------------------------------------------
 
   private async notifyPropertyOwner(
     propertyId: string,
-    message: { title: string; body: string; emailSubject: string },
+    message: {
+      title: string;
+      body: string;
+      valid: (property: PropertyNotificationRecord) => boolean;
+      render: (property: PropertyNotificationRecord) => RenderedEmail;
+    },
   ): Promise<void> {
     try {
       const property = await loadPropertyForNotification(propertyId);
       if (!property) return;
+      if (!message.valid(property)) return;
       const body = `${property.name}: ${message.body}`;
       await this.notifyUser(property.ownerId, {
         type: "PROPERTY_REVIEW",
@@ -578,12 +702,7 @@ export class NotificationsService {
         body,
         linkUrl: `/host/properties/${propertyId}`,
         email: property.owner.email
-          ? {
-              to: property.owner.email,
-              subject: message.emailSubject,
-              html: simpleEmailHtml(property.name, [message.body]),
-              text: body,
-            }
+          ? toEmailPayload(property.owner.email, message.render(property))
           : undefined,
       });
     } catch (err) {
@@ -660,10 +779,15 @@ async function loadBooking(id: string) {
     where: { id },
     include: {
       payment: true,
+      user: { select: { name: true } },
       roomUnit: {
         include: {
           roomType: {
-            include: { property: { include: { city: { select: { name: true } }, owner: true } } },
+            include: {
+              property: {
+                include: { city: { select: { name: true } }, owner: true },
+              },
+            },
           },
         },
       },
@@ -679,7 +803,10 @@ async function loadPayout(id: string) {
       owner: {
         select: {
           email: true,
-          payoutMethod: { select: { bankName: true, accountNumberLast4: true } },
+          name: true,
+          payoutMethod: {
+            select: { bankName: true, accountNumberLast4: true },
+          },
         },
       },
     },
@@ -693,106 +820,62 @@ async function loadPropertyForNotification(id: string) {
       id: true,
       ownerId: true,
       name: true,
+      status: true,
+      reviewStatus: true,
+      scheduledPublishAt: true,
       owner: { select: { email: true, name: true } },
     },
   });
 }
 
-function confirmationEmailHtml(p: {
-  propertyName: string;
-  cityName: string;
-  roomName: string;
-  checkIn: string;
-  checkOut: string;
-  amount: string;
-  reference: string;
-  hasVoucher: boolean;
-}): string {
-  const row = (label: string, value: string) =>
-    `<tr><td style="padding:6px 0;color:#6E6A83;font-size:14px">${label}</td>` +
-    `<td style="padding:6px 0;color:#101014;font-size:14px;font-weight:600;text-align:right">${value}</td></tr>`;
-  const voucherNote = p.hasVoucher
-    ? `<p style="color:#6E6A83;font-size:13px;margin:14px 0 0">
-        Your <strong style="color:#101014">Booking Confirmation &amp; Receipt</strong> is attached as a PDF.
-        Present it (or its QR code) at check-in — the host can verify it instantly on Staynex.
-      </p>`
-    : "";
-  return `<!doctype html>
-<html><body style="margin:0;background:#F7F7FF;font-family:Arial,Helvetica,sans-serif">
-  <div style="max-width:520px;margin:0 auto;padding:24px">
-    <h1 style="color:#27187D;font-size:20px;margin:0 0 4px">Booking confirmed</h1>
-    <p style="color:#6E6A83;font-size:14px;margin:0 0 16px">
-      Your stay is reserved. Keep your reference handy for support.
-    </p>
-    <div style="background:#fff;border:1px solid #E7E5F2;border-radius:12px;padding:16px">
-      <table style="width:100%;border-collapse:collapse">
-        ${row("Property", `${p.propertyName} · ${p.cityName}`)}
-        ${row("Room", p.roomName)}
-        ${row("Dates", `${p.checkIn} → ${p.checkOut}`)}
-        ${row("Amount", p.amount)}
-        ${row("Reference", p.reference)}
-      </table>
-    </div>
-    ${voucherNote}
-    <p style="color:#6E6A83;font-size:12px;margin:16px 0 0">
-      Staynex — Book trusted stays, Confidently.
-    </p>
-  </div>
-</body></html>`;
+type PropertyNotificationRecord = NonNullable<
+  Awaited<ReturnType<typeof loadPropertyForNotification>>
+>;
+
+function toEmailPayload(to: string, rendered: RenderedEmail): EmailPayload {
+  return { to, ...rendered };
+}
+
+function bookingConfirmationPayload(
+  to: string,
+  input: Parameters<typeof renderBookingConfirmedEmail>[0],
+): EmailPayload {
+  const withoutVoucher = renderBookingConfirmedEmail({
+    ...input,
+    voucherAttached: false,
+  });
+  if (!input.reference) return toEmailPayload(to, withoutVoucher);
+  const withVoucher = renderBookingConfirmedEmail({
+    ...input,
+    voucherAttached: true,
+  });
+  return {
+    ...toEmailPayload(to, withoutVoucher),
+    attachVoucherReference: input.reference,
+    voucherAttachedHtml: withVoucher.html,
+    voucherAttachedText: withVoucher.text,
+  };
 }
 
 function manualDecisionCopy(
   decision: "APPROVE" | "REJECT" | "REQUEST_CHANGES",
   note?: string,
-): { title: string; body: string; emailSubject: string } {
+): { title: string; body: string } {
   const suffix = note ? ` Reviewer note: ${note}` : "";
   if (decision === "APPROVE") {
     return {
       title: "Property approved",
       body: `An admin approved your property and it is now live.${suffix}`,
-      emailSubject: "Your Staynex property was approved",
     };
   }
   if (decision === "REQUEST_CHANGES") {
     return {
       title: "Property changes requested",
       body: `An admin requested changes before the property can go live.${suffix}`,
-      emailSubject: "Staynex requested property changes",
     };
   }
   return {
     title: "Property rejected",
     body: `An admin rejected this property submission.${suffix}`,
-    emailSubject: "Your Staynex property was not approved",
   };
-}
-
-/** Simple branded email: heading + paragraphs (all text HTML-escaped). */
-function simpleEmailHtml(heading: string, lines: string[]): string {
-  const paragraphs = lines
-    .filter((line) => line.trim().length > 0)
-    .map(
-      (line) =>
-        `<p style="color:#101014;font-size:14px;line-height:1.5;margin:0 0 12px">${escapeHtml(line)}</p>`,
-    )
-    .join("");
-  return `<!doctype html>
-<html><body style="margin:0;background:#F7F7FF;font-family:Arial,Helvetica,sans-serif">
-  <div style="max-width:520px;margin:0 auto;padding:24px">
-    <h1 style="color:#27187D;font-size:20px;margin:0 0 8px">${escapeHtml(heading)}</h1>
-    ${paragraphs}
-    <p style="color:#6E6A83;font-size:12px;margin:16px 0 0">
-      Staynex — Book trusted stays, Confidently.
-    </p>
-  </div>
-</body></html>`;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
 }

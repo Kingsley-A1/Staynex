@@ -4,7 +4,7 @@ import { prisma } from "../../../db";
 import type { AgentConversation, AgentMessage, AuthUser } from "../../../types";
 
 /**
- * Staynex Agent conversation store. Conversations are private to their owner:
+ * Staynex AI conversation store. Conversations are private to their owner:
  * authenticated users see only their own history; anonymous conversations
  * (userId = null) are accessible by id only (capability-based) so a guest can
  * keep one session conversation without leaking others'.

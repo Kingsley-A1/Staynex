@@ -1,3 +1,4 @@
+@Depricated
 # Staynex AI — Professionalization Plan
 
 > A deep review of the current Staynex AI (assistant) implementation and a phased,
@@ -22,7 +23,7 @@
 | Conversation store | ✅ **Server-persisted.** `AIConversation`, `AIMessage`, `AIActionLog` in Prisma. Soft-delete, pin, rename, auto-title, per-user scoping. This is already real. |
 | Grounding | ✅ Now intent-based: property page facts **and** real approved listings for a named city (Phase 2). Was previously property-slug-only. |
 | Conversation memory | ✅ Now replays the last ~12 turns to the model (Phase 1). Was previously single-message (no memory). |
-| Model | `gemini-2.0-flash`, temp 0.3, 512 max tokens. ✅ Now retries 429/503 with backoff honoring `Retry-After`. |
+| Model | `gemini-2.5-flash`, temp 0.3, 512 max tokens. ✅ Now retries 429/503 with backoff honoring `Retry-After`. |
 | Rename to "Staynex AI" | ✅ Done in system prompt, canned replies, controller. |
 
 **Frontend (`staynex-frontend/src/features/ai/assistant-widget.tsx`)**
@@ -245,15 +246,15 @@ going beyond verified facts.
 
 ## 5. Model & rate-limit notes (verified June 2026)
 
-- Current model `gemini-2.0-flash` free tier: ~**15 RPM / 1M TPM / 1,500 RPD**.
+- Current model `gemini-2.5-flash` free tier: ~**15 RPM / 1M TPM / 1,500 RPD**.
   A `429 RESOURCE_EXHAUSTED` means one dimension was hit; it's transient. Limits
   are **per project**, not per key — hence the Phase 4 per-user throttle.
 - Retries must use **exponential backoff with jitter** and honor `Retry-After`
   (now implemented in `gemini.service.ts`).
 - **Model options if quality/limits become a constraint** (drop-in swaps — change
-  the `MODEL` constant): `gemini-2.5-flash` (longer outputs, native reasoning) or
+  `GEMINI_MODEL` in the deployment environment): `gemini-2.5-flash` (longer outputs, native reasoning) or
   the newer **Gemini 3 Flash** (Google's recommended free-tier model in 2026, ~10
-  RPM). Evaluate cost vs. quality before switching; `gemini-2.0-flash` is the
+  RPM). Evaluate cost vs. quality before switching; `gemini-2.5-flash` is the
   cheapest and is sufficient for the current grounded, short-answer use.
 
 Sources:

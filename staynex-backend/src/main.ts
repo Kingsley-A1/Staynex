@@ -82,7 +82,8 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "X-CSRF-Token"],
+    allowedHeaders: ["Content-Type", "X-CSRF-Token", "X-Request-ID"],
+    exposedHeaders: ["X-Request-ID"],
     optionsSuccessStatus: 204,
   });
   app.use(csrfProtection(allowedOrigins));

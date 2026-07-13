@@ -34,6 +34,25 @@ Use these endpoints from a terminal client.
 | `PATCH` | `/ai/conversations/:id` | Renames a conversation. |
 | `POST` | `/ai/conversations/:id/pin` | Pins or unpins a conversation. |
 | `DELETE` | `/ai/conversations/:id` | Soft-deletes a conversation. |
+
+The assistant has four supported request paths. They share the same grounding,
+safety, persistence, recovery classification, and per-principal application
+limit:
+
+| Client path | URL | Response transport |
+| --- | --- | --- |
+| Direct backend, full response | `<backend>/ai/assistant` | JSON |
+| Direct backend, incremental response | `<backend>/ai/assistant/stream` | SSE |
+| Frontend proxy, full response | `<frontend>/api/backend/ai/assistant` | JSON |
+| Frontend proxy, incremental response | `<frontend>/api/backend/ai/assistant/stream` | SSE |
+
+The production widget uses the fourth path. For parity checks, run the same
+prompt through direct and proxied streaming paths. Use the JSON paths to verify
+the pre-token fallback independently. A `recovery` value beginning with
+`provider_` is not an application throttle; only
+`application_throttled`/`AI_APPLICATION_THROTTLED` means the Staynex request
+window was exceeded. The opaque `requestId` can be shared with support without
+including prompt or account data.
 | `GET` | `/admin/ai-logs` | Admin-only operational log of assistant actions. Requires an admin session. |
 
 The direct local backend base URL is usually:
@@ -132,7 +151,7 @@ $body = @{
 } | ConvertTo-Json
 
 $reply = Invoke-RestMethod `
-  -Uri "$Api/ai/assistant/stream" `
+  -Uri "$Api/ai/assistant" `
   -Method POST `
   -WebSession $StaynexSession `
   -Headers @{ "X-CSRF-Token" = $csrf } `

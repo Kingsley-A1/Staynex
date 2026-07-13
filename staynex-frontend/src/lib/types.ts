@@ -140,7 +140,10 @@ export const PROPERTY_STATUS_LABELS: Record<PropertyStatus, string> = {
   ARCHIVED: "Archived",
 };
 
-export const PROPERTY_REVIEW_STATUS_LABELS: Record<PropertyReviewStatus, string> = {
+export const PROPERTY_REVIEW_STATUS_LABELS: Record<
+  PropertyReviewStatus,
+  string
+> = {
   NOT_SUBMITTED: "Not submitted",
   PENDING: "Reviewing",
   FAILED: "Needs changes",
@@ -484,7 +487,20 @@ export interface AssistantReply {
   refused: boolean;
   unavailable: boolean;
   groundedFacts: string[];
+  recovery: AssistantRecovery;
+  requestId: string;
 }
+
+export type AssistantRecovery =
+  | "none"
+  | "application_throttled"
+  | "provider_rate_limited"
+  | "provider_overloaded"
+  | "provider_timeout"
+  | "provider_unconfigured"
+  | "provider_error"
+  | "partial_response"
+  | "transport_interrupted";
 
 export type AgentMessageRole = "USER" | "AGENT";
 

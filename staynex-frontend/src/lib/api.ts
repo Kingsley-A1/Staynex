@@ -47,6 +47,8 @@ import type {
   SessionSummary,
 } from "@/lib/types";
 import { API_BASE } from "@/lib/api-base";
+import { parseAssistantEvent, splitSseBlocks } from "@/lib/ai-stream-protocol";
+import type { AssistantRecovery } from "@/lib/types";
 
 type RequestOptions = RequestInit;
 const CSRF_COOKIE = "staynex_csrf";
@@ -119,13 +121,31 @@ function clearCsrfCache(path: string): void {
 export class ApiError extends Error {
   status: number;
   detail: string | null;
-  constructor(status: number, statusText: string, detail: string | null) {
+  code: string | null;
+  recovery: AssistantRecovery | null;
+  requestId: string | null;
+  retryAfterSeconds: number | null;
+  constructor(
+    status: number,
+    statusText: string,
+    detail: string | null,
+    diagnostics: {
+      code?: string | null;
+      recovery?: AssistantRecovery | null;
+      requestId?: string | null;
+      retryAfterSeconds?: number | null;
+    } = {},
+  ) {
     super(
       `Request failed: ${status} ${statusText}${detail ? ` — ${detail}` : ""}`,
     );
     this.name = "ApiError";
     this.status = status;
     this.detail = detail;
+    this.code = diagnostics.code ?? null;
+    this.recovery = diagnostics.recovery ?? null;
+    this.requestId = diagnostics.requestId ?? null;
+    this.retryAfterSeconds = diagnostics.retryAfterSeconds ?? null;
   }
 }
 
@@ -243,12 +263,18 @@ export const hostApi = {
     }),
   // Attach is by storage KEY (from requestUpload) — the backend verifies the
   // object and derives the public URL itself; clients never supply URLs.
-  attachPropertyMedia: (propertyId: string, body: { key: string; altText?: string }) =>
+  attachPropertyMedia: (
+    propertyId: string,
+    body: { key: string; altText?: string },
+  ) =>
     request<MediaItem>(`/host/media/property/${propertyId}`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  attachRoomMedia: (roomTypeId: string, body: { key: string; altText?: string }) =>
+  attachRoomMedia: (
+    roomTypeId: string,
+    body: { key: string; altText?: string },
+  ) =>
     request<MediaItem>(`/host/media/room/${roomTypeId}`, {
       method: "POST",
       body: JSON.stringify(body),
@@ -529,8 +555,7 @@ export const hostApiSettings = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
-  listLocations: () =>
-    request<OwnerLocationView[]>("/host/settings/locations"),
+  listLocations: () => request<OwnerLocationView[]>("/host/settings/locations"),
   createLocation: (body: LocationInput) =>
     request<OwnerLocationView>("/host/settings/locations", {
       method: "POST",
@@ -605,6 +630,19 @@ export interface AgentStreamMeta {
   refused: boolean;
   unavailable: boolean;
   groundedFacts: string[];
+  recovery: AssistantRecovery;
+  requestId: string;
+}
+
+export class AssistantTransportError extends Error {
+  constructor(
+    public readonly recovery: AssistantRecovery,
+    public readonly requestId: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AssistantTransportError";
+  }
 }
 
 /**
@@ -620,6 +658,7 @@ export async function askAgentStream(
   },
 ): Promise<void> {
   const csrfHeaders = await csrfHeaderFor("POST");
+  const requestId = crypto.randomUUID();
   const controller = new AbortController();
   const timeout = window.setTimeout(
     () => controller.abort(),
@@ -630,18 +669,32 @@ export async function askAgentStream(
       method: "POST",
       credentials: "include",
       signal: controller.signal,
-      headers: { "Content-Type": "application/json", ...csrfHeaders },
+      headers: {
+        Accept: "text/event-stream",
+        "Content-Type": "application/json",
+        "X-Request-ID": requestId,
+        ...csrfHeaders,
+      },
       body: JSON.stringify(body),
     });
     if (!res.ok || !res.body) {
       let detail: string | null = null;
+      let diagnostics: {
+        code?: string;
+        recovery?: AssistantRecovery;
+        requestId?: string;
+        retryAfterSeconds?: number;
+      } = {};
       try {
-        const data = (await res.json()) as { message?: string };
+        const data = (await res.json()) as typeof diagnostics & {
+          message?: string;
+        };
         if (typeof data.message === "string") detail = data.message;
+        diagnostics = data;
       } catch {
         /* non-JSON error body */
       }
-      throw new ApiError(res.status, res.statusText, detail);
+      throw new ApiError(res.status, res.statusText, detail, diagnostics);
     }
 
     const reader = res.body.getReader();
@@ -650,14 +703,8 @@ export async function askAgentStream(
     let doneMeta: AgentStreamMeta | null = null;
 
     function handleBlock(block: string) {
-      const line = block.split("\n").find((l) => l.startsWith("data:"));
-      if (!line) return;
-      let event: { type?: string; text?: string } & Partial<AgentStreamMeta>;
-      try {
-        event = JSON.parse(line.slice(5).trim());
-      } catch {
-        return;
-      }
+      const event = parseAssistantEvent(block);
+      if (!event) return;
       if (event.type === "chunk" && typeof event.text === "string") {
         handlers.onChunk(event.text);
       } else if (event.type === "done") {
@@ -666,6 +713,9 @@ export async function askAgentStream(
           refused: Boolean(event.refused),
           unavailable: Boolean(event.unavailable),
           groundedFacts: event.groundedFacts ?? [],
+          recovery: event.recovery ?? "none",
+          requestId:
+            event.requestId ?? res.headers.get("x-request-id") ?? requestId,
         };
       }
     }
@@ -674,15 +724,28 @@ export async function askAgentStream(
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      let sep: number;
-      while ((sep = buffer.indexOf("\n\n")) !== -1) {
-        const block = buffer.slice(0, sep);
-        buffer = buffer.slice(sep + 2);
-        handleBlock(block);
-      }
+      const split = splitSseBlocks(buffer);
+      buffer = split.rest;
+      split.blocks.forEach(handleBlock);
     }
     if (buffer.trim()) handleBlock(buffer);
-    if (doneMeta) handlers.onDone(doneMeta);
+    if (!doneMeta) {
+      throw new AssistantTransportError(
+        "transport_interrupted",
+        res.headers.get("x-request-id") ?? requestId,
+        "Assistant stream ended without a final event",
+      );
+    }
+    handlers.onDone(doneMeta);
+  } catch (error) {
+    if (error instanceof ApiError || error instanceof AssistantTransportError)
+      throw error;
+    const timedOut = error instanceof Error && error.name === "AbortError";
+    throw new AssistantTransportError(
+      "transport_interrupted",
+      requestId,
+      timedOut ? "Assistant stream timed out" : "Assistant stream failed",
+    );
   } finally {
     window.clearTimeout(timeout);
   }
@@ -731,15 +794,21 @@ export const notificationsApi = {
       method: "POST",
       body: JSON.stringify(ids && ids.length > 0 ? { ids } : {}),
     }),
-  registerDevice: (token: string, platform: "WEB" | "ANDROID" | "IOS" = "WEB") =>
+  registerDevice: (
+    token: string,
+    platform: "WEB" | "ANDROID" | "IOS" = "WEB",
+  ) =>
     request<{ ok: true }>("/notifications/devices", {
       method: "POST",
       body: JSON.stringify({ token, platform }),
     }),
   removeDevice: (token: string) =>
-    request<{ ok: true }>(`/notifications/devices/${encodeURIComponent(token)}`, {
-      method: "DELETE",
-    }),
+    request<{ ok: true }>(
+      `/notifications/devices/${encodeURIComponent(token)}`,
+      {
+        method: "DELETE",
+      },
+    ),
 };
 
 type BookingDates = {

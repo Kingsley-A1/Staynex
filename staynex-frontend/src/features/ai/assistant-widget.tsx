@@ -1,9 +1,20 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { usePathname } from "next/navigation";
-import { ApiError, agentApi } from "@/lib/api";
-import type { AgentConversation, AgentMessage } from "@/lib/types";
+import { ApiError, AssistantTransportError, agentApi } from "@/lib/api";
+import { recoveryCopy } from "@/lib/ai-stream-protocol";
+import type {
+  AgentConversation,
+  AgentMessage,
+  AssistantRecovery,
+} from "@/lib/types";
 import { FormattedMessage } from "@/features/ai/formatted-message";
 
 const SUGGESTIONS = [
@@ -26,7 +37,13 @@ const THINKING_PHRASES = [
 ];
 const THINKING_ROTATE_MS = 2200;
 
-type Msg = { role: "USER" | "AGENT"; content: string; note?: "refused" | "unavailable" };
+type Msg = {
+  role: "USER" | "AGENT";
+  content: string;
+  note?: "refused" | "unavailable";
+  recovery?: AssistantRecovery;
+  requestId?: string;
+};
 
 // Remembers the active conversation across reloads so the panel reopens where the
 // user left off (server is the source of truth — this only stores the id).
@@ -58,7 +75,8 @@ function readLocalChats(): LocalChat[] {
     const parsed: unknown = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(
-      (c): c is LocalChat => Boolean(c) && typeof (c as LocalChat).id === "string",
+      (c): c is LocalChat =>
+        Boolean(c) && typeof (c as LocalChat).id === "string",
     );
   } catch {
     return [];
@@ -67,7 +85,10 @@ function readLocalChats(): LocalChat[] {
 
 function writeLocalChats(chats: LocalChat[]) {
   try {
-    window.localStorage.setItem(LOCAL_CHATS_KEY, JSON.stringify(chats.slice(0, LOCAL_CHATS_MAX)));
+    window.localStorage.setItem(
+      LOCAL_CHATS_KEY,
+      JSON.stringify(chats.slice(0, LOCAL_CHATS_MAX)),
+    );
   } catch {
     /* storage unavailable (private mode / quota) — history simply won't persist */
   }
@@ -83,9 +104,13 @@ function upsertLocalChat(partial: {
   const existing = chats.find((c) => c.id === partial.id);
   const merged: LocalChat = {
     id: partial.id,
-    title: partial.title !== undefined ? partial.title : (existing?.title ?? null),
+    title:
+      partial.title !== undefined ? partial.title : (existing?.title ?? null),
     pinned: partial.pinned ?? existing?.pinned ?? false,
-    preview: partial.preview !== undefined ? partial.preview : (existing?.preview ?? null),
+    preview:
+      partial.preview !== undefined
+        ? partial.preview
+        : (existing?.preview ?? null),
     updatedAt: new Date().toISOString(),
   };
   writeLocalChats([merged, ...chats.filter((c) => c.id !== partial.id)]);
@@ -106,7 +131,10 @@ function relativeTime(iso: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export function AssistantWidget() {
@@ -128,6 +156,7 @@ export function AssistantWidget() {
   // Accumulates the streamed reply so onDone can snapshot a preview for the
   // local chat registry without racing React state updates.
   const streamedRef = useRef("");
+  const busyRef = useRef(false);
 
   const refreshConversations = useCallback(async () => {
     let server: AgentConversation[] = [];
@@ -144,7 +173,8 @@ export function AssistantWidget() {
     if (locals.length !== all.length) writeLocalChats(locals);
     locals.sort(
       (a, b) =>
-        Number(b.pinned) - Number(a.pinned) || Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
+        Number(b.pinned) - Number(a.pinned) ||
+        Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
     );
     setConversations([
       ...server,
@@ -220,7 +250,8 @@ export function AssistantWidget() {
 
   async function sendMessage(text: string) {
     const message = text.trim();
-    if (!message || busy) return;
+    if (!message || busyRef.current) return;
+    busyRef.current = true;
     const startedNew = !activeId;
     resetInput();
     setMessages((m) => [...m, { role: "USER", content: message }]);
@@ -242,17 +273,32 @@ export function AssistantWidget() {
               // Mirror into the session registry so guests keep their chat list.
               upsertLocalChat({
                 id: meta.conversationId,
-                ...(startedNew ? { title: message.replace(/\s+/g, " ").slice(0, 60) } : {}),
-                ...(streamedRef.current ? { preview: streamedRef.current.slice(0, 100) } : {}),
+                ...(startedNew
+                  ? { title: message.replace(/\s+/g, " ").slice(0, 60) }
+                  : {}),
+                ...(streamedRef.current
+                  ? { preview: streamedRef.current.slice(0, 100) }
+                  : {}),
               });
             }
             // Tag the just-streamed agent message with its final state, if any.
-            const note = meta.refused ? "refused" : meta.unavailable ? "unavailable" : undefined;
-            if (note) {
+            const note = meta.refused
+              ? "refused"
+              : meta.unavailable
+                ? "unavailable"
+                : undefined;
+            if (note || meta.recovery !== "none") {
               setMessages((m) => {
                 const copy = [...m];
                 const last = copy[copy.length - 1];
-                if (last && last.role === "AGENT") copy[copy.length - 1] = { ...last, note };
+                if (last && last.role === "AGENT") {
+                  copy[copy.length - 1] = {
+                    ...last,
+                    note,
+                    recovery: meta.recovery,
+                    requestId: meta.requestId,
+                  };
+                }
                 return copy;
               });
             }
@@ -261,21 +307,40 @@ export function AssistantWidget() {
         },
       );
     } catch (err) {
-      const rateLimited = err instanceof ApiError && err.status === 429;
-      const content = rateLimited
-        ? "You're sending messages quickly — please wait a few seconds and try again."
-        : "Staynex AI is unavailable right now. You can still search and book directly.";
+      const applicationThrottled =
+        err instanceof ApiError && err.code === "AI_APPLICATION_THROTTLED";
+      const recovery: AssistantRecovery = applicationThrottled
+        ? "application_throttled"
+        : err instanceof AssistantTransportError
+          ? err.recovery
+          : err instanceof ApiError && err.recovery
+            ? err.recovery
+            : "transport_interrupted";
+      const requestId =
+        err instanceof AssistantTransportError || err instanceof ApiError
+          ? (err.requestId ?? undefined)
+          : undefined;
+      const content = recoveryCopy(recovery);
       setMessages((m) => {
         const copy = [...m];
         const last = copy[copy.length - 1];
         // Mark a partially-streamed reply, else add a fresh notice.
         if (last && last.role === "AGENT" && last.content.length > 0) {
-          copy[copy.length - 1] = { ...last, note: "unavailable" };
+          copy[copy.length - 1] = {
+            ...last,
+            note: "unavailable",
+            recovery,
+            requestId,
+          };
           return copy;
         }
-        return [...copy, { role: "AGENT", content, note: "unavailable" }];
+        return [
+          ...copy,
+          { role: "AGENT", content, note: "unavailable", recovery, requestId },
+        ];
       });
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
@@ -365,17 +430,21 @@ export function AssistantWidget() {
             role="dialog"
             aria-modal="true"
             aria-label="Staynex AI"
-            className="fixed inset-0 z-50 flex animate-slide-up flex-col bg-surface-raised sm:inset-y-0 sm:left-auto sm:right-0 sm:w-[420px] sm:animate-slide-in-right sm:border-l sm:border-border sm:shadow-xl"
+            className="fixed inset-0 z-50 flex h-[100dvh] max-h-[100dvh] animate-slide-up flex-col overflow-hidden bg-surface-raised sm:inset-y-0 sm:left-auto sm:right-0 sm:w-[420px] sm:animate-slide-in-right sm:border-l sm:border-border sm:shadow-xl"
           >
             {/* Header */}
-            <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+            <header className="flex shrink-0 items-center justify-between gap-1.5 border-b border-border px-3 py-3 min-[380px]:gap-2 min-[380px]:px-4">
               <div className="flex min-w-0 items-center gap-2.5">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <SparkIcon />
                 </span>
                 <div className="min-w-0">
-                  <p className="font-semibold leading-tight text-ink">Staynex AI</p>
-                  <p className="text-caption text-muted-foreground">Helps you find &amp; book stays</p>
+                  <p className="font-semibold leading-tight text-ink">
+                    Staynex AI
+                  </p>
+                  <p className="hidden text-caption text-muted-foreground min-[360px]:block">
+                    Helps you find &amp; book stays
+                  </p>
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
@@ -419,13 +488,16 @@ export function AssistantWidget() {
                         Hi, I&apos;m Staynex AI
                       </h3>
                       <p className="text-sm leading-relaxed text-muted-foreground">
-                        I can help you find verified stays and walk you through booking. I&apos;m an
-                        AI assistant, not a person — I can&apos;t confirm payments, promise
-                        availability, or handle refunds.
+                        I can help you find verified stays and walk you through
+                        booking. I&apos;m an AI assistant, not a person — I
+                        can&apos;t confirm payments, promise availability, or
+                        handle refunds.
                       </p>
                     </div>
                     <div className="space-y-2">
-                      <p className="text-overline text-muted-foreground">Try asking</p>
+                      <p className="text-overline text-muted-foreground">
+                        Try asking
+                      </p>
                       {SUGGESTIONS.map((s) => (
                         <button
                           key={s}
@@ -440,7 +512,8 @@ export function AssistantWidget() {
                   </div>
                 ) : (
                   messages.map((t, i) => {
-                    const streaming = busy && i === messages.length - 1 && t.role === "AGENT";
+                    const streaming =
+                      busy && i === messages.length - 1 && t.role === "AGENT";
                     return (
                       <div
                         key={i}
@@ -464,7 +537,10 @@ export function AssistantWidget() {
                           {t.role === "USER" ? (
                             t.content
                           ) : (
-                            <FormattedMessage content={t.content} onNavigate={() => setOpen(false)} />
+                            <FormattedMessage
+                              content={t.content}
+                              onNavigate={() => setOpen(false)}
+                            />
                           )}
                           {streaming && (
                             <span
@@ -472,17 +548,27 @@ export function AssistantWidget() {
                               aria-hidden
                             />
                           )}
+                          {t.role === "AGENT" &&
+                            t.recovery &&
+                            t.recovery !== "none" && (
+                              <RecoveryNotice
+                                recovery={t.recovery}
+                                requestId={t.requestId}
+                              />
+                            )}
                         </div>
                       </div>
                     );
                   })
                 )}
-                {busy && messages[messages.length - 1]?.role === "USER" && <ThinkingIndicator />}
+                {busy && messages[messages.length - 1]?.role === "USER" && (
+                  <ThinkingIndicator />
+                )}
                 <div ref={endRef} />
               </div>
 
               {/* Composer */}
-              <div className="border-t border-border px-3 py-3">
+              <div className="shrink-0 border-t border-border px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
                 <form
                   onSubmit={(e: FormEvent) => {
                     e.preventDefault();
@@ -522,8 +608,8 @@ export function AssistantWidget() {
                 </form>
                 {/* Persistent transparency line — under the input, not atop the panel. */}
                 <p className="mt-2 px-2 text-center text-caption text-muted-foreground">
-                  Staynex AI can make mistakes — confirm availability and prices on the
-                  property page.
+                  Staynex AI can make mistakes — confirm availability and prices
+                  on the property page.
                 </p>
               </div>
 
@@ -542,7 +628,10 @@ export function AssistantWidget() {
                   >
                     <div className="flex items-center justify-between border-b border-border px-4 py-3">
                       <p className="font-semibold text-ink">Chats</p>
-                      <IconButton label="Close chat history" onClick={() => setHistoryOpen(false)}>
+                      <IconButton
+                        label="Close chat history"
+                        onClick={() => setHistoryOpen(false)}
+                      >
                         <CloseIcon />
                       </IconButton>
                     </div>
@@ -556,15 +645,21 @@ export function AssistantWidget() {
                       </button>
                       {conversations.length === 0 ? (
                         <div className="space-y-1.5 px-1 py-8 text-center">
-                          <p className="text-sm font-medium text-ink">No conversations yet</p>
+                          <p className="text-sm font-medium text-ink">
+                            No conversations yet
+                          </p>
                           <p className="text-caption leading-relaxed text-muted-foreground">
-                            Your chats will appear here. Sign in to keep them across devices.
+                            Your chats will appear here. Sign in to keep them
+                            across devices.
                           </p>
                         </div>
                       ) : (
                         <ul className="space-y-0.5">
                           {conversations.map((c) => (
-                            <li key={c.id} className="group rounded-lg transition-colors hover:bg-secondary">
+                            <li
+                              key={c.id}
+                              className="group rounded-lg transition-colors hover:bg-secondary"
+                            >
                               {editingId === c.id ? (
                                 <form
                                   onSubmit={(e) => {
@@ -576,7 +671,9 @@ export function AssistantWidget() {
                                   <input
                                     autoFocus
                                     value={editTitle}
-                                    onChange={(e) => setEditTitle(e.target.value)}
+                                    onChange={(e) =>
+                                      setEditTitle(e.target.value)
+                                    }
                                     aria-label="Chat name"
                                     className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm"
                                   />
@@ -593,7 +690,10 @@ export function AssistantWidget() {
                                   >
                                     <span className="flex items-baseline gap-1.5">
                                       {c.pinned && (
-                                        <span className="shrink-0 text-primary" aria-label="Pinned">
+                                        <span
+                                          className="shrink-0 text-primary"
+                                          aria-label="Pinned"
+                                        >
                                           <PinIcon filled small />
                                         </span>
                                       )}
@@ -621,7 +721,10 @@ export function AssistantWidget() {
                                       <span className="text-caption font-medium text-error">
                                         Delete?
                                       </span>
-                                      <IconButton label="Confirm delete" onClick={() => void remove(c.id)}>
+                                      <IconButton
+                                        label="Confirm delete"
+                                        onClick={() => void remove(c.id)}
+                                      >
                                         <CheckIcon />
                                       </IconButton>
                                       <IconButton
@@ -634,7 +737,9 @@ export function AssistantWidget() {
                                   ) : (
                                     <span className="flex shrink-0 items-center gap-0.5">
                                       <IconButton
-                                        label={c.pinned ? "Unpin chat" : "Pin chat"}
+                                        label={
+                                          c.pinned ? "Unpin chat" : "Pin chat"
+                                        }
                                         onClick={() => void togglePin(c)}
                                       >
                                         <PinIcon filled={c.pinned} />
@@ -671,6 +776,43 @@ export function AssistantWidget() {
         </>
       )}
     </>
+  );
+}
+
+function RecoveryNotice({
+  recovery,
+  requestId,
+}: {
+  recovery: AssistantRecovery;
+  requestId?: string;
+}) {
+  const labels: Partial<Record<AssistantRecovery, string>> = {
+    application_throttled: "Staynex message limit reached",
+    provider_rate_limited: "Model quota busy — Staynex limit not reached",
+    provider_overloaded: "Model temporarily overloaded",
+    provider_timeout: "Model response timed out",
+    provider_unconfigured: "AI model temporarily offline",
+    provider_error: "AI model connection unavailable",
+    partial_response: "Partial response — verify details",
+    transport_interrupted: "Browser connection interrupted",
+  };
+  const reference = requestId ? requestId.slice(-8) : null;
+
+  return (
+    <div
+      role="status"
+      className="mt-2 border-t border-current/15 pt-2 text-[11px] font-medium leading-4"
+    >
+      <span>{labels[recovery] ?? "Recovery needed"}</span>
+      {reference && (
+        <span
+          className="ml-1 opacity-70"
+          title={`Support reference ${requestId}`}
+        >
+          · Ref {reference}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -783,7 +925,11 @@ const TrashIcon = () => (
   </svg>
 );
 const PinIcon = ({ filled, small }: { filled: boolean; small?: boolean }) => (
-  <svg {...svg} className={small ? "size-3" : "size-4"} fill={filled ? "currentColor" : "none"}>
+  <svg
+    {...svg}
+    className={small ? "size-3" : "size-4"}
+    fill={filled ? "currentColor" : "none"}
+  >
     <path d="M12 17v5M7 4h10l-1 7 3 3H5l3-3-1-7Z" />
   </svg>
 );

@@ -449,7 +449,7 @@ export interface AiLogRow {
   createdAt: string;
 }
 
-// --- Phase 4 / Staynex Agent ---
+// --- Phase 4 / Staynex AI ---
 
 export interface AssistantReply {
   conversationId: string;
@@ -460,7 +460,22 @@ export interface AssistantReply {
   unavailable: boolean;
   /** Verified facts the answer was grounded in (e.g. room prices). */
   groundedFacts: string[];
+  /** Truthful recovery classification; app and provider limits stay distinct. */
+  recovery: AssistantRecovery;
+  /** Opaque diagnostics reference safe to share with support. */
+  requestId: string;
 }
+
+export type AssistantRecovery =
+  | "none"
+  | "application_throttled"
+  | "provider_rate_limited"
+  | "provider_overloaded"
+  | "provider_timeout"
+  | "provider_unconfigured"
+  | "provider_error"
+  | "partial_response"
+  | "transport_interrupted";
 
 export type AgentMessageRole = "USER" | "AGENT";
 

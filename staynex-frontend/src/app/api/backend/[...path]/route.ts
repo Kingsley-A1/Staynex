@@ -5,9 +5,20 @@ interface RouteContext {
   params: Promise<{ path: string[] }>;
 }
 
-type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+type HttpMethod =
+  | "GET"
+  | "POST"
+  | "PUT"
+  | "PATCH"
+  | "DELETE"
+  | "HEAD"
+  | "OPTIONS";
 
 const BODYLESS_METHODS = new Set<HttpMethod>(["GET", "HEAD"]);
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET(request: NextRequest, context: RouteContext) {
   return proxyBackend(request, context);
@@ -37,27 +48,48 @@ export async function OPTIONS(request: NextRequest, context: RouteContext) {
   return proxyBackend(request, context);
 }
 
-async function proxyBackend(request: NextRequest, context: RouteContext): Promise<NextResponse> {
+async function proxyBackend(
+  request: NextRequest,
+  context: RouteContext,
+): Promise<NextResponse> {
   const { path } = await context.params;
-  const target = new URL(path.map(encodeURIComponent).join("/"), `${API_BASE}/`);
+  const target = new URL(
+    path.map(encodeURIComponent).join("/"),
+    `${API_BASE}/`,
+  );
   target.search = request.nextUrl.search;
 
   const headers = proxyRequestHeaders(request);
+  const requestId = safeRequestId(headers.get("x-request-id"));
+  headers.set("x-request-id", requestId);
   const method = request.method as HttpMethod;
   const upstream = await fetch(target, {
     method,
     headers,
-    body: BODYLESS_METHODS.has(method) ? undefined : await request.arrayBuffer(),
+    body: BODYLESS_METHODS.has(method)
+      ? undefined
+      : await request.arrayBuffer(),
     cache: "no-store",
     redirect: "manual",
   });
 
   const responseHeaders = proxyResponseHeaders(upstream.headers);
+  responseHeaders.set(
+    "x-request-id",
+    upstream.headers.get("x-request-id") ?? requestId,
+  );
   return new NextResponse(upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText,
     headers: responseHeaders,
   });
+}
+
+function safeRequestId(value: string | null): string {
+  const candidate = value?.trim();
+  return candidate && /^[A-Za-z0-9._:-]{8,80}$/.test(candidate)
+    ? candidate
+    : crypto.randomUUID();
 }
 
 function proxyRequestHeaders(request: NextRequest): Headers {
