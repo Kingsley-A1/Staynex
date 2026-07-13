@@ -568,6 +568,7 @@ export interface OwnerLocationView {
 /** Masked payout method — never includes the full account number. */
 export interface OwnerPayoutMethodView {
   id: string;
+  bankCode: string | null;
   bankName: string;
   accountName: string;
   accountNumberLast4: string;
@@ -576,6 +577,26 @@ export interface OwnerPayoutMethodView {
   /** True when the full number is encrypted at rest and can be revealed by a Super Admin. */
   hasEncryptedNumber: boolean;
   updatedAt: string;
+}
+
+export interface PayoutBankOption {
+  code: string;
+  name: string;
+  provider: "paystack";
+}
+
+export interface PayoutBankDirectoryView {
+  banks: PayoutBankOption[];
+  source: "paystack" | "cache";
+  refreshedAt: string;
+}
+
+export interface ResolvedPayoutAccount {
+  bankCode: string;
+  bankName: string;
+  accountName: string;
+  accountNumberLast4: string;
+  provider: "paystack";
 }
 
 /** Resume-safe snapshot the onboarding flow reads to know what's left. */
@@ -657,6 +678,21 @@ export interface CityOption {
   id: string;
   name: string;
   slug: string;
+}
+
+export interface AdminLocationReferenceView {
+  countries: Array<{ id: string; name: string; code: string }>;
+  regions: Array<{ id: string; countryId: string; name: string; slug: string }>;
+}
+
+export interface AdminCityRow extends CityOption {
+  countryId: string;
+  countryName: string;
+  regionId: string | null;
+  regionName: string | null;
+  areaCount: number;
+  propertyCount: number;
+  ownerLocationCount: number;
 }
 
 export type TestimonialStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED";

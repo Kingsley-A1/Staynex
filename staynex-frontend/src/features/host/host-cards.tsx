@@ -12,6 +12,8 @@ import {
   type OwnerPayoutMethodView,
   type OwnerProfileView,
   PAYOUT_METHOD_STATUS_LABELS,
+  type PayoutBankOption,
+  type ResolvedPayoutAccount,
 } from "@/lib/types";
 
 type Reload = () => Promise<void> | void;
@@ -62,9 +64,13 @@ export function HostProfileCard({
       canSave={businessName.trim().length > 0 && phone.trim().length > 0}
       summary={
         <dl>
-          <SettingsRow label="Display name">{profile.displayName || "—"}</SettingsRow>
+          <SettingsRow label="Display name">
+            {profile.displayName || "—"}
+          </SettingsRow>
           <SettingsRow label="Business name">
-            {profile.businessName || <span className="text-warning">Not set</span>}
+            {profile.businessName || (
+              <span className="text-warning">Not set</span>
+            )}
           </SettingsRow>
           <SettingsRow label="Contact phone">
             {profile.phone || <span className="text-warning">Not set</span>}
@@ -116,45 +122,103 @@ export function HostPayoutCard({
   payoutMethod: OwnerPayoutMethodView | null;
   onChanged: Reload;
 }) {
-  const [bankName, setBankName] = useState(payoutMethod?.bankName ?? "");
-  const [accountName, setAccountName] = useState(payoutMethod?.accountName ?? "");
+  const [banks, setBanks] = useState<PayoutBankOption[]>([]);
+  const [bankCode, setBankCode] = useState(payoutMethod?.bankCode ?? "");
   const [accountNumber, setAccountNumber] = useState("");
-  const [provider, setProvider] = useState(payoutMethod?.provider ?? "");
+  const [resolved, setResolved] = useState<ResolvedPayoutAccount | null>(null);
+  const [verifiedInput, setVerifiedInput] = useState("");
+  const [directorySource, setDirectorySource] = useState<
+    "paystack" | "cache" | null
+  >(null);
+  const [directoryError, setDirectoryError] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verificationError, setVerificationError] = useState<string | null>(
+    null,
+  );
+
+  async function loadBanks() {
+    setDirectoryError(null);
+    try {
+      const directory = await hostApiSettings.payoutBanks();
+      setBanks(directory.banks);
+      setDirectorySource(directory.source);
+    } catch (err) {
+      setDirectoryError(
+        apiErrorMessage(err, "Couldn't load the bank list. Try again."),
+      );
+    }
+  }
+
+  useEffect(() => {
+    void loadBanks();
+  }, []);
 
   function reset() {
-    setBankName(payoutMethod?.bankName ?? "");
-    setAccountName(payoutMethod?.accountName ?? "");
+    setBankCode(payoutMethod?.bankCode ?? "");
     setAccountNumber("");
-    setProvider(payoutMethod?.provider ?? "");
+    setResolved(null);
+    setVerifiedInput("");
+    setVerificationError(null);
   }
 
   async function save() {
+    if (verifiedInput !== `${bankCode}:${accountNumber}`) {
+      throw new Error("Verify the account details before saving.");
+    }
     await hostApiSettings.savePayoutMethod({
-      bankName: bankName.trim(),
-      accountName: accountName.trim(),
+      bankCode,
       accountNumber: accountNumber.trim(),
-      provider: provider.trim() || null,
     });
     await onChanged();
   }
 
-  const validNumber = /^\d{6,20}$/.test(accountNumber.trim());
+  async function verify() {
+    setVerifying(true);
+    setVerificationError(null);
+    setResolved(null);
+    setVerifiedInput("");
+    try {
+      const result = await hostApiSettings.verifyPayoutAccount({
+        bankCode,
+        accountNumber,
+      });
+      setResolved(result);
+      setVerifiedInput(`${bankCode}:${accountNumber}`);
+    } catch (err) {
+      setVerificationError(
+        apiErrorMessage(
+          err,
+          "The bank could not verify these account details.",
+        ),
+      );
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  const validNumber = /^\d{10}$/.test(accountNumber.trim());
+  const verified =
+    verifiedInput === `${bankCode}:${accountNumber}` && resolved !== null;
 
   return (
     <EditableCard
       title="Payout method"
-      description="Where Staynex settles your earnings. We never store full card details."
+      description="Verified bank details for receiving Staynex earnings. Account names come directly from Paystack."
       editLabel={payoutMethod ? "Update" : "Add payout method"}
       onEdit={reset}
       onCancel={reset}
       onSave={save}
-      canSave={bankName.trim().length > 0 && accountName.trim().length > 0 && validNumber}
+      canSave={verified}
       summary={
         payoutMethod ? (
           <dl>
             <SettingsRow label="Bank">{payoutMethod.bankName}</SettingsRow>
-            <SettingsRow label="Account name">{payoutMethod.accountName}</SettingsRow>
-            <SettingsRow label="Account number">•••• {payoutMethod.accountNumberLast4}</SettingsRow>
+            <SettingsRow label="Account name">
+              {payoutMethod.accountName}
+            </SettingsRow>
+            <SettingsRow label="Account number">
+              •••• {payoutMethod.accountNumberLast4}
+            </SettingsRow>
             <SettingsRow label="Status">
               {PAYOUT_METHOD_STATUS_LABELS[payoutMethod.status]}
             </SettingsRow>
@@ -167,47 +231,109 @@ export function HostPayoutCard({
       }
       form={
         <>
-          <Field label="Bank name" htmlFor="bankName" required>
-            <Input
-              id="bankName"
-              value={bankName}
-              onChange={(e) => setBankName(e.target.value)}
-              maxLength={120}
+          <Field
+            label="Bank"
+            htmlFor="bankCode"
+            required
+            hint={
+              directorySource === "cache"
+                ? "Using the most recently synced Paystack bank list."
+                : "Bank list supplied by Paystack."
+            }
+          >
+            <Select
+              id="bankCode"
+              value={bankCode}
+              onChange={(e) => {
+                setBankCode(e.target.value);
+                setResolved(null);
+                setVerifiedInput("");
+              }}
+              disabled={banks.length === 0}
               required
-            />
+            >
+              <option value="">Select your bank</option>
+              {banks.map((bank) => (
+                <option key={bank.code} value={bank.code}>
+                  {bank.name}
+                </option>
+              ))}
+            </Select>
           </Field>
-          <Field label="Account name" htmlFor="accountName" required>
-            <Input
-              id="accountName"
-              value={accountName}
-              onChange={(e) => setAccountName(e.target.value)}
-              maxLength={120}
-              required
-            />
-          </Field>
+          {directoryError && (
+            <div className="flex flex-wrap items-center gap-2" role="alert">
+              <p className="text-sm text-error">{directoryError}</p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void loadBanks()}
+              >
+                Retry bank list
+              </Button>
+            </div>
+          )}
           <Field
             label="Account number"
             htmlFor="accountNumber"
             required
-            hint={payoutMethod ? "Re-enter to update. 6–20 digits." : "6–20 digits."}
+            hint={
+              payoutMethod
+                ? "Re-enter the 10-digit number to update."
+                : "Enter the 10-digit NUBAN account number."
+            }
           >
             <Input
               id="accountNumber"
               inputMode="numeric"
               value={accountNumber}
-              onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ""))}
-              maxLength={20}
+              onChange={(e) => {
+                setAccountNumber(
+                  e.target.value.replace(/\D/g, "").slice(0, 10),
+                );
+                setResolved(null);
+                setVerifiedInput("");
+              }}
+              maxLength={10}
+              autoComplete="off"
               required
             />
           </Field>
-          <Field label="Provider" htmlFor="provider" hint="Optional, e.g. Paystack">
-            <Input
-              id="provider"
-              value={provider}
-              onChange={(e) => setProvider(e.target.value)}
-              maxLength={80}
-            />
-          </Field>
+          <div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void verify()}
+              disabled={!bankCode || !validNumber || verifying}
+            >
+              {verifying
+                ? "Verifying account…"
+                : verified
+                  ? "Account verified"
+                  : "Verify account"}
+            </Button>
+          </div>
+          {verificationError && (
+            <p className="text-sm text-error" role="alert">
+              {verificationError}
+            </p>
+          )}
+          {resolved && (
+            <div
+              className="rounded-lg border border-success-border bg-success-surface p-3"
+              role="status"
+            >
+              <p className="text-caption font-semibold uppercase tracking-wide text-success">
+                Verified account name
+              </p>
+              <p className="mt-1 font-semibold text-ink">
+                {resolved.accountName}
+              </p>
+              <p className="text-caption">
+                {resolved.bankName} · •••• {resolved.accountNumberLast4}
+              </p>
+            </div>
+          )}
         </>
       }
     />
@@ -330,7 +456,10 @@ function LocationRow({
     setBusy(true);
     setError(null);
     try {
-      await hostApiSettings.deleteLocation(location.id, replacementId || undefined);
+      await hostApiSettings.deleteLocation(
+        location.id,
+        replacementId || undefined,
+      );
       await onDeleted();
     } catch (err) {
       setError(apiErrorMessage(err, "Couldn't delete this location."));
@@ -356,7 +485,8 @@ function LocationRow({
           </p>
           {location.propertyCount > 0 && (
             <p className="mt-0.5 text-caption">
-              {location.propertyCount} listing{location.propertyCount === 1 ? "" : "s"}
+              {location.propertyCount} listing
+              {location.propertyCount === 1 ? "" : "s"}
             </p>
           )}
         </div>
@@ -365,7 +495,12 @@ function LocationRow({
             <Button variant="ghost" size="sm" onClick={onEdit}>
               Edit
             </Button>
-            <Button variant="ghost" size="sm" onClick={onDeleteStart} className="text-error">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDeleteStart}
+              className="text-error"
+            >
               Delete
             </Button>
           </div>
@@ -404,10 +539,20 @@ function LocationRow({
             </p>
           )}
           <div className="flex flex-wrap gap-2">
-            <Button variant="danger" size="sm" onClick={confirmDelete} disabled={busy}>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={confirmDelete}
+              disabled={busy}
+            >
               {busy ? "Deleting…" : "Delete location"}
             </Button>
-            <Button variant="ghost" size="sm" onClick={onDeleteCancel} disabled={busy}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDeleteCancel}
+              disabled={busy}
+            >
               Cancel
             </Button>
           </div>
@@ -475,7 +620,10 @@ function LocationForm({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3 rounded-lg border border-border bg-secondary p-4">
+    <form
+      onSubmit={submit}
+      className="space-y-3 rounded-lg border border-border bg-secondary p-4"
+    >
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="City" htmlFor="loc-city" required>
           <Select
@@ -493,7 +641,11 @@ function LocationForm({
             ))}
           </Select>
         </Field>
-        <Field label="Area" htmlFor="loc-area" hint={areas.length === 0 ? "No areas listed" : "Optional"}>
+        <Field
+          label="Area"
+          htmlFor="loc-area"
+          hint={areas.length === 0 ? "No areas listed" : "Optional"}
+        >
           <Select
             id="loc-area"
             value={areaId}
@@ -509,8 +661,17 @@ function LocationForm({
           </Select>
         </Field>
       </div>
-      <Field label="Label" htmlFor="loc-label" hint="Optional, e.g. Marina branch">
-        <Input id="loc-label" value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} />
+      <Field
+        label="Label"
+        htmlFor="loc-label"
+        hint="Optional, e.g. Marina branch"
+      >
+        <Input
+          id="loc-label"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          maxLength={80}
+        />
       </Field>
       <Field label="Address" htmlFor="loc-address" hint="Optional">
         <Input
@@ -538,7 +699,13 @@ function LocationForm({
         <Button type="submit" size="sm" disabled={busy || !cityId}>
           {busy ? "Saving…" : submitLabel}
         </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onCancel}
+          disabled={busy}
+        >
           Cancel
         </Button>
       </div>

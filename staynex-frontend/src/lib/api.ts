@@ -4,6 +4,8 @@
 
 import type {
   AdminBookingsPage,
+  AdminCityRow,
+  AdminLocationReferenceView,
   AdminPaymentExceptionRow,
   AdminPaymentRow,
   AdminPaymentsPage,
@@ -37,6 +39,7 @@ import type {
   OwnerLocationView,
   OwnerOnboardingState,
   OwnerPayoutMethodView,
+  PayoutBankDirectoryView,
   OwnerProfileView,
   OwnerSettingsView,
   PaymentStatusView,
@@ -44,6 +47,7 @@ import type {
   PropertySummary,
   PublicTestimonial,
   RevealedPayoutMethod,
+  ResolvedPayoutAccount,
   SessionSummary,
 } from "@/lib/types";
 import { API_BASE } from "@/lib/api-base";
@@ -428,6 +432,30 @@ export const adminApi = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  deleteArea: (id: string) =>
+    request<{ ok: true }>(`/admin/areas/${id}`, { method: "DELETE" }),
+  cities: () => request<AdminCityRow[]>("/admin/cities"),
+  locationReferences: () =>
+    request<AdminLocationReferenceView>("/admin/cities/reference"),
+  createCity: (body: {
+    countryId: string;
+    regionId?: string | null;
+    name: string;
+  }) =>
+    request<AdminCityRow>("/admin/cities", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateCity: (
+    id: string,
+    body: { countryId?: string; regionId?: string | null; name?: string },
+  ) =>
+    request<AdminCityRow>(`/admin/cities/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteCity: (id: string) =>
+    request<{ ok: true }>(`/admin/cities/${id}`, { method: "DELETE" }),
 };
 
 export const authApi = {
@@ -532,10 +560,8 @@ interface LocationInput {
 }
 
 interface PayoutMethodInput {
-  bankName: string;
-  accountName: string;
+  bankCode: string;
   accountNumber: string;
-  provider?: string | null;
 }
 
 export const hostApiSettings = {
@@ -577,6 +603,13 @@ export const hostApiSettings = {
     ),
   getPayoutMethod: () =>
     request<OwnerPayoutMethodView | null>("/host/settings/payout-method"),
+  payoutBanks: () =>
+    request<PayoutBankDirectoryView>("/host/settings/payout-banks"),
+  verifyPayoutAccount: (body: PayoutMethodInput) =>
+    request<ResolvedPayoutAccount>("/host/settings/payout-method/verify", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   savePayoutMethod: (body: PayoutMethodInput) =>
     request<OwnerPayoutMethodView>("/host/settings/payout-method", {
       method: "PUT",

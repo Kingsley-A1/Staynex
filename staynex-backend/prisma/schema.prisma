@@ -274,6 +274,7 @@ model OwnerLocation {
 model OwnerPayoutMethod {
   id                 String             @id @default(cuid())
   ownerId            String             @unique
+  bankCode           String?
   bankName           String
   accountName        String
   accountNumberLast4 String
@@ -285,6 +286,26 @@ model OwnerPayoutMethod {
   updatedAt          DateTime           @updatedAt
 
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+}
+
+// Provider-authoritative payout bank directory. Paystack remains the source of
+// truth; this table is the durable fallback when its list endpoint is briefly
+// unavailable and avoids shipping a stale bank list in frontend code.
+model BankDirectoryEntry {
+  id           String   @id @default(cuid())
+  provider     String
+  country      String
+  currency     String
+  code         String
+  name         String
+  type         String?
+  active       Boolean  @default(true)
+  lastSyncedAt DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([provider, country, code])
+  @@index([provider, country, active, name])
 }
 
 // Single-use, hashed, expiring password-reset token. The raw token is only ever
@@ -544,24 +565,24 @@ model AvailabilityCalendar {
 // ---------------------------------------------------------------------------
 
 model BookingHold {
-  id         String   @id @default(cuid())
-  userId     String?
-  roomUnitId String
-  checkIn    DateTime
-  checkOut   DateTime
+  id               String   @id @default(cuid())
+  userId           String?
+  roomUnitId       String
+  checkIn          DateTime
+  checkOut         DateTime
   /// Occupancy split. Capacity is checked against adults + children; infants are
   /// free and excluded from the room's maxGuests check.
-  adults     Int      @default(1)
-  children   Int      @default(0)
-  infants    Int      @default(0)
+  adults           Int      @default(1)
+  children         Int      @default(0)
+  infants          Int      @default(0)
   /// Price snapshot taken when the hold is created (kobo). Checkout charges
   /// this snapshot, so a host price edit mid-flow can never change what the
   /// guest was quoted. 0 only on legacy pre-snapshot rows.
-  nightlyPriceKobo Int @default(0)
-  totalKobo        Int @default(0)
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  nightlyPriceKobo Int      @default(0)
+  totalKobo        Int      @default(0)
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   user     User?    @relation(fields: [userId], references: [id])
   roomUnit RoomUnit @relation(fields: [roomUnitId], references: [id])

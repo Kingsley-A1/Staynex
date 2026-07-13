@@ -8,9 +8,15 @@ export const ownerProfileSchema = z
     businessName: z.string().trim().min(1).max(160).optional(),
     phone: z.string().trim().min(3).max(40).optional(),
   })
-  .refine((v) => v.displayName !== undefined || v.businessName !== undefined || v.phone !== undefined, {
-    message: "Nothing to update",
-  });
+  .refine(
+    (v) =>
+      v.displayName !== undefined ||
+      v.businessName !== undefined ||
+      v.phone !== undefined,
+    {
+      message: "Nothing to update",
+    },
+  );
 export type OwnerProfileInput = z.infer<typeof ownerProfileSchema>;
 
 export const createLocationSchema = z.object({
@@ -30,7 +36,9 @@ export const updateLocationSchema = z
     addressLine: z.string().trim().max(200).nullable().optional(),
     isPrimary: z.boolean().optional(),
   })
-  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: "Nothing to update" });
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
+    message: "Nothing to update",
+  });
 export type UpdateLocationInput = z.infer<typeof updateLocationSchema>;
 
 export const deleteLocationSchema = z.object({
@@ -41,12 +49,14 @@ export const deleteLocationSchema = z.object({
 export type DeleteLocationInput = z.infer<typeof deleteLocationSchema>;
 
 export const payoutMethodSchema = z.object({
-  bankName: z.string().trim().min(1).max(120),
-  accountName: z.string().trim().min(1).max(120),
-  accountNumber: z.string().trim().regex(/^\d{6,20}$/, "Account number must be 6–20 digits"),
-  provider: z.string().trim().max(80).nullable().optional(),
+  bankCode: z.string().trim().min(1).max(20),
+  accountNumber: z
+    .string()
+    .trim()
+    .regex(/^\d{10}$/, "Account number must be 10 digits"),
 });
 export type PayoutMethodInput = z.infer<typeof payoutMethodSchema>;
+export const verifyPayoutAccountSchema = payoutMethodSchema;
 
 export const completeOnboardingSchema = z.object({
   // Owner can finish without a payout method and add it later from settings.

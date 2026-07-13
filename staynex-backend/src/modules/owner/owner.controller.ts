@@ -29,6 +29,7 @@ import {
   ownerProfileSchema,
   payoutMethodSchema,
   updateLocationSchema,
+  verifyPayoutAccountSchema,
 } from "./dto";
 
 @Controller("host")
@@ -167,6 +168,26 @@ export class OwnerController {
   @RequireAnyCapability("OWNER")
   async getPayoutMethod(@CurrentUser() owner: AuthUser) {
     return this.owner.getPayoutMethod(owner.id);
+  }
+
+  @Get("settings/payout-banks")
+  @RequireAnyCapability("OWNER")
+  async listPayoutBanks() {
+    return this.owner.listPayoutBanks();
+  }
+
+  @Post("settings/payout-method/verify")
+  @RequireAnyCapability("OWNER")
+  @RateLimit({
+    bucket: "owner:payout-account-verify",
+    limit: 10,
+    windowMs: 60_000,
+    keyBy: ["user"],
+  })
+  async verifyPayoutAccount(@Body() body: unknown) {
+    return this.owner.verifyPayoutAccount(
+      parseBody(verifyPayoutAccountSchema, body),
+    );
   }
 
   @Put("settings/payout-method")
