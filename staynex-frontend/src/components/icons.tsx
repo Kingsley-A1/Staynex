@@ -89,11 +89,20 @@ export function IconAudit({ className }: IconProps) {
 export function IconAi({ className }: IconProps) {
   return (
     <svg {...base(className)}>
-      <path d="M12 3v2M12 19v2M5 12H3M21 12h-2" />
-      <rect x="6" y="6" width="12" height="12" rx="3" />
-      <circle cx="9.5" cy="11" r="1" fill="currentColor" stroke="none" />
-      <circle cx="14.5" cy="11" r="1" fill="currentColor" stroke="none" />
-      <path d="M9.5 14.5h5" />
+      <g fill="currentColor" stroke="none">
+        <circle cx="12" cy="2.75" r="1.1" />
+        <circle cx="18.55" cy="5.45" r="1.1" />
+        <circle cx="21.25" cy="12" r="1.1" />
+        <circle cx="18.55" cy="18.55" r="1.1" />
+        <circle cx="12" cy="21.25" r="1.1" />
+        <circle cx="5.45" cy="18.55" r="1.1" />
+        <circle cx="2.75" cy="12" r="1.1" />
+        <circle cx="5.45" cy="5.45" r="1.1" />
+      </g>
+      <path
+        d="m7.7 15 2.25-6 2.25 6M8.55 12.8h2.8M15.35 9v6"
+        strokeWidth="1.8"
+      />
     </svg>
   );
 }

@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { usePathname } from "next/navigation";
+import { IconAi } from "@/components/icons";
 import { ApiError, AssistantTransportError, agentApi } from "@/lib/api";
 import { recoveryCopy } from "@/lib/ai-stream-protocol";
 import type {
@@ -409,10 +410,10 @@ export function AssistantWidget() {
         aria-expanded={open}
         aria-controls="staynex-ai-panel"
         aria-label={open ? "Close AI assistant" : "Open AI assistant"}
-        className="fixed bottom-4 right-4 z-40 inline-flex h-11 animate-scale-in items-center gap-2 whitespace-nowrap rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg transition-colors hover:bg-primary-hover"
+        className="fixed bottom-4 right-4 z-40 inline-flex min-h-12 animate-scale-in items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-lg transition-colors hover:bg-primary-hover"
       >
-        <SparkIcon />
-        {open ? "Close" : "AI"}
+        <IconAi className="size-7" />
+        {open && <span>Close</span>}
       </button>
 
       {open && (
@@ -436,7 +437,7 @@ export function AssistantWidget() {
             <header className="flex shrink-0 items-center justify-between gap-1.5 border-b border-border px-3 py-3 min-[380px]:gap-2 min-[380px]:px-4">
               <div className="flex min-w-0 items-center gap-2.5">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <SparkIcon />
+                  <IconAi className="size-6" />
                 </span>
                 <div className="min-w-0">
                   <p className="font-semibold leading-tight text-ink">
@@ -482,7 +483,7 @@ export function AssistantWidget() {
                   <div className="space-y-6 pt-1">
                     <div className="space-y-2.5">
                       <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                        <SparkIcon />
+                        <IconAi className="size-7" />
                       </span>
                       <h3 className="text-base font-semibold text-ink">
                         Hi, I&apos;m Staynex AI
@@ -888,11 +889,6 @@ const svg = {
   "aria-hidden": true,
 };
 
-const SparkIcon = () => (
-  <svg {...svg} className="size-4 text-current">
-    <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18" />
-  </svg>
-);
 const HistoryIcon = () => (
   <svg {...svg}>
     <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />

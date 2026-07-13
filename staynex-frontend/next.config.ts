@@ -8,9 +8,10 @@ const production = process.env.NODE_ENV === "production";
 // Public base of the media bucket (R2 custom domain or dev subdomain). Drives
 // the next/image optimizer allowlist — uploaded photos are served resized and
 // re-encoded (AVIF/WebP) instead of full-size originals.
-function mediaRemotePattern():
-  | { protocol: "https" | "http"; hostname: string }
-  | null {
+function mediaRemotePattern(): {
+  protocol: "https" | "http";
+  hostname: string;
+} | null {
   const base = process.env.NEXT_PUBLIC_MEDIA_BASE_URL;
   if (!base) return null;
   try {
@@ -24,6 +25,18 @@ function mediaRemotePattern():
   }
 }
 const mediaPattern = mediaRemotePattern();
+const mediaUploadOrigin = (() => {
+  const configured = process.env.NEXT_PUBLIC_MEDIA_UPLOAD_ORIGIN?.trim();
+  if (!configured) return "https://*.r2.cloudflarestorage.com";
+  try {
+    const url = new URL(configured);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.origin
+      : null;
+  } catch {
+    return null;
+  }
+})();
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -35,7 +48,7 @@ const contentSecurityPolicy = [
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://va.vercel-scripts.com https://www.gstatic.com",
-  `connect-src 'self' ${apiOrigin} https://accounts.google.com https://vitals.vercel-insights.com https://*.vercel-insights.com https://fcmregistrations.googleapis.com https://firebaseinstallations.googleapis.com https://fcm.googleapis.com https://www.googleapis.com`,
+  `connect-src 'self' ${apiOrigin}${mediaUploadOrigin ? ` ${mediaUploadOrigin}` : ""} https://accounts.google.com https://vitals.vercel-insights.com https://*.vercel-insights.com https://fcmregistrations.googleapis.com https://firebaseinstallations.googleapis.com https://fcm.googleapis.com https://www.googleapis.com`,
   "frame-src https://accounts.google.com",
   "worker-src 'self' blob:",
   "upgrade-insecure-requests",

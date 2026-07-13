@@ -19,6 +19,7 @@ export function RoomManager({
   const [name, setName] = useState("");
   const [priceNaira, setPriceNaira] = useState("");
   const [maxGuests, setMaxGuests] = useState("2");
+  const [adding, setAdding] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -46,6 +47,7 @@ export function RoomManager({
       setName("");
       setPriceNaira("");
       setMaxGuests("2");
+      setAdding(false);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add room type");
@@ -66,9 +68,27 @@ export function RoomManager({
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-caption">
+          {roomTypes.length} room type{roomTypes.length === 1 ? "" : "s"}
+        </p>
+        {!adding && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setAdding(true)}
+          >
+            Add room type
+          </Button>
+        )}
+      </div>
       <ul className="space-y-3">
         {roomTypes.length === 0 && (
-          <li className="text-caption">No room types yet. Add your first below.</li>
+          <li className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-caption">
+            No room types yet. Add your first room type to define pricing and
+            capacity.
+          </li>
         )}
         {roomTypes.map((rt) =>
           editingId === rt.id ? (
@@ -89,14 +109,18 @@ export function RoomManager({
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-ink">{rt.name}</p>
                     {justSavedId === rt.id && (
-                      <span className="text-caption font-medium text-success" role="status">
+                      <span
+                        className="text-caption font-medium text-success"
+                        role="status"
+                      >
                         Saved
                       </span>
                     )}
                   </div>
                   <p className="text-caption">
-                    {formatNairaFromKobo(rt.basePriceKobo)} / night · up to {rt.maxGuests} guests ·{" "}
-                    {rt.unitCount} unit{rt.unitCount === 1 ? "" : "s"}
+                    {formatNairaFromKobo(rt.basePriceKobo)} / night · up to{" "}
+                    {rt.maxGuests} guests · {rt.unitCount} unit
+                    {rt.unitCount === 1 ? "" : "s"}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -105,10 +129,14 @@ export function RoomManager({
                     variant="ghost"
                     size="sm"
                     onClick={() =>
-                      setPhotosOpenId((current) => (current === rt.id ? null : rt.id))
+                      setPhotosOpenId((current) =>
+                        current === rt.id ? null : rt.id,
+                      )
                     }
                   >
-                    {photosOpenId === rt.id ? "Hide photos" : `Photos (${rt.media.length})`}
+                    {photosOpenId === rt.id
+                      ? "Hide photos"
+                      : `Photos (${rt.media.length})`}
                   </Button>
                   <Button
                     type="button"
@@ -118,7 +146,12 @@ export function RoomManager({
                   >
                     Edit
                   </Button>
-                  <Button type="button" variant="secondary" size="sm" onClick={() => addUnit(rt.id)}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => addUnit(rt.id)}
+                  >
                     Add unit
                   </Button>
                 </div>
@@ -136,44 +169,56 @@ export function RoomManager({
         )}
       </ul>
 
-      <form
-        onSubmit={addRoomType}
-        className="surface-card grid gap-3 p-4 sm:grid-cols-[1.5fr_1fr_0.8fr_auto] sm:items-end"
-      >
-        <Field label="Room type" htmlFor="rt-name" required>
-          <Input
-            id="rt-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Deluxe Room"
-            required
-            minLength={2}
-          />
-        </Field>
-        <Field label="Price / night (₦)" htmlFor="rt-price" required>
-          <CurrencyInput
-            id="rt-price"
-            value={priceNaira}
-            onValueChange={setPriceNaira}
-            placeholder="48,000"
-            required
-          />
-        </Field>
-        <Field label="Max guests" htmlFor="rt-guests" required>
-          <Input
-            id="rt-guests"
-            type="number"
-            min={1}
-            max={20}
-            value={maxGuests}
-            onChange={(e) => setMaxGuests(e.target.value)}
-            required
-          />
-        </Field>
-        <Button type="submit" disabled={pending}>
-          {pending ? "Adding…" : "Add room type"}
-        </Button>
-      </form>
+      {adding && (
+        <form
+          onSubmit={addRoomType}
+          className="surface-card grid gap-3 p-4 sm:grid-cols-[1.5fr_1fr_0.8fr_auto] sm:items-end"
+        >
+          <Field label="Room type" htmlFor="rt-name" required>
+            <Input
+              id="rt-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Deluxe Room"
+              required
+              minLength={2}
+            />
+          </Field>
+          <Field label="Price / night (₦)" htmlFor="rt-price" required>
+            <CurrencyInput
+              id="rt-price"
+              value={priceNaira}
+              onValueChange={setPriceNaira}
+              placeholder="48,000"
+              required
+            />
+          </Field>
+          <Field label="Max guests" htmlFor="rt-guests" required>
+            <Input
+              id="rt-guests"
+              type="number"
+              min={1}
+              max={20}
+              value={maxGuests}
+              onChange={(e) => setMaxGuests(e.target.value)}
+              required
+            />
+          </Field>
+          <div className="flex flex-wrap gap-2 sm:col-span-4 sm:justify-end">
+            <Button type="submit" disabled={pending}>
+              {pending ? "Adding…" : "Save room type"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setAdding(false)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
 
       {error && (
         <p className="text-sm text-error" role="alert">
@@ -194,7 +239,9 @@ function RoomTypeEditCard({
   onSaved: () => void;
 }) {
   const [name, setName] = useState(roomType.name);
-  const [priceNaira, setPriceNaira] = useState(String(Math.round(roomType.basePriceKobo / 100)));
+  const [priceNaira, setPriceNaira] = useState(
+    String(Math.round(roomType.basePriceKobo / 100)),
+  );
   const [maxGuests, setMaxGuests] = useState(String(roomType.maxGuests));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -218,7 +265,10 @@ function RoomTypeEditCard({
 
   return (
     <li className="surface-card p-4">
-      <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-[1.5fr_1fr_0.8fr] sm:items-end">
+      <form
+        onSubmit={onSubmit}
+        className="grid gap-3 sm:grid-cols-[1.5fr_1fr_0.8fr] sm:items-end"
+      >
         <Field label="Room type" htmlFor={`edit-name-${roomType.id}`} required>
           <Input
             id={`edit-name-${roomType.id}`}
@@ -228,7 +278,11 @@ function RoomTypeEditCard({
             minLength={2}
           />
         </Field>
-        <Field label="Price / night (₦)" htmlFor={`edit-price-${roomType.id}`} required>
+        <Field
+          label="Price / night (₦)"
+          htmlFor={`edit-price-${roomType.id}`}
+          required
+        >
           <CurrencyInput
             id={`edit-price-${roomType.id}`}
             value={priceNaira}
@@ -236,7 +290,11 @@ function RoomTypeEditCard({
             required
           />
         </Field>
-        <Field label="Max guests" htmlFor={`edit-guests-${roomType.id}`} required>
+        <Field
+          label="Max guests"
+          htmlFor={`edit-guests-${roomType.id}`}
+          required
+        >
           <Input
             id={`edit-guests-${roomType.id}`}
             type="number"
@@ -251,7 +309,13 @@ function RoomTypeEditCard({
           <Button type="submit" size="sm" disabled={pending}>
             {pending ? "Saving…" : "Save changes"}
           </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={pending}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onCancel}
+            disabled={pending}
+          >
             Cancel
           </Button>
         </div>
