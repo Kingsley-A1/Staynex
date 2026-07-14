@@ -315,15 +315,21 @@ zero closes the selected nights to new bookings.
 | POST   | `/checkout`           | session | Hold → PENDING_PAYMENT booking + Paystack init |
 | GET    | `/bookings/:id`       | public  | Booking view (confirmation page source)        |
 
+Checkout accepts an optional `platform: "web" | "mobile"` (default `"web"`, an
+enum — never a URL, so clients cannot inject a redirect target). `"mobile"`
+switches the Paystack `callback_url` to the API-served deep-link interstitial
+below so the in-app browser returns to the app by itself.
+
 Host views (`OwnerBookingsController`, OWNER): `GET /host/bookings`,
 `GET /host/bookings/:id`.
 
 ### 9.6 Payments — `/payments` (`PaymentsWebhookController`)
 
-| Method | Path                         | Auth          | Purpose                                              |
-| ------ | ---------------------------- | ------------- | ---------------------------------------------------- |
-| POST   | `/payments/paystack/webhook` | public (HMAC) | Paystack events; SHA512 verified against raw body    |
-| GET    | `/payments/:reference`       | public        | Reconciled payment/booking status (debounced verify) |
+| Method | Path                                 | Auth          | Purpose                                              |
+| ------ | ------------------------------------ | ------------- | ---------------------------------------------------- |
+| POST   | `/payments/paystack/webhook`         | public (HMAC) | Paystack events; SHA512 verified against raw body    |
+| GET    | `/payments/:reference`               | public        | Reconciled payment/booking status (debounced verify) |
+| GET    | `/payments/:reference/mobile-return` | public        | HTML interstitial: deep-links `staynex://payment/<ref>` after a mobile Paystack payment; carries **no payment truth** (the app polls) |
 
 ### 9.7 Vouchers & verification — root (`VoucherController`, public)
 
@@ -409,7 +415,7 @@ transaction as the new message and AI action log.
 - **Password reset:** emailed **6-digit code** (scrypt-hashed, looked up by
   user, 15-min TTL, 5-attempt cap). No link, no account enumeration.
 - **CSRF:** `csrfProtection` (main.ts) enforces origin + `X-CSRF-Token`
-  (matching the `sx_csrf` cookie from `GET /auth/csrf`) on mutating requests.
+  (matching the `staynex_csrf` cookie from `GET /auth/csrf`) on mutating requests.
 - **Rate limiting:** in-memory `RateLimiterService` via `@RateLimit({bucket,
 limit, windowMs, keyBy})` (`SecurityModule` is `@Global`).
 - **Webhook integrity:** Paystack `POST /payments/paystack/webhook` verifies an

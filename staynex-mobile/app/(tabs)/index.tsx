@@ -9,7 +9,14 @@ import { apiErrorMessage } from "@/core/client";
 import { Screen } from "@/ui/Screen";
 import { Button } from "@/ui/Button";
 import { PropertyCard } from "@/ui/PropertyCard";
-import { DateField, Field, Select, Stepper, type Option } from "@/ui/form";
+import {
+  DateField,
+  Field,
+  OccupancySelector,
+  Select,
+  type Option,
+  type OccupancyValue,
+} from "@/ui/form";
 import { EmptyState, ErrorState, LoadingState } from "@/ui/states";
 
 export default function SearchScreen() {
@@ -19,7 +26,7 @@ export default function SearchScreen() {
   const [area, setArea] = useState<string | null>(null);
   const [checkIn, setCheckIn] = useState<string | null>(null);
   const [checkOut, setCheckOut] = useState<string | null>(null);
-  const [guests, setGuests] = useState(2);
+  const [occupancy, setOccupancy] = useState<OccupancyValue>({ adults: 2, children: 0, infants: 0 });
   const [submitted, setSubmitted] = useState<SearchInput | null>(null);
 
   const citiesQuery = useQuery({
@@ -58,7 +65,7 @@ export default function SearchScreen() {
       area: area ?? undefined,
       checkIn: checkIn ?? undefined,
       checkOut: checkOut ?? undefined,
-      guests,
+      ...occupancy,
     });
   }
 
@@ -69,7 +76,9 @@ export default function SearchScreen() {
         slug: property.slug,
         checkIn: checkIn ?? "",
         checkOut: checkOut ?? "",
-        guests: String(guests),
+        adults: String(occupancy.adults),
+        children: String(occupancy.children),
+        infants: String(occupancy.infants),
       },
     });
   }
@@ -122,7 +131,7 @@ export default function SearchScreen() {
       </View>
 
       <Field label="Guests">
-        <Stepper value={guests} onChange={setGuests} min={1} max={20} />
+        <OccupancySelector value={occupancy} onChange={setOccupancy} />
       </Field>
 
       <Button label="Search stays" onPress={runSearch} disabled={!canSearch} />

@@ -24,7 +24,9 @@ export default function QuoteScreen() {
     roomTypeId: param(params.roomTypeId),
     checkIn: param(params.checkIn),
     checkOut: param(params.checkOut),
-    guests: Number(param(params.guests)) || 1,
+    adults: Number(param(params.adults)) || 1,
+    children: Number(param(params.children)) || 0,
+    infants: Number(param(params.infants)) || 0,
   };
 
   const quoteQuery = useQuery({

@@ -35,8 +35,10 @@ export default function CheckoutScreen() {
   const checkoutMutation = useMutation({
     mutationFn: async (email: string) => {
       const result = await bookingApi.checkout({ holdId, email });
-      // Paystack hosted flow — the only card-data surface. We open it, then poll
-      // payment status on return (no client-side confirmation).
+      // Paystack hosted flow — the only card-data surface. After payment the
+      // API's mobile-return interstitial deep-links to staynex://payment/<ref>,
+      // which matches this return URL and closes the browser by itself. The
+      // status screen still polls for truth (the deep link asserts nothing).
       await WebBrowser.openAuthSessionAsync(result.authorizationUrl, Linking.createURL("payment"));
       return result;
     },

@@ -24,7 +24,7 @@ targets, not fiction — if a gate slips, move every later date, don't skip the 
 | ----- | -------------------------------------------- | ------------- | ------ |
 | 0     | The app runs against the real platform       | Wed 15 Jul    | 🟡 toolchain green; 2 device checks pending |
 | 1     | A phone can book and pay for a real stay     | Fri 24 Jul    | 🟡 Track A ✅ 25/25 machine-verified; Track B pending hardware |
-| 1.5   | Payment feels native; receipt in hand        | Wed 29 Jul    | ⬜ |
+| 1.5   | Payment feels native; receipt in hand        | Wed 29 Jul    | 🟡 engineering ✅ 28/28; device auto-return gate pending hardware |
 | 2     | The returning-guest app (trips + identity)   | Fri 7 Aug     | ⬜ |
 | 3     | The app taps you on the shoulder (push)      | Wed 12 Aug    | ⬜ |
 | 4     | Concierge in your pocket (Staynex AI)        | Fri 21 Aug    | ⬜ |
@@ -115,14 +115,20 @@ receipt in the guest's hand — the same trusted voucher + QR the web issues.
 Paystack payment via deep link on 100% of test runs, and the confirmation screen
 opens the voucher PDF and verify QR for a paid booking.
 
-- [ ] Mobile payment return: backend accepts an optional mobile return hint at checkout (or serves an interstitial that deep-links to `staynex://payment/...`); `openAuthSessionAsync` resolves without manual dismissal. Keep the web callback default untouched.
-- [ ] App scheme registered in `app.config.ts` and verified on Android + iOS.
-- [ ] Occupancy parity: adults/children/infants stepper on search, quote, and hold (same contract as web; drop the legacy single `guests` field from requests).
-- [ ] Confirmation screen links the voucher: open `GET /vouchers/:reference/pdf` and show the QR (`/vouchers/:reference/qr.svg` or the verify URL) — endpoints already exist; no new backend surface.
-- [ ] Polling remains the source of truth — the deep-link return only closes the browser, it never asserts payment state.
-- [ ] Regression: re-run the Phase 1 happy path + both failure paths after these changes.
+**Engineering track — ✅ machine-verified (harness 28/28, 2026-07-15):**
+- [x] Mobile payment return: `POST /checkout` accepts `platform: "web" | "mobile"` (enum, never a URL — no redirect injection). `"mobile"` points Paystack's `callback_url` at the new API-served interstitial `GET /payments/:reference/mobile-return`, which deep-links `staynex://payment/<ref>`; web default untouched. Real Paystack test-mode initialize accepted the interstitial callback.
+- [x] Interstitial hardening: reference validated (`^stx_[A-Za-z0-9]{8,64}$`) before any HTML is built — malformed input 404s with no reflection; `Cache-Control: no-store`; carries zero payment truth.
+- [x] App scheme `staynex` registered in `app.config.ts` (was present); `bookingApi.checkout` now sends `platform: "mobile"`.
+- [x] Occupancy parity: `OccupancySelector` (adults 1–20 / children 0–20 / infants 0–10, backend caps mirrored) on search, stay detail, quote, and hold; legacy `guests` dropped from request bodies (search still receives `guests = adults + children`, same as the web client); split verified persisted through hold → booking by the harness.
+- [x] Confirmation links the voucher: "View receipt & check-in QR (PDF)" opens `GET /vouchers/:reference/pdf` (the canonical PDF with the embedded QR) for CONFIRMED bookings; harness verified the PDF renders and 404s for unpaid bookings.
+- [x] Polling remains the source of truth — the deep link only closes the browser; the status screen still polls `GET /payments/:reference`.
+- [x] Regression: full harness re-run after all changes — **PHASE 1 GATE PASS 28/28** (3 new Phase 1.5 checks included).
 
-**Exit gate:** three consecutive test payments auto-return to the app; voucher opens from confirmation. *Measured by:* test-run log in the PR.
+**Device track (⏳ pending hardware):**
+- [ ] Three consecutive test payments auto-return to the app (`openAuthSessionAsync` resolves via the interstitial deep link, no manual dismissal) on Android + iOS. Note: the fixed `staynex://` scheme requires a dev-client or preview build — Expo Go uses the `exp://` scheme and won't auto-return.
+- [ ] Voucher PDF opens from the confirmation screen on-device.
+
+**Exit gate:** engineering track green (✅) + three consecutive auto-returns on a device + voucher opens from confirmation. *Measured by:* harness output + device test-run log in the PR.
 
 ---
 

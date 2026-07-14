@@ -16,20 +16,25 @@ import type {
 } from "@staynex/backend/types";
 import { api } from "@/core/client";
 
-/** Date range + room used by quote and hold (same body shape on the backend). */
-export interface BookingDatesInput {
+/** Airbnb-style occupancy split — the same contract the web client sends. */
+export interface Occupancy {
+  adults: number; // >= 1
+  children: number; // >= 0
+  infants: number; // >= 0 (free; don't count toward room capacity)
+}
+
+/** Date range + room + occupancy used by quote and hold (same body on the backend). */
+export interface BookingDatesInput extends Occupancy {
   roomTypeId: string;
   checkIn: string; // YYYY-MM-DD
   checkOut: string; // YYYY-MM-DD
-  guests: number;
 }
 
-export interface SearchInput {
+export interface SearchInput extends Partial<Occupancy> {
   city: string;
   area?: string;
   checkIn?: string;
   checkOut?: string;
-  guests?: number;
 }
 
 function searchQuery(input: SearchInput): string {
@@ -37,7 +42,9 @@ function searchQuery(input: SearchInput): string {
   if (input.area) qs.set("area", input.area);
   if (input.checkIn) qs.set("checkIn", input.checkIn);
   if (input.checkOut) qs.set("checkOut", input.checkOut);
-  if (input.guests) qs.set("guests", String(input.guests));
+  // The search API takes a capacity total; the web client sends adults +
+  // children (infants stay free) — mirror that mapping exactly.
+  if (input.adults) qs.set("guests", String(input.adults + (input.children ?? 0)));
   return qs.toString();
 }
 
@@ -64,8 +71,10 @@ export const bookingApi = {
   createHold: (body: BookingDatesInput) => api.post<HoldSummary>("/bookings/holds", body),
   getHold: (holdId: string) =>
     api.get<HoldSummary>(`/bookings/holds/${encodeURIComponent(holdId)}`),
+  // `platform: "mobile"` switches the Paystack callback to the API's
+  // deep-link interstitial so the in-app browser returns to the app by itself.
   checkout: (body: { holdId: string; email: string }) =>
-    api.post<CheckoutResult>("/checkout", body),
+    api.post<CheckoutResult>("/checkout", { ...body, platform: "mobile" }),
   paymentStatus: (reference: string) =>
     api.get<PaymentStatusView>(`/payments/${encodeURIComponent(reference)}`),
   getBooking: (id: string) => api.get<BookingView>(`/bookings/${encodeURIComponent(id)}`),

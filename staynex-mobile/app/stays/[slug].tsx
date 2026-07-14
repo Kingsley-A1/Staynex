@@ -10,7 +10,7 @@ import { toDateParam } from "@/core/format";
 import { Screen } from "@/ui/Screen";
 import { Button } from "@/ui/Button";
 import { PriceTag } from "@/ui/PriceTag";
-import { DateField, Field, Stepper } from "@/ui/form";
+import { DateField, Field, OccupancySelector, type OccupancyValue } from "@/ui/form";
 import { ErrorState, LoadingState } from "@/ui/states";
 
 function param(value: string | string[] | undefined): string | null {
@@ -25,7 +25,12 @@ export default function StayDetailScreen() {
 
   const [checkIn, setCheckIn] = useState<string | null>(param(params.checkIn) || null);
   const [checkOut, setCheckOut] = useState<string | null>(param(params.checkOut) || null);
-  const [guests, setGuests] = useState(Number(param(params.guests)) || 2);
+  const [occupancy, setOccupancy] = useState<OccupancyValue>({
+    // Legacy `guests` deep links map onto adults, matching the web search page.
+    adults: Number(param(params.adults)) || Number(param(params.guests)) || 2,
+    children: Number(param(params.children)) || 0,
+    infants: Number(param(params.infants)) || 0,
+  });
 
   const stayQuery = useQuery({
     queryKey: ["stay", slug],
@@ -59,7 +64,15 @@ export default function StayDetailScreen() {
     if (!checkIn || !checkOut) return;
     router.push({
       pathname: "/booking/quote",
-      params: { roomTypeId: room.id, slug, checkIn, checkOut, guests: String(guests) },
+      params: {
+        roomTypeId: room.id,
+        slug,
+        checkIn,
+        checkOut,
+        adults: String(occupancy.adults),
+        children: String(occupancy.children),
+        infants: String(occupancy.infants),
+      },
     });
   }
 
@@ -89,7 +102,7 @@ export default function StayDetailScreen() {
             </View>
           </View>
           <Field label="Guests">
-            <Stepper value={guests} onChange={setGuests} min={1} max={20} />
+            <OccupancySelector value={occupancy} onChange={setOccupancy} />
           </Field>
         </View>
 

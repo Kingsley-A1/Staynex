@@ -1,10 +1,12 @@
 import { StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
+import * as WebBrowser from "expo-web-browser";
 import { color, fontSize, fontWeight, radius, spacing } from "@staynex/shared";
 import { BOOKING_STATUS_LABELS, BOOKING_STATUS_TONE, formatKoboToNGN } from "@staynex/shared";
 import { bookingApi } from "@/data/api";
 import { apiErrorMessage } from "@/core/client";
+import { API_BASE_URL } from "@/core/env";
 import { formatDateLabel } from "@/core/format";
 import { Screen } from "@/ui/Screen";
 import { Button } from "@/ui/Button";
@@ -84,6 +86,20 @@ export default function ConfirmationScreen() {
         </View>
 
         <View style={styles.actions}>
+          {booking.status === "CONFIRMED" && booking.paymentReference ? (
+            <Button
+              label="View receipt & check-in QR (PDF)"
+              variant="secondary"
+              onPress={() =>
+                // The canonical Booking Confirmation & Receipt — the same
+                // byte-identical PDF the email attaches, QR included. The
+                // server only issues it for a paid, confirmed booking.
+                WebBrowser.openBrowserAsync(
+                  `${API_BASE_URL}/vouchers/${booking.paymentReference}/pdf`,
+                )
+              }
+            />
+          ) : null}
           <Button label="Done" onPress={() => router.replace("/(tabs)")} />
           <Button
             label="View trips"
@@ -92,7 +108,10 @@ export default function ConfirmationScreen() {
             onPress={() => undefined /* Phase 2 — out of scope */}
           />
         </View>
-        <Text style={styles.note}>My trips arrives in Phase 2.{/* Phase 2 — out of scope */}</Text>
+        <Text style={styles.note}>
+          Show the QR on your receipt at reception — it verifies against live
+          booking truth. My trips arrives in Phase 2.{/* Phase 2 — out of scope */}
+        </Text>
       </View>
     </Screen>
   );

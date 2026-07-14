@@ -43,5 +43,9 @@ export const createHoldSchema = quoteSchema;
 export const checkoutSchema = z.object({
   holdId: z.string().min(1),
   email: z.string().trim().toLowerCase().email(),
+  // Which client is paying. "mobile" switches the Paystack callback to the
+  // API-served deep-link interstitial so the in-app browser returns to the app.
+  // An enum (not a URL) so clients can never inject a redirect target.
+  platform: z.enum(["web", "mobile"]).default("web"),
 });
 export type CheckoutInput = z.infer<typeof checkoutSchema>;

@@ -5,6 +5,7 @@ import {
   Headers,
   Param,
   Post,
+  Req,
   UseGuards,
 } from "@nestjs/common";
 import type { AuthUser } from "../../../types";
@@ -66,12 +67,40 @@ export class BookingsController {
     windowMs: 60_000,
     keyBy: ["user", "ip"],
   })
-  async checkout(@CurrentUser() user: AuthUser, @Body() body: unknown) {
-    return this.bookings.checkout(parseBody(checkoutSchema, body), user.id);
+  async checkout(
+    @CurrentUser() user: AuthUser,
+    @Body() body: unknown,
+    @Req() req: OriginRequest,
+  ) {
+    return this.bookings.checkout(
+      parseBody(checkoutSchema, body),
+      user.id,
+      requestApiOrigin(req),
+    );
   }
 
   @Get("bookings/:id")
   getBooking(@Param("id") id: string) {
     return this.bookings.getBooking(id);
   }
+}
+
+interface OriginRequest {
+  protocol?: string;
+  headers: Record<string, string | string[] | undefined>;
+}
+
+/**
+ * Public origin of this API for the current request, proxy-aware
+ * (Railway sets x-forwarded-*; locally it falls back to the Host header).
+ * Used only to build the server-controlled mobile payment-return URL.
+ */
+function requestApiOrigin(req: OriginRequest): string | null {
+  const first = (v: string | string[] | undefined): string | null => {
+    const raw = Array.isArray(v) ? v[0] : v;
+    return raw ? raw.split(",")[0].trim() : null;
+  };
+  const proto = first(req.headers["x-forwarded-proto"]) ?? req.protocol ?? "http";
+  const host = first(req.headers["x-forwarded-host"]) ?? first(req.headers["host"]);
+  return host ? `${proto}://${host}` : null;
 }

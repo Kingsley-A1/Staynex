@@ -11,6 +11,8 @@ interface InitializeInput {
   amountKobo: number;
   reference: string;
   metadata?: Record<string, unknown>;
+  /** Server-controlled override (mobile deep-link return). Never user input. */
+  callbackUrl?: string;
 }
 
 interface PaystackInitResponse {
@@ -107,7 +109,7 @@ export class PaystackService {
         amount: input.amountKobo, // Paystack expects kobo for NGN
         reference: input.reference,
         currency: "NGN",
-        callback_url: this.callbackUrl(),
+        callback_url: input.callbackUrl ?? this.callbackUrl(),
         metadata: input.metadata,
       }),
     });

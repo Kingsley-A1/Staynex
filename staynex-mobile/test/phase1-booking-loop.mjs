@@ -311,8 +311,15 @@ async function main() {
     bail("no bookable availability in the lookahead window");
   }
 
-  // 5. Quote (exact body the mobile app sends)
-  const quoteBody = { roomTypeId: room.id, checkIn: window_.checkIn, checkOut: window_.checkOut, guests: 2 };
+  // 5. Quote (exact body the mobile app sends — occupancy split, no legacy `guests`)
+  const quoteBody = {
+    roomTypeId: room.id,
+    checkIn: window_.checkIn,
+    checkOut: window_.checkOut,
+    adults: 2,
+    children: 0,
+    infants: 0,
+  };
   const quote = await guest.post("/bookings/quote", quoteBody);
   must(
     quote.ok && quote.json?.totalKobo > 0 && quote.json?.nights === NIGHTS && quote.json?.available >= 1,
@@ -329,8 +336,14 @@ async function main() {
     hold.ok ? `hold ${h.holdId}, expires ${h.expiresAt}` : `status ${hold.status}`,
   )) bail("hold failed");
 
-  // 7. Checkout (session + CSRF) → real Paystack test-mode initialize
-  const checkout = await guest.post("/checkout", { holdId: h.holdId, email: GUEST_EMAIL });
+  // 7. Checkout (session + CSRF) → real Paystack test-mode initialize.
+  // platform:"mobile" mirrors bookingApi.checkout and switches the Paystack
+  // callback to the API's deep-link interstitial (Phase 1.5).
+  const checkout = await guest.post("/checkout", {
+    holdId: h.holdId,
+    email: GUEST_EMAIL,
+    platform: "mobile",
+  });
   const co = checkout.json;
   if (!must(
     checkout.ok && co?.bookingId && co?.reference?.startsWith("stx_") && /^https:\/\//.test(co?.authorizationUrl ?? ""),
@@ -346,6 +359,24 @@ async function main() {
     spentHold.status === 404 && reCheckout.status >= 400 && reCheckout.status < 500,
     "consumed hold is rejected (GET 404, re-checkout 4xx)",
     `GET ${spentHold.status}, re-checkout ${reCheckout.status}`,
+  );
+
+  // 8b. Phase 1.5 — mobile payment-return interstitial contract
+  const interstitial = await fetch(`${API}/payments/${co.reference}/mobile-return`);
+  const interstitialType = interstitial.headers.get("content-type") ?? "";
+  const interstitialHtml = await interstitial.text();
+  must(
+    interstitial.ok &&
+      interstitialType.includes("text/html") &&
+      interstitialHtml.includes(`staynex://payment/${co.reference}`),
+    "mobile-return interstitial serves the deep link (HTML)",
+    `status ${interstitial.status}, type ${interstitialType}`,
+  );
+  const badRef = await fetch(`${API}/payments/stx_%3Cscript%3E/mobile-return`);
+  must(
+    badRef.status === 404,
+    "mobile-return rejects a malformed reference (404, no reflection)",
+    `status ${badRef.status}`,
   );
 
   // 9. Signed charge.success webhook with the exact snapshotted amount
@@ -372,6 +403,11 @@ async function main() {
     "GET /bookings/:id → CONFIRMED with snapshotted amount",
     view.ok ? `${view.json.propertyName} / ${view.json.roomName}` : `status ${view.status}`,
   );
+  must(
+    view.json?.adults === 2 && view.json?.children === 0 && view.json?.infants === 0,
+    "occupancy split persisted through hold → booking",
+    `adults ${view.json?.adults}, children ${view.json?.children}, infants ${view.json?.infants}`,
+  );
   const verify = await guest.get(`/verify/${co.reference}`);
   must(verify.ok, "GET /verify/:reference (reception card)", `status ${verify.status}`);
   must(
@@ -390,9 +426,11 @@ async function main() {
   if (!must(Boolean(w2), "second bookable window for the failure path", w2 ? `${w2.checkIn}→${w2.checkOut}` : "none")) {
     bail("no capacity left for the failure-path booking");
   }
-  const body2 = { roomTypeId: room.id, checkIn: w2.checkIn, checkOut: w2.checkOut, guests: 2 };
+  const body2 = { roomTypeId: room.id, checkIn: w2.checkIn, checkOut: w2.checkOut, adults: 2, children: 0, infants: 0 };
   const hold2 = await guest.post("/bookings/holds", body2);
-  const co2 = hold2.ok ? await guest.post("/checkout", { holdId: hold2.json.holdId, email: GUEST_EMAIL }) : { ok: false, status: hold2.status };
+  const co2 = hold2.ok
+    ? await guest.post("/checkout", { holdId: hold2.json.holdId, email: GUEST_EMAIL, platform: "mobile" })
+    : { ok: false, status: hold2.status };
   if (!must(co2.ok, "failure-path hold + checkout", co2.ok ? `ref ${co2.json.reference}` : `status ${co2.status}`)) {
     bail("failure-path checkout failed");
   }

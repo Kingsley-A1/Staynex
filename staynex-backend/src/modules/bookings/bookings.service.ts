@@ -170,7 +170,13 @@ export class BookingsService {
   }
 
   /** Convert a valid hold into a PENDING_PAYMENT booking + Paystack transaction. */
-  async checkout(input: CheckoutInput, guestUserId: string | null): Promise<CheckoutResult> {
+  async checkout(
+    input: CheckoutInput,
+    guestUserId: string | null,
+    // API origin of the current request (proxy-aware, controller-derived).
+    // Only used to build the mobile deep-link return interstitial URL.
+    apiOrigin: string | null = null,
+  ): Promise<CheckoutResult> {
     const reference = `stx_${randomUUID().replace(/-/g, "")}`;
 
     const prepared = await prisma.$transaction(async (tx) => {
@@ -239,6 +245,12 @@ export class BookingsService {
         amountKobo: prepared.totalKobo,
         reference,
         metadata: { bookingId: prepared.bookingId },
+        // Mobile checkouts return through the API-served interstitial, which
+        // deep-links back into the app. Web keeps the default status page.
+        callbackUrl:
+          input.platform === "mobile" && apiOrigin
+            ? `${apiOrigin}/payments/${reference}/mobile-return`
+            : undefined,
       });
       return { bookingId: prepared.bookingId, reference, authorizationUrl: init.authorizationUrl };
     } catch (err) {

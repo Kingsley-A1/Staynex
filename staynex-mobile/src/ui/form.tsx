@@ -156,6 +156,81 @@ export function Stepper({
   );
 }
 
+/** Occupancy values shared by search, quote, and hold (backend caps mirrored). */
+export interface OccupancyValue {
+  adults: number;
+  children: number;
+  infants: number;
+}
+
+/**
+ * Airbnb-style guest selector: adults / children / infants steppers.
+ * Same contract the web client sends — infants are free and don't count
+ * toward room capacity (the backend derives `guests = adults + children`).
+ */
+export function OccupancySelector({
+  value,
+  onChange,
+}: {
+  value: OccupancyValue;
+  onChange: (value: OccupancyValue) => void;
+}) {
+  return (
+    <View style={styles.occupancy}>
+      <OccupancyRow
+        label="Adults"
+        hint="Age 13+"
+        count={value.adults}
+        min={1}
+        max={20}
+        onCount={(adults) => onChange({ ...value, adults })}
+      />
+      <OccupancyRow
+        label="Children"
+        hint="Age 2–12"
+        count={value.children}
+        min={0}
+        max={20}
+        onCount={(children) => onChange({ ...value, children })}
+      />
+      <OccupancyRow
+        label="Infants"
+        hint="Under 2 — stay free"
+        count={value.infants}
+        min={0}
+        max={10}
+        onCount={(infants) => onChange({ ...value, infants })}
+      />
+    </View>
+  );
+}
+
+function OccupancyRow({
+  label,
+  hint,
+  count,
+  min,
+  max,
+  onCount,
+}: {
+  label: string;
+  hint: string;
+  count: number;
+  min: number;
+  max: number;
+  onCount: (count: number) => void;
+}) {
+  return (
+    <View style={styles.occupancyRow}>
+      <View style={styles.occupancyText}>
+        <Text style={styles.occupancyLabel}>{label}</Text>
+        <Text style={styles.hint}>{hint}</Text>
+      </View>
+      <Stepper value={count} onChange={onCount} min={min} max={max} />
+    </View>
+  );
+}
+
 function StepButton({
   label,
   onPress,
@@ -283,6 +358,10 @@ const styles = StyleSheet.create({
   stepperValue: { fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: color.ink, minWidth: 24, textAlign: "center" },
   stepBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   stepBtnLabel: { fontSize: fontSize.xl, color: color.primary, fontWeight: fontWeight.semibold },
+  occupancy: { gap: spacing.sm },
+  occupancyRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  occupancyText: { flexShrink: 1, paddingRight: spacing.md },
+  occupancyLabel: { fontSize: fontSize.md, color: color.ink, fontWeight: fontWeight.medium },
   iosDone: { alignSelf: "flex-end", paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
   iosDoneLabel: { color: color.primary, fontWeight: fontWeight.semibold, fontSize: fontSize.md },
 });

@@ -4,10 +4,12 @@ import {
   Get,
   Headers,
   HttpCode,
+  NotFoundException,
   Param,
   Post,
   type RawBodyRequest,
   Req,
+  Res,
   UnauthorizedException,
 } from "@nestjs/common";
 import type { IncomingMessage } from "node:http";
@@ -28,6 +30,12 @@ interface PaystackEvent {
     status?: string;
     transaction_reference?: string;
   };
+}
+
+/** Minimal structural response type for the one HTML page this API serves. */
+interface HtmlResponse {
+  setHeader(name: string, value: string): void;
+  send(body: string): void;
 }
 
 @Controller("payments")
@@ -115,6 +123,54 @@ export class PaymentsWebhookController {
         }
         return { outcome: "RECORDED", detail: "Unhandled event type." };
     }
+  }
+
+  /**
+   * Mobile payment-return interstitial. Paystack redirects the in-app browser
+   * here after a mobile checkout; the page immediately deep-links back into
+   * the app (`staynex://payment/<reference>`), which resolves the app's
+   * `openAuthSessionAsync` and closes the browser. It carries NO payment
+   * truth — the app still polls `GET /payments/:reference` for state, and the
+   * reference format is validated so nothing user-controlled reaches the HTML.
+   */
+  @Get(":reference/mobile-return")
+  mobileReturn(
+    @Param("reference") reference: string,
+    @Res() res: HtmlResponse,
+  ) {
+    if (!/^stx_[A-Za-z0-9]{8,64}$/.test(reference)) {
+      throw new NotFoundException("Unknown payment reference");
+    }
+    const deepLink = `staynex://payment/${reference}`;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Returning to Staynex…</title>
+<style>
+  body{margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center;
+       background:#F7F7FF;color:#101014;font-family:system-ui,-apple-system,sans-serif}
+  main{text-align:center;padding:24px;max-width:340px}
+  a.btn{display:inline-block;margin-top:16px;padding:14px 28px;border-radius:12px;
+        background:#27187D;color:#fff;text-decoration:none;font-weight:600}
+  p{color:#6E6A83;font-size:14px;line-height:1.5}
+</style>
+</head>
+<body>
+<main>
+  <h1 style="font-size:20px">Returning to the Staynex app…</h1>
+  <p>We're confirming your payment in the app. If nothing happens,
+     tap the button below.</p>
+  <a class="btn" href="${deepLink}">Open Staynex</a>
+  <p>You can close this window once the app opens.</p>
+</main>
+<script>window.location.replace(${JSON.stringify(deepLink)});</script>
+</body>
+</html>`);
   }
 
   // Polled by the payment-status page. Rate-limited because each poll can
