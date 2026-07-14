@@ -17,6 +17,8 @@ import type {
   AdminUserRow,
   AgentConversation,
   AgentMessage,
+  AgentMessageFeedback,
+  AgentMessageFeedbackResult,
   ApprovalActionResult,
   AreaOption,
   AssistantReply,
@@ -660,11 +662,25 @@ export const areasApi = {
 /** Metadata delivered by the final `done` event of a streamed reply. */
 export interface AgentStreamMeta {
   conversationId: string;
+  userMessageId: string;
+  messageId: string;
   refused: boolean;
   unavailable: boolean;
   groundedFacts: string[];
+  properties: PropertySummary[];
   recovery: AssistantRecovery;
   requestId: string;
+}
+
+export type AssistantOperation =
+  | { type: "retry"; assistantMessageId: string }
+  | { type: "edit"; userMessageId: string };
+
+export interface AssistantRequest {
+  message: string;
+  conversationId?: string;
+  propertySlug?: string;
+  operation?: AssistantOperation;
 }
 
 export class AssistantTransportError extends Error {
@@ -684,7 +700,7 @@ export class AssistantTransportError extends Error {
  * `ApiError` (e.g. 429) before any streaming begins.
  */
 export async function askAgentStream(
-  body: { message: string; conversationId?: string; propertySlug?: string },
+  body: AssistantRequest,
   handlers: {
     onChunk: (text: string) => void;
     onDone: (meta: AgentStreamMeta) => void;
@@ -743,9 +759,12 @@ export async function askAgentStream(
       } else if (event.type === "done") {
         doneMeta = {
           conversationId: event.conversationId ?? body.conversationId ?? "",
+          userMessageId: event.userMessageId ?? "",
+          messageId: event.messageId ?? "",
           refused: Boolean(event.refused),
           unavailable: Boolean(event.unavailable),
           groundedFacts: event.groundedFacts ?? [],
+          properties: event.properties ?? [],
           recovery: event.recovery ?? "none",
           requestId:
             event.requestId ?? res.headers.get("x-request-id") ?? requestId,
@@ -785,11 +804,7 @@ export async function askAgentStream(
 }
 
 export const agentApi = {
-  ask: (body: {
-    message: string;
-    conversationId?: string;
-    propertySlug?: string;
-  }) =>
+  ask: (body: AssistantRequest) =>
     request<AssistantReply>("/ai/assistant", {
       method: "POST",
       body: JSON.stringify(body),
@@ -803,6 +818,18 @@ export const agentApi = {
     }),
   messages: (id: string) =>
     request<AgentMessage[]>(`/ai/conversations/${id}/messages`),
+  setFeedback: (
+    conversationId: string,
+    messageId: string,
+    feedback: AgentMessageFeedback | null,
+  ) =>
+    request<AgentMessageFeedbackResult>(
+      `/ai/conversations/${conversationId}/messages/${messageId}/feedback`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ feedback }),
+      },
+    ),
   rename: (id: string, title: string) =>
     request<AgentConversation>(`/ai/conversations/${id}`, {
       method: "PATCH",

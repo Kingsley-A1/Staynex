@@ -1,12 +1,15 @@
-import type { AssistantRecovery } from "./types";
+import type { AssistantRecovery, PropertySummary } from "./types";
 
 export interface ParsedAssistantEvent {
   type?: string;
   text?: string;
   conversationId?: string;
+  userMessageId?: string;
+  messageId?: string;
   refused?: boolean;
   unavailable?: boolean;
   groundedFacts?: string[];
+  properties?: PropertySummary[];
   recovery?: AssistantRecovery;
   requestId?: string;
 }

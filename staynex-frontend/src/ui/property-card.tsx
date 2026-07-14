@@ -7,48 +7,70 @@ import { OptimizedFillImage } from "./optimized-fill-image";
 export function PropertyCard({
   property,
   href,
-  actionLabel = "Manage",
+  actionLabel,
+  variant = "default",
 }: {
   property: PropertySummary;
   href: string;
   actionLabel?: string;
+  variant?: "default" | "assistant";
 }) {
+  const assistant = variant === "assistant";
+  const resolvedActionLabel =
+    actionLabel ?? (assistant ? "View stay" : "Manage");
+
   return (
     <Link
       href={href}
-      className="group surface-card flex h-full flex-col overflow-hidden transition-shadow hover:shadow-md"
+      className={`group surface-card flex h-full flex-col overflow-hidden transition-shadow hover:shadow-md ${assistant ? "rounded-lg" : ""}`}
     >
-      {/* Visual area ≈ 60% of the card height */}
-      <div className="relative aspect-[16/10] bg-gradient-to-br from-indigo-500 to-indigo-800">
+      <div
+        className={`relative bg-gradient-to-br from-indigo-500 to-indigo-800 ${assistant ? "aspect-[16/8]" : "aspect-[16/10]"}`}
+      >
         {property.coverImageUrl ? (
           <OptimizedFillImage
             src={property.coverImageUrl}
             alt={property.name}
-            sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+            sizes={
+              assistant
+                ? "(min-width: 768px) 360px, 88vw"
+                : "(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+            }
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : null}
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-        <div className="absolute left-3 top-3">
-          <StatusBadge status={property.status} />
-        </div>
+        {!assistant && (
+          <div className="absolute left-3 top-3">
+            <StatusBadge status={property.status} />
+          </div>
+        )}
       </div>
-      <div className="flex flex-1 flex-col p-4">
+      <div className={`flex flex-1 flex-col ${assistant ? "p-3" : "p-4"}`}>
         <h3 className="text-title-sm truncate">{property.name}</h3>
         <p className="text-caption mt-1">{property.cityName}, Nigeria</p>
-        <div className="mt-auto flex items-end justify-between border-t border-border pt-3">
+        <div
+          className={`mt-auto flex items-end justify-between border-t border-border ${assistant ? "pt-2.5" : "pt-3"}`}
+        >
           <div>
             <p className="text-ink">
               <span className="text-lg font-bold">
-                {formatNairaFromKobo(property.fromPriceKobo)}
+                {property.fromPriceKobo == null
+                  ? "Price on request"
+                  : formatNairaFromKobo(property.fromPriceKobo)}
               </span>
-              <span className="text-caption"> / night</span>
+              {property.fromPriceKobo != null && (
+                <span className="text-caption"> / night</span>
+              )}
             </p>
             <p className="text-caption">
-              {property.roomTypeCount} room type{property.roomTypeCount === 1 ? "" : "s"}
+              {property.roomTypeCount} room type
+              {property.roomTypeCount === 1 ? "" : "s"}
             </p>
           </div>
-          <span className="text-sm font-semibold text-primary">{actionLabel} →</span>
+          <span className="text-sm font-semibold text-primary">
+            {resolvedActionLabel} →
+          </span>
         </div>
       </div>
     </Link>

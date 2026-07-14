@@ -494,10 +494,13 @@ export interface AiLogRow {
 
 export interface AssistantReply {
   conversationId: string;
+  userMessageId: string;
+  messageId: string;
   reply: string;
   refused: boolean;
   unavailable: boolean;
   groundedFacts: string[];
+  properties: PropertySummary[];
   recovery: AssistantRecovery;
   requestId: string;
 }
@@ -514,12 +517,20 @@ export type AssistantRecovery =
   | "transport_interrupted";
 
 export type AgentMessageRole = "USER" | "AGENT";
+export type AgentMessageFeedback = "UP" | "DOWN";
 
 export interface AgentMessage {
   id: string;
   role: AgentMessageRole;
   content: string;
+  feedback: AgentMessageFeedback | null;
+  properties: PropertySummary[];
   createdAt: string;
+}
+
+export interface AgentMessageFeedbackResult {
+  messageId: string;
+  feedback: AgentMessageFeedback | null;
 }
 
 export interface AgentConversation {

@@ -23,16 +23,28 @@ import {
   MdOutlineDock,
   MdOutlineSend,
   MdPushPin,
+  MdRefresh,
+  MdThumbDownOffAlt,
+  MdThumbUpOffAlt,
 } from "react-icons/md";
 import { IconAi } from "@/components/icons";
-import { ApiError, AssistantTransportError, agentApi } from "@/lib/api";
+import {
+  ApiError,
+  AssistantTransportError,
+  agentApi,
+  authApi,
+  type AssistantOperation,
+} from "@/lib/api";
 import { recoveryCopy } from "@/lib/ai-stream-protocol";
 import type {
   AgentConversation,
   AgentMessage,
+  AgentMessageFeedback,
   AssistantRecovery,
+  PropertySummary,
 } from "@/lib/types";
 import { FormattedMessage } from "@/features/ai/formatted-message";
+import { PropertyCard } from "@/ui";
 import {
   clampFloatingPosition,
   floatingPanelSize,
@@ -60,11 +72,18 @@ const THINKING_PHRASES = [
 const THINKING_ROTATE_MS = 2200;
 
 type Msg = {
+  id?: string;
   role: "USER" | "AGENT";
   content: string;
+  feedback?: AgentMessageFeedback | null;
+  properties?: PropertySummary[];
   note?: "refused" | "unavailable";
   recovery?: AssistantRecovery;
   requestId?: string;
+};
+
+type SendOptions = {
+  operation?: AssistantOperation;
 };
 
 // Remembers the active conversation across reloads so the panel reopens where the
@@ -171,6 +190,10 @@ export function AssistantWidget() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [firstName, setFirstName] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editedMessage, setEditedMessage] = useState("");
+  const [feedbackBusyId, setFeedbackBusyId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -185,6 +208,7 @@ export function AssistantWidget() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const restoredRef = useRef(false);
+  const identityLoadedRef = useRef(false);
   // Accumulates the streamed reply so onDone can snapshot a preview for the
   // local chat registry without racing React state updates.
   const streamedRef = useRef("");
@@ -297,6 +321,13 @@ export function AssistantWidget() {
     if (open) {
       inputRef.current?.focus();
       void refreshConversations();
+      if (!identityLoadedRef.current) {
+        identityLoadedRef.current = true;
+        void authApi
+          .me()
+          .then((user) => setFirstName(safeFirstName(user?.name)))
+          .catch(() => setFirstName(null));
+      }
     }
   }, [open, refreshConversations]);
 
@@ -352,13 +383,38 @@ export function AssistantWidget() {
     });
   }
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, options: SendOptions = {}) {
     const message = text.trim();
-    if (!message || busyRef.current) return;
+    const operation = options.operation;
+    if (!message || busyRef.current || (operation && !activeId)) return;
     busyRef.current = true;
     const startedNew = !activeId;
     resetInput();
-    setMessages((m) => [...m, { role: "USER", content: message }]);
+    setEditingMessageId(null);
+    if (!operation) {
+      setMessages((current) => [
+        ...current,
+        { role: "USER", content: message },
+      ]);
+    } else if (operation.type === "retry") {
+      const assistantMessageId = operation.assistantMessageId;
+      setMessages((current) =>
+        current.filter((item) => item.id !== assistantMessageId),
+      );
+    } else {
+      const userMessageId = operation.userMessageId;
+      setMessages((current) => {
+        const userIndex = current.findIndex(
+          (item) => item.id === userMessageId,
+        );
+        if (userIndex < 0) return current;
+        return current
+          .slice(0, userIndex + 1)
+          .map((item, index) =>
+            index === userIndex ? { ...item, content: message } : item,
+          );
+      });
+    }
     setBusy(true);
     streamedRef.current = "";
     try {
@@ -368,6 +424,7 @@ export function AssistantWidget() {
           message,
           conversationId: activeId ?? undefined,
           ...(slug ? { propertySlug: decodeURIComponent(slug) } : {}),
+          ...(operation ? { operation } : {}),
         },
         {
           onChunk: (t) => appendToAgent(t),
@@ -385,32 +442,52 @@ export function AssistantWidget() {
                   : {}),
               });
             }
-            // Tag the just-streamed agent message with its final state, if any.
             const note = meta.refused
               ? "refused"
               : meta.unavailable
                 ? "unavailable"
                 : undefined;
-            if (note || meta.recovery !== "none") {
-              setMessages((m) => {
-                const copy = [...m];
-                const last = copy[copy.length - 1];
-                if (last && last.role === "AGENT") {
-                  copy[copy.length - 1] = {
-                    ...last,
-                    note,
-                    recovery: meta.recovery,
-                    requestId: meta.requestId,
-                  };
-                }
-                return copy;
-              });
-            }
+            setMessages((current) => {
+              const copy = [...current];
+              const agentIndex = lastIndexWhere(
+                copy,
+                (item) => item.role === "AGENT",
+              );
+              const userIndex = lastIndexWhere(
+                copy,
+                (item, index) => item.role === "USER" && index < agentIndex,
+              );
+              if (userIndex >= 0 && meta.userMessageId) {
+                copy[userIndex] = {
+                  ...copy[userIndex],
+                  id: meta.userMessageId,
+                };
+              }
+              if (agentIndex >= 0) {
+                copy[agentIndex] = {
+                  ...copy[agentIndex],
+                  id: meta.messageId || copy[agentIndex].id,
+                  note,
+                  feedback: null,
+                  properties: meta.properties,
+                  recovery: meta.recovery,
+                  requestId: meta.requestId,
+                };
+              }
+              return copy;
+            });
             void refreshConversations();
           },
         },
       );
     } catch (err) {
+      if (operation && activeId) {
+        const restored = await agentApi.messages(activeId).catch(() => null);
+        if (restored) {
+          setMessages(restored.map(toMessageState));
+          return;
+        }
+      }
       const applicationThrottled =
         err instanceof ApiError && err.code === "AI_APPLICATION_THROTTLED";
       const recovery: AssistantRecovery = applicationThrottled
@@ -449,9 +526,61 @@ export function AssistantWidget() {
     }
   }
 
+  async function setFeedback(message: Msg, requested: AgentMessageFeedback) {
+    if (!activeId || !message.id || feedbackBusyId) return;
+    const previous = message.feedback ?? null;
+    const next = previous === requested ? null : requested;
+    setFeedbackBusyId(message.id);
+    setMessages((current) =>
+      current.map((item) =>
+        item.id === message.id ? { ...item, feedback: next } : item,
+      ),
+    );
+    try {
+      await agentApi.setFeedback(activeId, message.id, next);
+    } catch {
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === message.id ? { ...item, feedback: previous } : item,
+        ),
+      );
+    } finally {
+      setFeedbackBusyId(null);
+    }
+  }
+
+  function regenerate(message: Msg) {
+    if (!message.id || busyRef.current) return;
+    const agentIndex = messages.findIndex((item) => item.id === message.id);
+    const userMessage = [...messages.slice(0, agentIndex)]
+      .reverse()
+      .find((item) => item.role === "USER");
+    if (!userMessage) return;
+    void sendMessage(userMessage.content, {
+      operation: {
+        type: "retry",
+        assistantMessageId: message.id,
+      },
+    });
+  }
+
+  function beginMessageEdit(message: Msg) {
+    if (!message.id || busyRef.current) return;
+    setEditingMessageId(message.id);
+    setEditedMessage(message.content);
+  }
+
+  function saveMessageEdit(message: Msg) {
+    if (!message.id) return;
+    void sendMessage(editedMessage, {
+      operation: { type: "edit", userMessageId: message.id },
+    });
+  }
+
   function newChat() {
     setActiveId(null);
     setMessages([]);
+    setEditingMessageId(null);
     setHistoryOpen(false);
     window.localStorage.removeItem(ACTIVE_KEY);
     inputRef.current?.focus();
@@ -462,7 +591,8 @@ export function AssistantWidget() {
     try {
       const msgs: AgentMessage[] = await agentApi.messages(id);
       setActiveId(id);
-      setMessages(msgs.map((m) => ({ role: m.role, content: m.content })));
+      setMessages(msgs.map(toMessageState));
+      setEditingMessageId(null);
     } catch {
       // Stored/clicked conversation is gone or no longer ours — reset cleanly.
       removeLocalChat(id);
@@ -610,9 +740,8 @@ export function AssistantWidget() {
           aria-expanded={false}
           aria-controls="staynex-ai-panel"
           aria-label="Open Staynex AI"
-          className="fixed bottom-4 right-4 z-[var(--z-drawer)] inline-flex min-h-12 animate-scale-in items-center gap-2 rounded-full border border-primary/10 bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-lg transition-all hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="fixed bottom-4 right-4 z-[var(--z-drawer)] inline-flex min-h-12 animate-scale-in items-center rounded-full border border-primary/10 bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-lg transition-all hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
-          <IconAi className="size-6" />
           <span>Ask Staynex AI</span>
         </button>
       )}
@@ -722,7 +851,7 @@ export function AssistantWidget() {
                   <div className="mx-auto flex min-h-full w-full max-w-xl flex-col justify-center py-8 md:py-10">
                     <div className="space-y-1">
                       <p className="text-xl font-medium tracking-tight text-primary md:text-2xl">
-                        Hello.
+                        {firstName ? `Hello, ${firstName}.` : "Hello."}
                       </p>
                       <h3 className="text-xl font-regular tracking-tight text-ink md:text-2xl">
                         How can I help you today?
@@ -746,49 +875,164 @@ export function AssistantWidget() {
                   messages.map((t, i) => {
                     const streaming =
                       busy && i === messages.length - 1 && t.role === "AGENT";
+                    const lastAgentIndex = lastIndexWhere(
+                      messages,
+                      (message) => message.role === "AGENT",
+                    );
+                    const lastUserIndex = lastIndexWhere(
+                      messages,
+                      (message) => message.role === "USER",
+                    );
+                    const canRegenerate =
+                      t.role === "AGENT" &&
+                      i === lastAgentIndex &&
+                      Boolean(t.id) &&
+                      !busy;
+                    const canEdit =
+                      t.role === "USER" &&
+                      i === lastUserIndex &&
+                      lastAgentIndex > i &&
+                      Boolean(t.id) &&
+                      !busy;
                     return (
                       <div
-                        key={i}
+                        key={t.id ?? `${t.role}-${i}`}
                         className={
                           t.role === "USER"
                             ? "flex animate-slide-up justify-end"
                             : "flex animate-slide-up justify-start"
                         }
                       >
-                        <div
-                          className={`max-w-[88%] rounded-lg px-3.5 py-2.5 text-sm leading-relaxed ${
-                            t.role === "USER"
-                              ? "whitespace-pre-wrap rounded-br-md bg-primary text-primary-foreground"
-                              : t.note === "refused"
-                                ? "rounded-bl-md border border-warning-border bg-warning-surface text-warning"
-                                : t.note === "unavailable"
-                                  ? "rounded-bl-md border border-border bg-secondary text-muted-foreground"
-                                  : "rounded-bl-md bg-secondary text-ink"
-                          }`}
-                        >
-                          {t.role === "USER" ? (
-                            t.content
-                          ) : (
-                            <FormattedMessage
-                              content={t.content}
-                              onNavigate={() => setOpen(false)}
-                            />
-                          )}
-                          {streaming && (
-                            <span
-                              className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse-soft rounded-full bg-primary align-[-2px]"
-                              aria-hidden
-                            />
-                          )}
-                          {t.role === "AGENT" &&
-                            t.recovery &&
-                            t.recovery !== "none" && (
-                              <RecoveryNotice
-                                recovery={t.recovery}
-                                requestId={t.requestId}
-                              />
+                        {t.role === "USER" ? (
+                          <div className="flex max-w-[88%] flex-col items-end gap-1">
+                            {editingMessageId === t.id ? (
+                              <div className="w-full min-w-[min(18rem,78vw)] rounded-lg border border-primary/30 bg-background p-2 shadow-sm">
+                                <textarea
+                                  autoFocus
+                                  rows={3}
+                                  value={editedMessage}
+                                  onChange={(event) =>
+                                    setEditedMessage(event.target.value)
+                                  }
+                                  aria-label="Edit your message"
+                                  className="w-full resize-none bg-transparent px-1 py-1 text-sm leading-relaxed text-ink outline-none"
+                                />
+                                <div className="mt-1 flex justify-end gap-1">
+                                  <MessageActionButton
+                                    label="Cancel editing"
+                                    onClick={() => setEditingMessageId(null)}
+                                  >
+                                    <MdClose className="size-[18px]" />
+                                  </MessageActionButton>
+                                  <MessageActionButton
+                                    label="Save and resend message"
+                                    disabled={!editedMessage.trim()}
+                                    onClick={() => saveMessageEdit(t)}
+                                  >
+                                    <MdCheck className="size-[18px]" />
+                                  </MessageActionButton>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="whitespace-pre-wrap rounded-lg rounded-br-md bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground">
+                                {t.content}
+                              </div>
                             )}
-                        </div>
+                            {canEdit && editingMessageId !== t.id && (
+                              <MessageActionButton
+                                label="Edit message"
+                                onClick={() => beginMessageEdit(t)}
+                              >
+                                <MdEdit className="size-[17px]" />
+                              </MessageActionButton>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="w-full max-w-[92%]">
+                            <div
+                              className={`w-fit max-w-full rounded-lg rounded-bl-md px-3.5 py-2.5 text-sm leading-relaxed ${
+                                t.note === "refused"
+                                  ? "border border-warning-border bg-warning-surface text-warning"
+                                  : t.note === "unavailable"
+                                    ? "border border-border bg-secondary text-muted-foreground"
+                                    : "bg-secondary text-ink"
+                              }`}
+                            >
+                              <FormattedMessage
+                                content={t.content}
+                                onNavigate={() => setOpen(false)}
+                              />
+                              {streaming && (
+                                <span
+                                  className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse-soft rounded-full bg-primary align-[-2px]"
+                                  aria-hidden
+                                />
+                              )}
+                              {t.recovery && t.recovery !== "none" && (
+                                <RecoveryNotice
+                                  recovery={t.recovery}
+                                  requestId={t.requestId}
+                                />
+                              )}
+                            </div>
+
+                            {t.properties && t.properties.length > 0 && (
+                              <div
+                                className="mt-2.5 grid gap-2.5"
+                                aria-label="Verified stays from this answer"
+                              >
+                                {t.properties.map((property) => (
+                                  <PropertyCard
+                                    key={property.id}
+                                    property={property}
+                                    href={`/stays/${property.slug}`}
+                                    variant="assistant"
+                                  />
+                                ))}
+                              </div>
+                            )}
+
+                            {!streaming && t.id && (
+                              <div
+                                className="mt-1 flex items-center gap-0.5"
+                                aria-label="Message actions"
+                              >
+                                <MessageActionButton
+                                  label={
+                                    t.feedback === "UP"
+                                      ? "Remove positive feedback"
+                                      : "Helpful response"
+                                  }
+                                  active={t.feedback === "UP"}
+                                  disabled={feedbackBusyId === t.id}
+                                  onClick={() => void setFeedback(t, "UP")}
+                                >
+                                  <MdThumbUpOffAlt className="size-[17px]" />
+                                </MessageActionButton>
+                                <MessageActionButton
+                                  label={
+                                    t.feedback === "DOWN"
+                                      ? "Remove negative feedback"
+                                      : "Unhelpful response"
+                                  }
+                                  active={t.feedback === "DOWN"}
+                                  disabled={feedbackBusyId === t.id}
+                                  onClick={() => void setFeedback(t, "DOWN")}
+                                >
+                                  <MdThumbDownOffAlt className="size-[17px]" />
+                                </MessageActionButton>
+                                {canRegenerate && (
+                                  <MessageActionButton
+                                    label="Regenerate response"
+                                    onClick={() => regenerate(t)}
+                                  >
+                                    <MdRefresh className="size-[18px]" />
+                                  </MessageActionButton>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -840,8 +1084,8 @@ export function AssistantWidget() {
                 </form>
                 {/* Persistent transparency line — under the input, not atop the panel. */}
                 <p className="mt-2 px-2 text-center text-2xs text-muted-foreground">
-                  Staynex AI can make mistakes — confirm availability and prices
-                  on the property page.
+                  Staynex uses security in depth. AI can make mistakes — confirm
+                  live availability and prices on the property page.
                 </p>
               </div>
 
@@ -1084,6 +1328,65 @@ function ThinkingIndicator() {
         </span>
       </p>
     </div>
+  );
+}
+
+function lastIndexWhere<T>(
+  items: T[],
+  predicate: (item: T, index: number) => boolean,
+): number {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (predicate(items[index], index)) return index;
+  }
+  return -1;
+}
+
+function toMessageState(message: AgentMessage): Msg {
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    feedback: message.feedback,
+    properties: message.properties,
+  };
+}
+
+function safeFirstName(name: string | null | undefined): string | null {
+  const normalized = name?.normalize("NFKC").trim();
+  if (!normalized) return null;
+  const first = normalized.split(/\s+/)[0]?.replace(/[^\p{L}'-]/gu, "");
+  return first && first.length <= 40 ? first : null;
+}
+
+function MessageActionButton({
+  label,
+  onClick,
+  active,
+  disabled = false,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-pressed={active === undefined ? undefined : active}
+      disabled={disabled}
+      onClick={onClick}
+      className={`grid size-8 place-items-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45 ${
+        active
+          ? "bg-primary-subtle text-primary"
+          : "text-muted-foreground hover:bg-secondary hover:text-ink"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
