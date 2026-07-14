@@ -741,11 +741,6 @@ export function AssistantWidget() {
                         </button>
                       ))}
                     </div>
-                    <p className="mt-6 max-w-md text-xs leading-relaxed text-muted-foreground">
-                      I can guide verified stay discovery and booking steps. I
-                      can&apos;t confirm payments, promise availability, or
-                      handle refunds.
-                    </p>
                   </div>
                 ) : (
                   messages.map((t, i) => {
