@@ -65,8 +65,13 @@ test("property editor exposes availability and places photos before review statu
   );
   assert.match(page, /<AvailabilityEditor/);
   assert.match(availability, /hostApi\.setCapacity/);
-  assert.match(availability, /Available rooms per night/);
-  assert.match(availability, /30 open days required for review/);
+  assert.match(availability, /Next 30 days/);
+  assert.match(availability, /Next 90 days/);
+  assert.match(availability, /Choose dates/);
+  assert.match(availability, /Rooms offered for booking/);
+  assert.match(availability, /Existing bookings and holds are protected automatically/);
+  assert.match(availability, /aria-pressed={selected}/);
+  assert.match(availability, /aria-expanded={advancedOpen}/);
 });
 
 test("workspace chrome uses the shared accessible breadcrumb", async () => {

@@ -270,6 +270,13 @@ Areas: `GET /areas` (public); admin `GET|POST /admin/areas`, `PATCH /admin/areas
 `GET /availability/room-types/:roomTypeId` (public);
 `PUT /availability/capacity` (OWNER — set totalUnits per date).
 
+`AvailabilityCalendar` remains the capacity authority. The host capacity write
+applies one `totalUnits` value to every night in an inclusive date range (up to
+366 days). The service rejects values above the room type's active physical
+units and values below existing bookings plus unexpired holds, so the client
+never calculates or overwrites remaining inventory. Setting `totalUnits` to
+zero closes the selected nights to new bookings.
+
 ### 9.5 Booking loop — root (`BookingsController`)
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
@@ -448,6 +455,14 @@ The trust anchor for check-in is **live server truth**, not a screenshot.
   Use tokens (`text-ink`, `bg-success-surface`, …), not raw colors.
 - **Media:** `next/image` optimizes R2 images when `NEXT_PUBLIC_MEDIA_BASE_URL`
   is set (allowlisted in `next.config.ts`); otherwise images render unoptimized.
+- **Host availability:** `features/properties/availability-editor.tsx` presents
+  30-day and 90-day quick-open actions plus a custom-range option. Quick setup
+  offers all active units for the chosen room type; advanced availability lets
+  experienced hosts change the saleable rooms per night or close a range with
+  zero. Every action still uses `PUT /availability/capacity`, and the backend
+  protects booked/held inventory. Property review requires at least 30 unique
+  future nights with positive bookable capacity across the property's room
+  types; the quick 30-day action satisfies that gate when inventory is valid.
 
 ---
 
