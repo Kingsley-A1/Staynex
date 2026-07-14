@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { PublicHeader } from "@/components/public-header";
 import { SiteFooter } from "@/components/site-footer";
-import { DeferredAssistantWidget } from "@/features/ai/deferred-assistant-widget";
 
 export default function PublicLayout({ children }: { children: ReactNode }) {
   return (
@@ -9,7 +8,6 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
       <PublicHeader />
       {children}
       <SiteFooter />
-      <DeferredAssistantWidget />
     </div>
   );
 }

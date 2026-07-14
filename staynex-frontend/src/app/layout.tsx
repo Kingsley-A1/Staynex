@@ -15,6 +15,7 @@ const brandFont = Plus_Jakarta_Sans({
 });
 import { PageLoadingLine } from "@/components/page-loading-line";
 import { WebVitalsReporter } from "@/components/web-vitals-reporter";
+import { DeferredAssistantWidget } from "@/features/ai/deferred-assistant-widget";
 import {
   DEFAULT_DESCRIPTION,
   SEO_KEYWORDS,
@@ -106,7 +107,8 @@ export default function RootLayout({
             __html: JSON.stringify(organizationJsonLd).replace(/</g, "\\u003c"),
           }}
         />
-        {children}
+        <div id="staynex-app-shell">{children}</div>
+        <DeferredAssistantWidget />
       </body>
     </html>
   );
