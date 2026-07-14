@@ -32,7 +32,7 @@ export default async function AdminOverviewPage() {
   }
 
   const queue = approvals.data ?? [];
-  const bookingRows = bookings.data?.bookings ?? [];
+  const bookingRows = bookings.data?.rows ?? [];
   const totals = payouts.data?.totals;
 
   const confirmedCount = bookingRows.filter((b) => b.status === "CONFIRMED").length;
@@ -77,7 +77,7 @@ export default async function AdminOverviewPage() {
         <KpiCard
           label="Pending payouts"
           value={totals ? formatNairaFromKobo(totals.pendingPayoutKobo) : "—"}
-          hint="Owed to owners"
+          hint="Owed to hosts"
           icon={<IconPayouts className="size-5" />}
           href="/admin/payouts"
         />

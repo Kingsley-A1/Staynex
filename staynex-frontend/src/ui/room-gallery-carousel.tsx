@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { OptimizedFillImage } from "./optimized-fill-image";
 
 export interface GallerySlide {
   id: string;
@@ -44,11 +45,12 @@ export function RoomGalleryCarousel({
             )}
           >
             {slide.url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <OptimizedFillImage
                 src={slide.url}
                 alt={slide.altText ?? ""}
-                className="h-full w-full object-cover"
+                sizes="(min-width: 1024px) 60vw, 100vw"
+                priority={i === 0}
+                className="absolute inset-0 h-full w-full object-cover"
               />
             ) : (
               <div className="grid h-full w-full place-items-center text-sm text-white/80">

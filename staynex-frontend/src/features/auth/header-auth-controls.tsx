@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authApi } from "@/lib/api";
+import { NotificationCenter } from "@/components/notification-center";
 import {
   type AuthUser,
   capabilityHome,
@@ -28,7 +29,7 @@ export function HeaderAuthControls({ user }: { user: AuthUser | null }) {
         </Link>
         <Link
           href="/search"
-          className="inline-flex h-10 items-center whitespace-nowrap rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover active:bg-primary-active"
+          className="hidden h-10 items-center whitespace-nowrap rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover active:bg-primary-active min-[360px]:inline-flex"
         >
           Find a stay
         </Link>
@@ -82,6 +83,7 @@ function AccountMenu({ user }: { user: AuthUser }) {
       >
         Find a stay
       </Link>
+      <NotificationCenter />
       <div className="relative" ref={ref}>
         <button
           type="button"

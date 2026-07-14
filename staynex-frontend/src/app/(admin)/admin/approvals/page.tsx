@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { StatusBadge } from "@/ui";
+import { ReviewStatusBadge, StatusBadge } from "@/ui";
 import { getAdminApprovals } from "@/lib/server-reports";
 import { formatNairaFromKobo } from "@/lib/format";
 
@@ -16,7 +16,7 @@ export default async function ApprovalsPage() {
         <p className="text-muted-foreground">
           {data
             ? `${queue.length} propert${queue.length === 1 ? "y" : "ies"} awaiting review.`
-            : "Review properties submitted by owners."}
+            : "Review properties submitted by hosts."}
         </p>
       </header>
 
@@ -53,6 +53,7 @@ export default async function ApprovalsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  <ReviewStatusBadge status={p.reviewStatus} />
                   <StatusBadge status={p.status} />
                   <span className="text-sm font-semibold text-primary">Review →</span>
                 </div>

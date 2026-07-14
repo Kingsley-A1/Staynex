@@ -10,6 +10,52 @@ export type PropertyStatus =
   | "REJECTED"
   | "ARCHIVED";
 
+export type PropertyReviewStatus =
+  | "NOT_SUBMITTED"
+  | "PENDING"
+  | "FAILED"
+  | "SCHEDULED"
+  | "PUBLISHED"
+  | "CANCELLED"
+  | "MANUAL_REVIEW";
+
+export type PropertyReviewSource = "AUTO_REVIEW" | "ADMIN_OVERRIDE";
+
+export type PropertyReviewCheckStatus = "PASS" | "FAIL" | "WARNING";
+
+export type PropertyReviewCheckKey =
+  | "owner_identity"
+  | "payout_ready"
+  | "property_details"
+  | "location_ready"
+  | "media_ready"
+  | "rooms_ready"
+  | "availability_ready"
+  | "duplicate_listing"
+  | "content_safety";
+
+export interface PropertyReviewCheckView {
+  id: string;
+  key: PropertyReviewCheckKey;
+  label: string;
+  status: PropertyReviewCheckStatus;
+  severity: string;
+  details: string;
+}
+
+export interface PropertyReviewRunView {
+  id: string;
+  source: PropertyReviewSource;
+  status: PropertyReviewStatus;
+  riskScore: number;
+  summary: string | null;
+  scheduledPublishAt: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  checks: PropertyReviewCheckView[];
+}
+
 export interface MediaItem {
   id: string;
   url: string;
@@ -32,6 +78,10 @@ export interface PropertySummary {
   name: string;
   slug: string;
   status: PropertyStatus;
+  reviewStatus: PropertyReviewStatus;
+  reviewSource: PropertyReviewSource | null;
+  reviewedAt: string | null;
+  scheduledPublishAt: string | null;
   cityName: string;
   fromPriceKobo: number | null;
   roomTypeCount: number;
@@ -43,6 +93,20 @@ export interface PropertyDetail extends PropertySummary {
   description: string | null;
   media: MediaItem[];
   roomTypes: RoomTypeDetail[];
+  latestReview: PropertyReviewRunView | null;
+}
+
+export interface DestinationShowcase {
+  cityName: string;
+  citySlug: string;
+  stayCount: number;
+  propertyImageUrls: string[];
+}
+
+export interface HomeCatalogView {
+  latestProperties: PropertySummary[];
+  mostBookedProperties: PropertySummary[];
+  destinations: DestinationShowcase[];
 }
 
 export interface MediaUploadTarget {
@@ -87,6 +151,19 @@ export const PROPERTY_STATUS_LABELS: Record<PropertyStatus, string> = {
   ARCHIVED: "Archived",
 };
 
+export const PROPERTY_REVIEW_STATUS_LABELS: Record<
+  PropertyReviewStatus,
+  string
+> = {
+  NOT_SUBMITTED: "Not submitted",
+  PENDING: "Reviewing",
+  FAILED: "Needs changes",
+  SCHEDULED: "Scheduled",
+  PUBLISHED: "Published",
+  CANCELLED: "Cancelled",
+  MANUAL_REVIEW: "Manual review",
+};
+
 // --- Phase 3: guest booking + payment ---
 
 export type BookingStatus =
@@ -101,6 +178,8 @@ export type PaymentState =
   | "PENDING"
   | "SUCCESS"
   | "FAILED"
+  /** Funds captured but the booking can't be honored — needs an admin refund. */
+  | "REQUIRES_REFUND"
   | "REFUNDED";
 
 export interface AvailabilityQuote {
@@ -150,14 +229,42 @@ export interface BookingView {
   checkIn: string;
   checkOut: string;
   nights: number;
+  adults: number;
+  children: number;
+  infants: number;
   amountKobo: number;
   currency: string;
   propertyName: string;
   propertySlug: string;
   cityName: string;
   roomName: string;
+  /** Internal unit code — provisional; the physical room is set at check-in. */
+  unitCode: string | null;
   paymentStatus: PaymentState;
   paymentReference: string | null;
+}
+
+/**
+ * Public booking-verification card (GET /verify/:reference). Live server truth
+ * a receptionist can trust over any screenshot. No amount, no card data.
+ * Mirrors the backend VoucherVerification shape.
+ */
+export interface VoucherVerification {
+  valid: boolean;
+  status: "CONFIRMED" | "PENDING" | "CANCELLED" | "NOT_FOUND";
+  reference: string;
+  guestName: string | null;
+  guestEmailMasked: string | null;
+  propertyName: string | null;
+  cityName: string | null;
+  areaName: string | null;
+  roomTypeName: string | null;
+  unitCode: string | null;
+  checkIn: string | null;
+  checkOut: string | null;
+  nights: number | null;
+  guests: { adults: number; children: number; infants: number } | null;
+  confirmedAt: string | null;
 }
 
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
@@ -173,6 +280,7 @@ export const PAYMENT_STATE_LABELS: Record<PaymentState, string> = {
   PENDING: "Pending",
   SUCCESS: "Paid",
   FAILED: "Failed",
+  REQUIRES_REFUND: "Refund required",
   REFUNDED: "Refunded",
 };
 
@@ -232,6 +340,7 @@ export interface AdminPaymentRow {
   reference: string | null;
   bookingId: string;
   propertyName: string;
+  guestEmail: string | null;
   amountKobo: number;
   grossAmountKobo: number;
   platformFeeKobo: number;
@@ -244,9 +353,83 @@ export interface AdminPaymentRow {
   createdAt: string;
 }
 
-export interface AdminBookingsView {
-  bookings: BookingRow[];
-  payments: AdminPaymentRow[];
+/** Cursor-paginated admin list page (cursor is opaque; null = end). */
+export interface AdminBookingsPage {
+  rows: BookingRow[];
+  nextCursor: string | null;
+}
+
+export interface AdminPaymentsPage {
+  rows: AdminPaymentRow[];
+  nextCursor: string | null;
+}
+
+/** One entry in a payment's money audit timeline. */
+export interface AdminPaymentEventRow {
+  id: string;
+  eventType: string;
+  outcome: string;
+  detail: string | null;
+  createdAt: string;
+}
+
+/**
+ * A payment where funds moved but the platform owes a human action
+ * (REQUIRES_REFUND). This queue must trend to empty.
+ */
+export interface AdminPaymentExceptionRow {
+  reference: string | null;
+  bookingId: string;
+  bookingStatus: BookingStatus;
+  propertyName: string;
+  guestEmail: string | null;
+  grossAmountKobo: number;
+  currency: string;
+  status: PaymentState;
+  createdAt: string;
+  updatedAt: string;
+  events: AdminPaymentEventRow[];
+}
+
+/** A calendar day whose counters disagree with live holds/bookings. */
+export interface AvailabilityDriftRow {
+  roomTypeId: string;
+  roomName: string;
+  propertyName: string;
+  date: string;
+  totalUnits: number;
+  heldUnits: number;
+  expectedHeldUnits: number;
+  bookedUnits: number;
+  expectedBookedUnits: number;
+}
+
+// --- Notifications ---
+
+export type NotificationTypeValue =
+  | "BOOKING_CONFIRMED"
+  | "BOOKING_REFUNDED"
+  | "PAYOUT_PAID"
+  | "PAYOUT_FAILED"
+  | "PAYMENT_EXCEPTION"
+  | "PROPERTY_REVIEW"
+  | "CHECKIN_REMINDER"
+  | "GENERAL";
+
+export interface NotificationRow {
+  id: string;
+  type: NotificationTypeValue;
+  title: string;
+  body: string;
+  linkUrl: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationsPage {
+  rows: NotificationRow[];
+  nextCursor: string | null;
+  unreadCount: number;
 }
 
 export interface AdminPayoutRow {
@@ -262,10 +445,17 @@ export interface AdminPayoutRow {
   ownerPayoutKobo: number;
   currency: string;
   status: PayoutStatusValue;
+  /** Settlement destination (masked) — where the admin actually sends money. */
+  bankName: string | null;
+  accountName: string | null;
+  accountNumberLast4: string | null;
+  /** Settlement reference on PAID, reason on FAILED, clawback note on refunds. */
+  note: string | null;
   /** When the payout becomes eligible to settle (checkIn + 24h). */
   eligibleAt: string;
   approvedAt: string | null;
   paidAt: string | null;
+  failedAt: string | null;
   createdAt: string;
 }
 
@@ -300,23 +490,47 @@ export interface AiLogRow {
   createdAt: string;
 }
 
-// --- Phase 4: AI assistant ---
+// ---  AI assistant ---
 
 export interface AssistantReply {
   conversationId: string;
+  userMessageId: string;
+  messageId: string;
   reply: string;
   refused: boolean;
   unavailable: boolean;
   groundedFacts: string[];
+  properties: PropertySummary[];
+  recovery: AssistantRecovery;
+  requestId: string;
 }
 
+export type AssistantRecovery =
+  | "none"
+  | "application_throttled"
+  | "provider_rate_limited"
+  | "provider_overloaded"
+  | "provider_timeout"
+  | "provider_unconfigured"
+  | "provider_error"
+  | "partial_response"
+  | "transport_interrupted";
+
 export type AgentMessageRole = "USER" | "AGENT";
+export type AgentMessageFeedback = "UP" | "DOWN";
 
 export interface AgentMessage {
   id: string;
   role: AgentMessageRole;
   content: string;
+  feedback: AgentMessageFeedback | null;
+  properties: PropertySummary[];
   createdAt: string;
+}
+
+export interface AgentMessageFeedbackResult {
+  messageId: string;
+  feedback: AgentMessageFeedback | null;
 }
 
 export interface AgentConversation {
@@ -324,6 +538,8 @@ export interface AgentConversation {
   title: string | null;
   pinned: boolean;
   updatedAt: string;
+  /** Short excerpt of the latest message, for history-list previews. */
+  preview: string | null;
 }
 
 // --- Phase 5: auth, testimonials, areas ---
@@ -331,7 +547,11 @@ export interface AgentConversation {
 export type AppRole = "GUEST" | "OWNER" | "ADMIN_REVIEWER" | "ADMIN_MANAGER";
 
 /** Additive capabilities. GUEST is always present for a signed-in user. */
-export type AppCapability = "GUEST" | "OWNER" | "ADMIN_REVIEWER" | "ADMIN_MANAGER";
+export type AppCapability =
+  | "GUEST"
+  | "OWNER"
+  | "ADMIN_REVIEWER"
+  | "ADMIN_MANAGER";
 
 export interface AuthUser {
   id: string;
@@ -343,9 +563,31 @@ export interface AuthUser {
   capabilities: AppCapability[];
 }
 
+export interface AuthMfaChallenge {
+  mfaRequired: true;
+  challengeId: string;
+  email: string;
+  expiresAt: string;
+}
+
+export type AuthResponse = AuthUser | AuthMfaChallenge;
+
+export interface SessionSummary {
+  id: string;
+  createdAt: string;
+  expiresAt: string;
+  current: boolean;
+}
+
+export function isAuthMfaChallenge(
+  value: AuthResponse,
+): value is AuthMfaChallenge {
+  return "mfaRequired" in value && value.mfaRequired === true;
+}
+
 export const ROLE_LABELS: Record<AppRole, string> = {
   GUEST: "Guest",
-  OWNER: "Property owner",
+  OWNER: "Host",
   ADMIN_REVIEWER: "Admin",
   ADMIN_MANAGER: "Super Admin",
 };
@@ -356,7 +598,8 @@ export function isOwnerCapable(user: AuthUser | null | undefined): boolean {
 
 export function isAdminCapable(user: AuthUser | null | undefined): boolean {
   return Boolean(
-    user?.capabilities.includes("ADMIN_REVIEWER") || user?.capabilities.includes("ADMIN_MANAGER"),
+    user?.capabilities.includes("ADMIN_REVIEWER") ||
+    user?.capabilities.includes("ADMIN_MANAGER"),
   );
 }
 
@@ -367,15 +610,21 @@ export function isAdminManager(user: AuthUser | null | undefined): boolean {
 /** Destination after auth, driven by capability (not just the compat role). */
 export function capabilityHome(user: AuthUser): string {
   if (isAdminCapable(user)) return "/admin";
-  if (isOwnerCapable(user)) return "/owner/dashboard";
+  if (isOwnerCapable(user)) return "/host/dashboard";
   return "/stays";
 }
 
 // --- Owner v1: onboarding, locations, payout, settings ---
 
-export type PayoutMethodStatusValue = "PENDING_VERIFICATION" | "ACTIVE" | "DISABLED";
+export type PayoutMethodStatusValue =
+  | "PENDING_VERIFICATION"
+  | "ACTIVE"
+  | "DISABLED";
 
-export const PAYOUT_METHOD_STATUS_LABELS: Record<PayoutMethodStatusValue, string> = {
+export const PAYOUT_METHOD_STATUS_LABELS: Record<
+  PayoutMethodStatusValue,
+  string
+> = {
   PENDING_VERIFICATION: "Pending verification",
   ACTIVE: "Active",
   DISABLED: "Disabled",
@@ -403,6 +652,7 @@ export interface OwnerLocationView {
 
 export interface OwnerPayoutMethodView {
   id: string;
+  bankCode: string | null;
   bankName: string;
   accountName: string;
   accountNumberLast4: string;
@@ -410,6 +660,26 @@ export interface OwnerPayoutMethodView {
   status: PayoutMethodStatusValue;
   hasEncryptedNumber: boolean;
   updatedAt: string;
+}
+
+export interface PayoutBankOption {
+  code: string;
+  name: string;
+  provider: "paystack";
+}
+
+export interface PayoutBankDirectoryView {
+  banks: PayoutBankOption[];
+  source: "paystack" | "cache";
+  refreshedAt: string;
+}
+
+export interface ResolvedPayoutAccount {
+  bankCode: string;
+  bankName: string;
+  accountName: string;
+  accountNumberLast4: string;
+  provider: "paystack";
 }
 
 export interface OwnerOnboardingState {
@@ -452,7 +722,9 @@ export interface AdminUserDetail {
   id: string;
   name: string | null;
   email: string | null;
+  /** Populated only for Super Admins; null + `phoneRestricted` for reviewers. */
   phone: string | null;
+  phoneRestricted: boolean;
   role: AppRole;
   capabilities: AppCapability[];
   createdAt: string;
@@ -483,6 +755,21 @@ export interface CityOption {
   id: string;
   name: string;
   slug: string;
+}
+
+export interface AdminLocationReferenceView {
+  countries: Array<{ id: string; name: string; code: string }>;
+  regions: Array<{ id: string; countryId: string; name: string; slug: string }>;
+}
+
+export interface AdminCityRow extends CityOption {
+  countryId: string;
+  countryName: string;
+  regionId: string | null;
+  regionName: string | null;
+  areaCount: number;
+  propertyCount: number;
+  ownerLocationCount: number;
 }
 
 export type TestimonialStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED";

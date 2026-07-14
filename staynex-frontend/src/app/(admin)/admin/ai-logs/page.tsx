@@ -9,9 +9,9 @@ export default async function AdminAiLogsPage() {
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="text-title-lg text-ink">Staynex Agent logs</h1>
+        <h1 className="text-title-lg text-ink">Staynex AI logs</h1>
         <p className="text-muted-foreground">
-          Staynex Agent is tool-first and bounded. Every reply, refusal, and
+          Staynex AI is tool-first and bounded. Every reply, refusal, and
           unavailable response is logged here.
         </p>
       </header>

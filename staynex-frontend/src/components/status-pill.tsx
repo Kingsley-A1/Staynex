@@ -21,6 +21,7 @@ const PAYMENT_STYLES: Record<PaymentState, string> = {
   PENDING: "border-warning-border bg-warning-surface text-warning",
   SUCCESS: "border-success-border bg-success-surface text-success",
   FAILED: "border-error-border bg-error-surface text-error",
+  REQUIRES_REFUND: "border-error-border bg-error-surface font-semibold text-error",
   REFUNDED: "border-border bg-neutral-100 text-muted-foreground",
 };
 

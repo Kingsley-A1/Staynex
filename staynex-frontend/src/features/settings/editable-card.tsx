@@ -19,6 +19,7 @@ export function EditableCard({
   saveLabel = "Save changes",
   canSave = true,
   disabled = false,
+  initialEditing = false,
 }: {
   title: string;
   description?: string;
@@ -31,8 +32,9 @@ export function EditableCard({
   saveLabel?: string;
   canSave?: boolean;
   disabled?: boolean;
+  initialEditing?: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(initialEditing);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +58,9 @@ export function EditableCard({
       await onSave();
       setEditing(false);
     } catch (err) {
-      setError(apiErrorMessage(err, "Couldn't save your changes. Please try again."));
+      setError(
+        apiErrorMessage(err, "Couldn't save your changes. Please try again."),
+      );
     } finally {
       setBusy(false);
     }
@@ -67,7 +71,11 @@ export function EditableCard({
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="text-title-sm text-ink">{title}</h3>
-          {description && <p className="mt-0.5 text-body-sm text-muted-foreground">{description}</p>}
+          {description && (
+            <p className="mt-0.5 text-body-sm text-muted-foreground">
+              {description}
+            </p>
+          )}
         </div>
         {!editing && !disabled && (
           <Button variant="secondary" size="sm" onClick={startEdit}>
@@ -88,7 +96,12 @@ export function EditableCard({
             <Button type="submit" disabled={busy || !canSave}>
               {busy ? "Saving…" : saveLabel}
             </Button>
-            <Button type="button" variant="ghost" onClick={cancel} disabled={busy}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={cancel}
+              disabled={busy}
+            >
               Cancel
             </Button>
           </div>

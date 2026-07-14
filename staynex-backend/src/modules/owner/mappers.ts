@@ -43,6 +43,7 @@ export function toOwnerLocationView(loc: LocationRow): OwnerLocationView {
 
 interface PayoutRow {
   id: string;
+  bankCode: string | null;
   bankName: string;
   accountName: string;
   accountNumberLast4: string;
@@ -55,6 +56,7 @@ interface PayoutRow {
 export function toPayoutMethodView(method: PayoutRow): OwnerPayoutMethodView {
   return {
     id: method.id,
+    bankCode: method.bankCode,
     bankName: method.bankName,
     accountName: method.accountName,
     accountNumberLast4: method.accountNumberLast4,
@@ -67,12 +69,17 @@ export function toPayoutMethodView(method: PayoutRow): OwnerPayoutMethodView {
 
 export function toOwnerProfileView(
   displayName: string | null,
-  profile: { businessName: string | null; phone: string | null; onboardingCompletedAt: Date | null } | null,
+  profile: {
+    businessName: string | null;
+    phone: string | null;
+    onboardingCompletedAt: Date | null;
+  } | null,
 ): OwnerProfileView {
   return {
     displayName,
     businessName: profile?.businessName ?? null,
     phone: profile?.phone ?? null,
-    onboardingCompletedAt: profile?.onboardingCompletedAt?.toISOString() ?? null,
+    onboardingCompletedAt:
+      profile?.onboardingCompletedAt?.toISOString() ?? null,
   };
 }

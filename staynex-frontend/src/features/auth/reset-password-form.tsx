@@ -3,11 +3,13 @@
 import { type FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Button, Field, PasswordInput } from "@/ui";
+import { Button, Field, Input, PasswordInput } from "@/ui";
 import { authApi } from "@/lib/api";
 
-export function ResetPasswordForm({ token }: { token: string }) {
+export function ResetPasswordForm({ email: initialEmail }: { email: string }) {
   const router = useRouter();
+  const [email, setEmail] = useState(initialEmail);
+  const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,7 +27,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
     }
     setBusy(true);
     try {
-      await authApi.resetPassword({ token, password });
+      await authApi.resetPassword({ email: email.trim(), code: code.trim(), password });
       setDone(true);
       setTimeout(() => {
         router.push("/sign-in");
@@ -35,22 +37,11 @@ export function ResetPasswordForm({ token }: { token: string }) {
       const msg = err instanceof Error ? err.message : "";
       setError(
         msg.includes("401")
-          ? "This reset link is invalid or has expired. Request a new one."
+          ? "That code is invalid or has expired. Request a new one."
           : "Couldn't reset your password. Please try again.",
       );
       setBusy(false);
     }
-  }
-
-  if (!token) {
-    return (
-      <div className="surface-card space-y-3 p-6 text-center">
-        <p className="text-muted-foreground">This reset link is missing or invalid.</p>
-        <Link href="/forgot-password" className="inline-block font-semibold text-primary">
-          Request a new link
-        </Link>
-      </div>
-    );
   }
 
   if (done) {
@@ -64,6 +55,35 @@ export function ResetPasswordForm({ token }: { token: string }) {
 
   return (
     <form onSubmit={submit} className="surface-card space-y-4 p-6">
+      <Field label="Email" htmlFor="email" required>
+        <Input
+          id="email"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+        />
+      </Field>
+      <Field
+        label="6-digit code"
+        htmlFor="code"
+        required
+        hint="Check your email — the code expires in 15 minutes"
+      >
+        <Input
+          id="code"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          required
+          pattern="\d{6}"
+          maxLength={6}
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          placeholder="000000"
+          className="tracking-[0.4em]"
+        />
+      </Field>
       <Field label="New password" htmlFor="password" required hint="At least 8 characters">
         <PasswordInput
           id="password"
@@ -93,6 +113,12 @@ export function ResetPasswordForm({ token }: { token: string }) {
       <Button type="submit" disabled={busy} className="w-full">
         {busy ? "Updating…" : "Update password"}
       </Button>
+      <p className="text-center text-caption">
+        Didn&apos;t get a code?{" "}
+        <Link href="/forgot-password" className="font-semibold text-primary">
+          Request another
+        </Link>
+      </p>
     </form>
   );
 }

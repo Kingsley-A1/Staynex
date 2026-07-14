@@ -56,6 +56,27 @@ enum PropertyStatus {
   ARCHIVED
 }
 
+enum PropertyReviewStatus {
+  NOT_SUBMITTED
+  PENDING
+  FAILED
+  SCHEDULED
+  PUBLISHED
+  CANCELLED
+  MANUAL_REVIEW
+}
+
+enum PropertyReviewSource {
+  AUTO_REVIEW
+  ADMIN_OVERRIDE
+}
+
+enum PropertyReviewCheckStatus {
+  PASS
+  FAIL
+  WARNING
+}
+
 enum BookingStatus {
   HOLD
   PENDING_PAYMENT
@@ -69,6 +90,10 @@ enum PaymentStatus {
   PENDING
   SUCCESS
   FAILED
+  /// Provider captured funds but the platform cannot honor a booking (late
+  /// success with no remaining capacity, underpayment, currency mismatch).
+  /// Terminal path out is an admin-issued refund -> REFUNDED. Never silent.
+  REQUIRES_REFUND
   REFUNDED
 }
 
@@ -93,6 +118,24 @@ enum NotificationStatus {
   READ
 }
 
+/// What a notification is about — drives inbox grouping, dedupe, and deep links.
+enum NotificationType {
+  BOOKING_CONFIRMED
+  BOOKING_REFUNDED
+  PAYOUT_PAID
+  PAYOUT_FAILED
+  PAYMENT_EXCEPTION
+  PROPERTY_REVIEW
+  CHECKIN_REMINDER
+  GENERAL
+}
+
+enum DevicePlatform {
+  WEB
+  ANDROID
+  IOS
+}
+
 // ---------------------------------------------------------------------------
 // Identity & profiles
 // ---------------------------------------------------------------------------
@@ -111,22 +154,24 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  guestProfile    GuestProfile?
-  ownerProfile    OwnerProfile?
-  capabilities    UserCapability[]
-  ownerLocations  OwnerLocation[]  @relation("OwnerLocations")
-  payoutMethod    OwnerPayoutMethod?
-  passwordResets  PasswordResetToken[]
-  ownedProperties Property[]       @relation("PropertyOwner")
-  bookings        Booking[]
-  bookingHolds    BookingHold[]
-  notifications   Notification[]
-  aiConversations AIConversation[]
-  auditLogs       AuditLog[]       @relation("AuditActor")
-  sessions        Session[]
-  testimonials    Testimonial[]
-  payouts          Payout[]        @relation("PayoutOwner")
-  processedPayouts Payout[]        @relation("PayoutProcessor")
+  guestProfile     GuestProfile?
+  ownerProfile     OwnerProfile?
+  capabilities     UserCapability[]
+  ownerLocations   OwnerLocation[]      @relation("OwnerLocations")
+  payoutMethod     OwnerPayoutMethod?
+  passwordResets   PasswordResetToken[]
+  ownedProperties  Property[]           @relation("PropertyOwner")
+  bookings         Booking[]
+  bookingHolds     BookingHold[]
+  notifications    Notification[]
+  deviceTokens     DeviceToken[]
+  aiConversations  AIConversation[]
+  auditLogs        AuditLog[]           @relation("AuditActor")
+  sessions         Session[]
+  mfaChallenges    MfaChallenge[]
+  testimonials     Testimonial[]
+  payouts          Payout[]             @relation("PayoutOwner")
+  processedPayouts Payout[]             @relation("PayoutProcessor")
 
   @@index([role])
 }
@@ -148,6 +193,7 @@ model UserCapability {
 model Session {
   id        String   @id @default(cuid())
   userId    String
+  /// SHA-256 hash of the raw cookie token. Older raw tokens are upgraded on use.
   token     String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
@@ -156,6 +202,22 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model MfaChallenge {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([usedAt])
 }
 
 model GuestProfile {
@@ -212,6 +274,7 @@ model OwnerLocation {
 model OwnerPayoutMethod {
   id                 String             @id @default(cuid())
   ownerId            String             @unique
+  bankCode           String?
   bankName           String
   accountName        String
   accountNumberLast4 String
@@ -225,14 +288,38 @@ model OwnerPayoutMethod {
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 }
 
+// Provider-authoritative payout bank directory. Paystack remains the source of
+// truth; this table is the durable fallback when its list endpoint is briefly
+// unavailable and avoids shipping a stale bank list in frontend code.
+model BankDirectoryEntry {
+  id           String   @id @default(cuid())
+  provider     String
+  country      String
+  currency     String
+  code         String
+  name         String
+  type         String?
+  active       Boolean  @default(true)
+  lastSyncedAt DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([provider, country, code])
+  @@index([provider, country, active, name])
+}
+
 // Single-use, hashed, expiring password-reset token. The raw token is only ever
 // emailed to the user; the DB stores its SHA-256 hash.
+// Password recovery. `tokenHash` holds the scrypt hash of a 6-digit code
+// (looked up by userId, not by hash), and `attempts` caps brute-force guesses
+// against that short code — mirrors MfaChallenge.
 model PasswordResetToken {
   id        String    @id @default(cuid())
   userId    String
   tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
+  attempts  Int       @default(0)
   createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -314,34 +401,82 @@ model Area {
 // ---------------------------------------------------------------------------
 
 model Property {
-  id              String         @id @default(cuid())
-  ownerId         String
-  cityId          String
-  areaId          String?
+  id                 String                @id @default(cuid())
+  ownerId            String
+  cityId             String
+  areaId             String?
   /// Optional link to the owner's saved location. Canonical listing location stays
   /// on cityId/areaId; this only records which OwnerLocation a listing belongs to.
-  ownerLocationId String?
-  name            String
-  slug            String         @unique
-  description     String?
-  status          PropertyStatus @default(DRAFT)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  ownerLocationId    String?
+  name               String
+  slug               String                @unique
+  description        String?
+  status             PropertyStatus        @default(DRAFT)
+  /// Incremented whenever owner-controlled listing content changes. Auto-publish
+  /// only releases a property if the reviewed version is still current.
+  contentVersion     Int                   @default(1)
+  reviewStatus       PropertyReviewStatus  @default(NOT_SUBMITTED)
+  reviewSource       PropertyReviewSource?
+  reviewedAt         DateTime?
+  scheduledPublishAt DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 
-  owner         User           @relation("PropertyOwner", fields: [ownerId], references: [id])
-  city          City           @relation(fields: [cityId], references: [id])
-  area          Area?          @relation(fields: [areaId], references: [id])
-  ownerLocation OwnerLocation? @relation(fields: [ownerLocationId], references: [id])
+  owner         User                @relation("PropertyOwner", fields: [ownerId], references: [id])
+  city          City                @relation(fields: [cityId], references: [id])
+  area          Area?               @relation(fields: [areaId], references: [id])
+  ownerLocation OwnerLocation?      @relation(fields: [ownerLocationId], references: [id])
   media         PropertyMedia[]
   roomTypes     RoomType[]
   payouts       Payout[]
   auditLogs     AuditLog[]
   testimonials  Testimonial[]
+  reviewRuns    PropertyReviewRun[]
 
   @@index([ownerId])
   @@index([cityId])
   @@index([areaId])
   @@index([ownerLocationId])
+  @@index([status])
+  @@index([reviewStatus])
+  @@index([scheduledPublishAt])
+}
+
+model PropertyReviewRun {
+  id                 String               @id @default(cuid())
+  propertyId         String
+  contentVersion     Int
+  source             PropertyReviewSource @default(AUTO_REVIEW)
+  status             PropertyReviewStatus @default(PENDING)
+  riskScore          Int                  @default(0)
+  summary            String?
+  scheduledPublishAt DateTime?
+  publishedAt        DateTime?
+  createdAt          DateTime             @default(now())
+  completedAt        DateTime?
+
+  property Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  checks   PropertyReviewCheck[]
+
+  @@index([propertyId])
+  @@index([status])
+  @@index([scheduledPublishAt])
+  @@index([propertyId, contentVersion])
+}
+
+model PropertyReviewCheck {
+  id        String                    @id @default(cuid())
+  runId     String
+  key       String
+  label     String
+  status    PropertyReviewCheckStatus
+  severity  String
+  details   String
+  createdAt DateTime                  @default(now())
+
+  run PropertyReviewRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
   @@index([status])
 }
 
@@ -430,19 +565,24 @@ model AvailabilityCalendar {
 // ---------------------------------------------------------------------------
 
 model BookingHold {
-  id         String   @id @default(cuid())
-  userId     String?
-  roomUnitId String
-  checkIn    DateTime
-  checkOut   DateTime
+  id               String   @id @default(cuid())
+  userId           String?
+  roomUnitId       String
+  checkIn          DateTime
+  checkOut         DateTime
   /// Occupancy split. Capacity is checked against adults + children; infants are
   /// free and excluded from the room's maxGuests check.
-  adults     Int      @default(1)
-  children   Int      @default(0)
-  infants    Int      @default(0)
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  adults           Int      @default(1)
+  children         Int      @default(0)
+  infants          Int      @default(0)
+  /// Price snapshot taken when the hold is created (kobo). Checkout charges
+  /// this snapshot, so a host price edit mid-flow can never change what the
+  /// guest was quoted. 0 only on legacy pre-snapshot rows.
+  nightlyPriceKobo Int      @default(0)
+  totalKobo        Int      @default(0)
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   user     User?    @relation(fields: [userId], references: [id])
   roomUnit RoomUnit @relation(fields: [roomUnitId], references: [id])
@@ -482,34 +622,61 @@ model Booking {
 }
 
 model Payment {
-  id        String        @id @default(cuid())
-  bookingId String        @unique
+  id                String        @id @default(cuid())
+  bookingId         String        @unique
   /// COMPAT: mirror of `grossAmountKobo`. Kept so older rows/readers keep working;
   /// all new accounting logic reads the explicit fields below. Always equals
   /// `grossAmountKobo` for payments created on/after Phase A.
-  amount    Int
+  amount            Int
   /// Full amount charged to the guest (minor units, kobo). Canonical gross.
-  grossAmountKobo   Int @default(0)
+  grossAmountKobo   Int           @default(0)
   /// Staynex commission retained from gross (kobo).
-  platformFeeKobo   Int @default(0)
+  platformFeeKobo   Int           @default(0)
   /// Net amount owed to the property owner (kobo) = gross - platform fee.
-  ownerPayoutKobo   Int @default(0)
+  ownerPayoutKobo   Int           @default(0)
   /// Commission rate snapshotted at checkout, in basis points (1000 = 10%).
   /// Snapshotted so historical accounting never shifts if the platform rate changes.
-  commissionRateBps Int @default(0)
-  currency  String        @default("NGN")
-  provider  String?
-  reference String?       @unique
-  status    PaymentStatus @default(PENDING)
+  commissionRateBps Int           @default(0)
+  currency          String        @default("NGN")
+  provider          String?
+  reference         String?       @unique
+  status            PaymentStatus @default(PENDING)
   /// Set once when the payment is verified SUCCESS.
-  paidAt    DateTime?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  paidAt            DateTime?
+  /// Last provider verification time — debounces status-page polling so the
+  /// platform never hammers Paystack's verify API.
+  lastVerifiedAt    DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   payout  Payout?
 
   @@index([status])
+}
+
+/// Immutable money audit trail: one row per provider webhook delivery, per
+/// provider verification that changed state, and per admin money action —
+/// always with the processing outcome. Nothing that touches funds may resolve
+/// invisibly (payment-review P1).
+model PaymentEvent {
+  id        String   @id @default(cuid())
+  provider  String   @default("paystack")
+  /// e.g. charge.success, charge.failed, refund.processed, sync.verify, admin.refund
+  eventType String
+  reference String?
+  /// Processing result: CONFIRMED, DUPLICATE, REVIVED, REQUIRES_REFUND,
+  /// UNDERPAID, CURRENCY_MISMATCH, UNKNOWN_REFERENCE, RECORDED, FAILED, ...
+  outcome   String
+  /// Short human-readable explanation for the admin timeline.
+  detail    String?
+  /// Raw provider payload (webhook deliveries only).
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([reference])
+  @@index([outcome])
+  @@index([createdAt])
 }
 
 // Guest rating + testimonial, always tied to a real booking (bookingId unique →
@@ -541,25 +708,30 @@ model Testimonial {
 // backend only when a payment is verified SUCCESS and its booking CONFIRMED.
 // Phase A: payouts are settled manually by an admin; Phase B automates transfers.
 model Payout {
-  id         String       @id @default(cuid())
-  bookingId  String       @unique
-  paymentId  String       @unique
-  ownerId    String
-  propertyId String
+  id                String       @id @default(cuid())
+  bookingId         String       @unique
+  paymentId         String       @unique
+  ownerId           String
+  propertyId        String
   /// Net amount owed to the owner in minor units (kobo) = payment.ownerPayoutKobo.
-  amount     Int
-  currency   String       @default("NGN")
-  status     PayoutStatus @default(PENDING)
+  amount            Int
+  currency          String       @default("NGN")
+  status            PayoutStatus @default(PENDING)
   /// When this payout becomes eligible to settle (checkIn + 24h).
-  eligibleAt DateTime
+  eligibleAt        DateTime
   /// Set when an admin approves the payout for settlement (Phase B workflow hook).
-  approvedAt DateTime?
+  approvedAt        DateTime?
   /// Set when the payout has actually been paid to the owner (manual in Phase A).
-  paidAt     DateTime?
+  paidAt            DateTime?
+  /// Set when an admin marks the payout FAILED (reason lives in `note`).
+  failedAt          DateTime?
+  /// Settlement note: bank-transfer reference on PAID, reason on FAILED,
+  /// clawback explanation when a refund cancels the payout.
+  note              String?
   /// Admin who last actioned this payout (manual settlement marker).
   processedByUserId String?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
   booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
@@ -586,16 +758,44 @@ model Notification {
   email     String?
   channel   NotificationChannel
   status    NotificationStatus  @default(QUEUED)
+  type      NotificationType    @default(GENERAL)
   title     String
   body      String
+  /// In-app deep link (e.g. /host/bookings/xyz).
+  linkUrl   String?
+  /// Set when the user opens/acknowledges an IN_APP notification.
+  readAt    DateTime?
+  /// Idempotency key so a trigger firing twice can never double-notify.
+  dedupeKey String?             @unique
+  /// Outbox: delivery attempts made so far (EMAIL/PUSH retry bookkeeping).
+  attempts  Int                 @default(0)
+  /// Outbox: the exact deliverable (email {to,subject,html,text} or push
+  /// {title,body,linkUrl}) so the retry dispatcher can re-send verbatim.
+  payload   Json?
   createdAt DateTime            @default(now())
   updatedAt DateTime            @updatedAt
 
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, readAt])
   @@index([userId])
   @@index([bookingId])
   @@index([status])
+}
+
+/// A push-capable device (FCM registration token) tied to a signed-in user.
+/// Tokens are upserted on login/opt-in and pruned when FCM reports them dead.
+model DeviceToken {
+  id         String         @id @default(cuid())
+  userId     String
+  token      String         @unique
+  platform   DevicePlatform @default(WEB)
+  lastSeenAt DateTime       @default(now())
+  createdAt  DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model AuditLog {
@@ -607,9 +807,9 @@ model AuditLog {
   entityId    String
   createdAt   DateTime @default(now())
 
-  actor      User?         @relation("AuditActor", fields: [actorUserId], references: [id])
-  property   Property?     @relation(fields: [propertyId], references: [id])
-  aiActions  AIActionLog[]
+  actor     User?         @relation("AuditActor", fields: [actorUserId], references: [id])
+  property  Property?     @relation(fields: [propertyId], references: [id])
+  aiActions AIActionLog[]
 
   @@index([actorUserId])
   @@index([propertyId])
@@ -623,6 +823,11 @@ model AuditLog {
 enum AIMessageRole {
   USER
   AGENT
+}
+
+enum AIMessageFeedback {
+  UP
+  DOWN
 }
 
 model AIConversation {
@@ -642,18 +847,25 @@ model AIConversation {
   @@index([userId])
 }
 
-// Persisted Staynex Agent chat messages (history is DB-backed, not faked in
+// Persisted Staynex AI chat messages (history is DB-backed, not faked in
 // component state). Conversations are private to their owner.
 model AIMessage {
   id             String        @id @default(cuid())
   conversationId String
   role           AIMessageRole
   content        String
+  feedback       AIMessageFeedback?
+  feedbackAt     DateTime?
+  supersededAt   DateTime?
+  /// Public, verified property summaries shown with an assistant response.
+  /// These are snapshots from the live catalog at generation time.
+  propertyCards  Json?
   createdAt      DateTime      @default(now())
 
   conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
+  @@index([conversationId, supersededAt, createdAt])
 }
 
 model AIActionLog {

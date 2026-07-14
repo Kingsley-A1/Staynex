@@ -1,8 +1,21 @@
 import type { Metadata } from "next";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { Suspense } from "react";
 import "../styles/globals.css";
+
+// Brand wordmark typeface — geometric, premium, and the closest web match to the
+// "Staynex" lettering in the logo. Exposed as --font-brand-src for the
+// `font-brand` utility (see tokens.css); the rest of the UI stays system-first.
+const brandFont = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["600", "700", "800"],
+  variable: "--font-brand-src",
+  display: "swap",
+});
 import { PageLoadingLine } from "@/components/page-loading-line";
+import { WebVitalsReporter } from "@/components/web-vitals-reporter";
+import { DeferredAssistantWidget } from "@/features/ai/deferred-assistant-widget";
 import {
   DEFAULT_DESCRIPTION,
   SEO_KEYWORDS,
@@ -10,9 +23,11 @@ import {
   getSiteOrigin,
   getSiteUrl,
 } from "@/lib/seo";
+import { getSupportContact } from "@/lib/support-contact";
 
 const appUrl = getSiteUrl();
 const appOrigin = getSiteOrigin();
+const supportContact = getSupportContact();
 
 const organizationJsonLd = {
   "@context": "https://schema.org",
@@ -24,7 +39,8 @@ const organizationJsonLd = {
   slogan: "Book trusted stays, confidently.",
   contactPoint: {
     "@type": "ContactPoint",
-    email: "support@staynexbookings.ng",
+    ...(supportContact.email ? { email: supportContact.email } : {}),
+    ...(supportContact.phone ? { telephone: supportContact.phone } : {}),
     contactType: "customer support",
   },
 };
@@ -32,8 +48,8 @@ const organizationJsonLd = {
 export const metadata: Metadata = {
   metadataBase: appUrl,
   title: {
-    default: "Staynex | Verified stays and secure bookings in Nigeria",
-    template: "%s · Staynex",
+    default: "Staynex Bookings | Verified stays and secure bookings in Nigeria",
+    template: "%s · Staynex Bookings",
   },
   description: DEFAULT_DESCRIPTION,
   applicationName: SITE_NAME,
@@ -58,7 +74,7 @@ export const metadata: Metadata = {
     type: "website",
     siteName: SITE_NAME,
     url: appOrigin,
-    title: "Staynex | Book trusted stays, confidently",
+    title: "Staynex Bookings | Book trusted stays, confidently",
     description: DEFAULT_DESCRIPTION,
     images: [
       {
@@ -71,7 +87,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Staynex | Book Trusted Stays, Confidently",
+    title: "Staynex Bookings | Book Trusted Stays, Confidently",
     description: DEFAULT_DESCRIPTION,
     images: ["/opengraph-image"],
   },
@@ -81,11 +97,12 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={brandFont.variable}>
       <body>
         <Suspense fallback={null}>
           <PageLoadingLine />
-          <Analytics/>
+          <WebVitalsReporter />
+          <Analytics />
         </Suspense>
         <script
           type="application/ld+json"
@@ -93,7 +110,8 @@ export default function RootLayout({
             __html: JSON.stringify(organizationJsonLd).replace(/</g, "\\u003c"),
           }}
         />
-        {children}
+        <div id="staynex-app-shell">{children}</div>
+        <DeferredAssistantWidget />
       </body>
     </html>
   );

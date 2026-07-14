@@ -98,6 +98,10 @@ function buildDetail(p: SeedProperty): PropertyDetail {
     name: p.name,
     slug: p.slug,
     status: p.status,
+    reviewStatus: p.status === "APPROVED" ? "PUBLISHED" : "NOT_SUBMITTED",
+    reviewSource: null,
+    reviewedAt: null,
+    scheduledPublishAt: null,
     cityName: p.cityName,
     fromPriceKobo: prices.length ? Math.min(...prices) : null,
     roomTypeCount: roomTypes.length,
@@ -106,6 +110,7 @@ function buildDetail(p: SeedProperty): PropertyDetail {
     description: p.description,
     media: [],
     roomTypes,
+    latestReview: null,
   };
 }
 
@@ -117,6 +122,10 @@ function toSummary(d: PropertyDetail): PropertySummary {
     name: d.name,
     slug: d.slug,
     status: d.status,
+    reviewStatus: d.reviewStatus,
+    reviewSource: d.reviewSource,
+    reviewedAt: d.reviewedAt,
+    scheduledPublishAt: d.scheduledPublishAt,
     cityName: d.cityName,
     fromPriceKobo: d.fromPriceKobo,
     roomTypeCount: d.roomTypeCount,

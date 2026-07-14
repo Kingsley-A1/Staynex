@@ -1,5 +1,16 @@
-import { Body, Controller, Get, Headers, Param, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
+import type { AuthUser } from "../../../types";
 import { parseBody } from "../../common/http";
+import { RateLimit } from "../../common/rate-limit.guard";
+import { CurrentUser, SessionGuard } from "../auth/access-control";
 import { AuthService } from "../auth/auth.service";
 import { BookingsService } from "./bookings.service";
 import { checkoutSchema, createHoldSchema, quoteSchema } from "./dto";
@@ -14,16 +25,32 @@ export class BookingsController {
   ) {}
 
   @Post("bookings/quote")
+  @RateLimit({
+    bucket: "booking:quote",
+    limit: 30,
+    windowMs: 60_000,
+    keyBy: ["ip"],
+  })
   quote(@Body() body: unknown) {
     return this.bookings.quote(parseBody(quoteSchema, body));
   }
 
   @Post("bookings/holds")
+  @RateLimit({
+    bucket: "booking:hold",
+    limit: 10,
+    windowMs: 60_000,
+    keyBy: ["ip"],
+  })
   async createHold(
-    @Headers("cookie") cookie: string | undefined,    @Body() body: unknown,
+    @Headers("cookie") cookie: string | undefined,
+    @Body() body: unknown,
   ) {
     const user = await this.auth.resolve(cookie);
-    return this.bookings.createHold(parseBody(createHoldSchema, body), user?.id ?? null);
+    return this.bookings.createHold(
+      parseBody(createHoldSchema, body),
+      user?.id ?? null,
+    );
   }
 
   @Get("bookings/holds/:id")
@@ -32,10 +59,14 @@ export class BookingsController {
   }
 
   @Post("checkout")
-  async checkout(
-    @Headers("cookie") cookie: string | undefined,    @Body() body: unknown,
-  ) {
-    const user = await this.auth.requireUser(cookie);
+  @UseGuards(SessionGuard)
+  @RateLimit({
+    bucket: "booking:checkout",
+    limit: 8,
+    windowMs: 60_000,
+    keyBy: ["user", "ip"],
+  })
+  async checkout(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     return this.bookings.checkout(parseBody(checkoutSchema, body), user.id);
   }
 

@@ -1,6 +1,6 @@
 import { KpiCard } from "@/ui";
 import { PayoutStatusBadge } from "@/components/status-pill";
-import { MarkPaidButton } from "@/features/admin/payout-actions";
+import { PayoutActions } from "@/features/admin/payout-actions";
 import { getAdminPayouts } from "@/lib/server-reports";
 import { formatNairaFromKobo, formatDate } from "@/lib/format";
 
@@ -26,7 +26,7 @@ export default async function AdminPayoutsPage() {
       <header>
         <h1 className="text-title-lg text-ink">Payouts</h1>
         <p className="text-muted-foreground">
-          Owner settlements. Payouts are settled manually after check-in (net of the platform fee).
+          Host settlements. Payouts are settled manually after check-in (net of the platform fee).
         </p>
       </header>
 
@@ -43,7 +43,7 @@ export default async function AdminPayoutsPage() {
         <KpiCard
           label="Pending payout"
           value={formatNairaFromKobo(data.totals.pendingPayoutKobo)}
-          hint="Owed to owners"
+          hint="Owed to hosts"
         />
         <KpiCard label="Paid out" value={formatNairaFromKobo(data.totals.paidPayoutKobo)} />
       </div>
@@ -56,14 +56,13 @@ export default async function AdminPayoutsPage() {
               No payouts yet. They appear here once guests complete payment.
             </p>
           ) : (
-            <table className="w-full min-w-[920px] text-left text-sm">
+            <table className="w-full min-w-[1080px] text-left text-sm">
               <thead className="border-b border-border text-caption uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Property</th>
-                  <th className="px-4 py-3 font-semibold">Owner</th>
-                  <th className="px-4 py-3 font-semibold text-right">Gross</th>
-                  <th className="px-4 py-3 font-semibold text-right">Staynex fee</th>
-                  <th className="px-4 py-3 font-semibold text-right">Owner payout</th>
+                  <th className="px-4 py-3 font-semibold">Host</th>
+                  <th className="px-4 py-3 font-semibold">Destination</th>
+                  <th className="px-4 py-3 font-semibold text-right">Host payout</th>
                   <th className="px-4 py-3 font-semibold">Eligible</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold text-right">Action</th>
@@ -82,14 +81,23 @@ export default async function AdminPayoutsPage() {
                       <td className="px-4 py-3 text-muted-foreground">
                         {p.ownerName ?? p.ownerEmail ?? "—"}
                       </td>
-                      <td className="px-4 py-3 text-right text-muted-foreground">
-                        {formatNairaFromKobo(p.grossAmountKobo)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-muted-foreground">
-                        {formatNairaFromKobo(p.platformFeeKobo)}
+                      <td className="px-4 py-3">
+                        {p.bankName ? (
+                          <>
+                            <div className="text-ink">{p.bankName}</div>
+                            <div className="text-caption">
+                              {p.accountName ?? "—"} ····{p.accountNumberLast4 ?? "????"}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-caption text-warning">No payout method</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-ink">
                         {formatNairaFromKobo(p.ownerPayoutKobo)}
+                        <div className="text-caption font-normal text-muted-foreground">
+                          of {formatNairaFromKobo(p.grossAmountKobo)} gross
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {formatDate(p.eligibleAt)}
@@ -99,13 +107,22 @@ export default async function AdminPayoutsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <PayoutStatusBadge status={p.status} />
+                        {p.note && (
+                          <span className="mt-1 block max-w-56 text-caption text-muted-foreground">
+                            {p.note}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         {settleable ? (
-                          <MarkPaidButton payoutId={p.id} />
+                          <PayoutActions payoutId={p.id} eligible={eligible} />
                         ) : (
                           <span className="text-caption text-muted-foreground">
-                            {p.paidAt ? `Paid ${formatDate(p.paidAt)}` : "—"}
+                            {p.paidAt
+                              ? `Paid ${formatDate(p.paidAt)}`
+                              : p.failedAt
+                                ? `Failed ${formatDate(p.failedAt)}`
+                                : "—"}
                           </span>
                         )}
                       </td>
@@ -117,8 +134,8 @@ export default async function AdminPayoutsPage() {
           )}
         </div>
         <p className="text-caption">
-          Marking a payout paid records a manual settlement and writes an audit log entry. Automated
-          bank transfers arrive in Phase B and remain documented as future work.
+          Settling or failing a payout records an audit log entry. Early settlement requires an
+          explicit override with a note. Automated bank transfers arrive in Phase B.
         </p>
       </section>
     </div>

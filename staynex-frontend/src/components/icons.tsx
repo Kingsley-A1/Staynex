@@ -89,11 +89,29 @@ export function IconAudit({ className }: IconProps) {
 export function IconAi({ className }: IconProps) {
   return (
     <svg {...base(className)}>
-      <path d="M12 3v2M12 19v2M5 12H3M21 12h-2" />
-      <rect x="6" y="6" width="12" height="12" rx="3" />
-      <circle cx="9.5" cy="11" r="1" fill="currentColor" stroke="none" />
-      <circle cx="14.5" cy="11" r="1" fill="currentColor" stroke="none" />
-      <path d="M9.5 14.5h5" />
+      <g fill="currentColor" stroke="none">
+        <circle cx="12" cy="2.75" r="1.1" />
+        <circle cx="18.55" cy="5.45" r="1.1" />
+        <circle cx="21.25" cy="12" r="1.1" />
+        <circle cx="18.55" cy="18.55" r="1.1" />
+        <circle cx="12" cy="21.25" r="1.1" />
+        <circle cx="5.45" cy="18.55" r="1.1" />
+        <circle cx="2.75" cy="12" r="1.1" />
+        <circle cx="5.45" cy="5.45" r="1.1" />
+      </g>
+      <path
+        d="m7.7 15 2.25-6 2.25 6M8.55 12.8h2.8M15.35 9v6"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+export function IconBell({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.7 21a2 2 0 0 1-3.4 0" />
     </svg>
   );
 }
@@ -125,6 +143,16 @@ export function IconOnboarding({ className }: IconProps) {
       <path d="M14.5 4.5C18 6 19 11 18 14l-4 4-5-5 4-4c1-1 .5-3.5-.5-4.5" />
       <path d="M14.5 4.5C13 4 9.5 4.5 8 6L6 8l3 3" />
       <circle cx="14.5" cy="9.5" r="1.4" />
+    </svg>
+  );
+}
+
+export function IconSupport({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M4 13v-2a8 8 0 0 1 16 0v2" />
+      <path d="M4 13a2 2 0 0 1 2-2h1v6H6a2 2 0 0 1-2-2v-2ZM20 13a2 2 0 0 0-2-2h-1v6h1a2 2 0 0 0 2-2v-2Z" />
+      <path d="M17 17c0 2-1.8 3-4 3h-1" />
     </svg>
   );
 }
@@ -220,7 +248,9 @@ export type IconName =
   | "ai"
   | "settings"
   | "properties"
-  | "onboarding";
+  | "onboarding"
+  | "support"
+  | "notifications";
 
 export const NAV_ICONS: Record<IconName, ComponentType<IconProps>> = {
   overview: IconOverview,
@@ -234,4 +264,6 @@ export const NAV_ICONS: Record<IconName, ComponentType<IconProps>> = {
   settings: IconSettings,
   properties: IconProperties,
   onboarding: IconOnboarding,
+  support: IconSupport,
+  notifications: IconBell,
 };

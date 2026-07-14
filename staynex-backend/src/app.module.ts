@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { SecurityModule } from "./common/security.module";
 import { AdminModule } from "./modules/admin/admin.module";
 import { AiModule } from "./modules/ai/ai.module";
 import { AreasModule } from "./modules/areas/areas.module";
@@ -16,9 +17,11 @@ import { PropertiesModule } from "./modules/properties/properties.module";
 import { ReviewsModule } from "./modules/reviews/reviews.module";
 import { RoomsModule } from "./modules/rooms/rooms.module";
 import { UsersModule } from "./modules/users/users.module";
+import { VouchersModule } from "./modules/vouchers/voucher.module";
 
 @Module({
   imports: [
+    SecurityModule,
     AuthModule,
     HealthModule,
     UsersModule,
@@ -36,6 +39,7 @@ import { UsersModule } from "./modules/users/users.module";
     AdminModule,
     AiModule,
     AuditModule,
+    VouchersModule,
   ],
 })
 export class AppModule {}

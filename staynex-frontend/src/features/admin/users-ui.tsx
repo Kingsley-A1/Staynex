@@ -137,7 +137,10 @@ export function AdminUserDetailView({ id }: { id: string }) {
     <div className="space-y-4">
       <SettingsCard title={user.name || "Unnamed user"} description={user.email || "No email"}>
         <dl>
-          <SettingsRow label="Phone">{user.phone || "—"}</SettingsRow>
+          <SettingsRow label="Phone">
+            {user.phone ||
+              (user.phoneRestricted ? "Restricted to Super Admins" : "—")}
+          </SettingsRow>
           <SettingsRow label="Capabilities">
             <CapabilityBadges capabilities={user.capabilities} />
           </SettingsRow>

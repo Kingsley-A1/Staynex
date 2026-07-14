@@ -6,3 +6,13 @@ function normalizeApiBase(input: string | undefined): string {
 }
 
 export const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_URL);
+
+/** Direct link to the canonical voucher PDF (also the email attachment). */
+export function voucherPdfUrl(reference: string): string {
+  return `${API_BASE}/vouchers/${encodeURIComponent(reference)}/pdf`;
+}
+
+/** SVG QR image the on-page voucher renders (points to /verify/<reference>). */
+export function voucherQrUrl(reference: string): string {
+  return `${API_BASE}/vouchers/${encodeURIComponent(reference)}/qr.svg`;
+}

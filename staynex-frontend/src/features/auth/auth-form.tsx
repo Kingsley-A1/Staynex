@@ -1,39 +1,56 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Field, Input, PasswordInput, Select } from "@/ui";
 import { GoogleAuthButton } from "@/features/auth/google-auth-button";
-import { authApi } from "@/lib/api";
-import { type AuthUser, capabilityHome, isAdminCapable, isOwnerCapable } from "@/lib/types";
+import { authDestination } from "@/features/auth/navigate";
+import { ApiError, apiErrorMessage, authApi } from "@/lib/api";
+import {
+  type AuthMfaChallenge,
+  type AuthUser,
+  isAdminCapable,
+  isAuthMfaChallenge,
+  isOwnerCapable,
+} from "@/lib/types";
 
 type Mode = "login" | "register" | "admin";
 
+/** Carry the intended destination across the sign-in/register cross-links. */
+function withNext(path: string, next: string | undefined): string {
+  return next ? `${path}?next=${encodeURIComponent(next)}` : path;
+}
+
 // Reusable auth form. As a page it navigates on success; embedded (checkout gate)
 // it calls `onSuccess` instead so the surrounding flow continues. `roleIntent`
-// locks owner-intent registration (used by /owner/register).
+// locks host-intent registration (used by /host/register).
 export function AuthForm({
   mode,
   next,
   onSuccess,
   compact = false,
   roleIntent,
+  requireAdmin = false,
 }: {
   mode: Mode;
   next?: string;
   onSuccess?: (user: AuthUser) => void;
   compact?: boolean;
   roleIntent?: "OWNER";
+  requireAdmin?: boolean;
 }) {
-  const router = useRouter();
   const ownerIntent = mode === "register" && roleIntent === "OWNER";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [role, setRole] = useState<"GUEST" | "OWNER">("GUEST");
   const [accessCode, setAccessCode] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaChallenge, setMfaChallenge] = useState<AuthMfaChallenge | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -46,20 +63,35 @@ export function AuthForm({
     setPasswordError(null);
   }
 
+  function resetMfa() {
+    setMfaChallenge(null);
+    setMfaCode("");
+  }
+
   function goHome(user: AuthUser) {
-    // router.refresh() re-renders server components (e.g. the auth-aware header)
-    // so the now-signed-in state is reflected immediately.
-    router.push(next || capabilityHome(user));
-    router.refresh();
+    // Full-page navigation, NOT router.push: the client router cache can hold
+    // a pre-sign-in RSC payload for the target route whose baked-in
+    // redirect-to-/sign-in would bounce the now-authenticated user straight
+    // back to the auth page. A document load always reaches the server with
+    // the fresh session cookie and re-renders everything signed in.
+    window.location.assign(authDestination(user, next));
   }
 
   function handleSuccess(user: AuthUser) {
+    if (requireAdmin && !isAdminCapable(user)) {
+      setBusy(false);
+      setError(
+        "This account is signed in, but it does not have admin access. Use an authorized staff account or contact support.",
+      );
+      return;
+    }
     if (onSuccess) {
       onSuccess(user);
     } else if (mode === "register") {
       // Confirm the account was created before sending the guest onward —
       // otherwise a guest (whose home is the welcome page) gets no signal that
       // registration worked.
+      setBusy(false);
       setRegistered(user);
     } else {
       goHome(user);
@@ -73,24 +105,102 @@ export function AuthForm({
     try {
       let user: AuthUser;
       if (mode === "login") {
-        user = await authApi.login({ email, password });
+        const result = await authApi.login({ email, password });
+        if (isAuthMfaChallenge(result)) {
+          setMfaChallenge(result);
+          setBusy(false);
+          return;
+        }
+        user = result;
       } else if (mode === "admin") {
-        user = await authApi.adminRegister({ email, password, name: name || undefined, accessCode });
+        const result = await authApi.adminRegister({
+          email,
+          password,
+          name: name || undefined,
+          phone,
+          accessCode,
+        });
+        if (isAuthMfaChallenge(result)) {
+          setMfaChallenge(result);
+          setBusy(false);
+          return;
+        }
+        user = result;
       } else if (ownerIntent) {
-        user = await authApi.registerOwner({ email, password, name: name || undefined });
+        user = await authApi.registerOwner({
+          email,
+          password,
+          name: name || undefined,
+          phone,
+        });
       } else {
-        user = await authApi.register({ email, password, name: name || undefined, role });
+        user = await authApi.register({
+          email,
+          password,
+          name: name || undefined,
+          phone,
+          role,
+        });
       }
       handleSuccess(user);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       if (msg.includes("401")) {
         // Wrong credentials: flag the password field rather than a generic banner.
-        setPasswordError("Incorrect email or password. Check your password or reset it.");
+        setPasswordError(
+          "Incorrect email or password. Check your password or reset it.",
+        );
       } else if (msg.includes("409")) {
         setEmailError("An account with this email already exists.");
-      } else if (msg.includes("403")) {
-        setError("That admin access code wasn't accepted.");
+      } else if (err instanceof ApiError && err.status === 400) {
+        const detail = apiErrorMessage(
+          err,
+          "Check your registration details and try again.",
+        );
+        if (/email|domain|deliverable/i.test(detail)) setEmailError(detail);
+        else setError(detail);
+      } else if (err instanceof ApiError && err.status === 403) {
+        setError(
+          mode === "admin"
+            ? "That admin access code wasn't accepted."
+            : apiErrorMessage(
+                err,
+                "This sign-in request could not be verified. Refresh the page and try again.",
+              ),
+        );
+      } else if (err instanceof ApiError && err.status === 503) {
+        setError(
+          mode === "login"
+            ? "Admin verification is temporarily unavailable. Try again shortly or contact support."
+            : apiErrorMessage(
+                err,
+                "Admin account setup is temporarily unavailable.",
+              ),
+        );
+      } else if (msg.includes("429")) {
+        setError("Too many attempts. Please try again later.");
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
+      setBusy(false);
+    }
+  }
+
+  async function submitMfa(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!mfaChallenge) return;
+    setBusy(true);
+    clearErrors();
+    try {
+      const user = await authApi.completeMfa({
+        challengeId: mfaChallenge.challengeId,
+        code: mfaCode,
+      });
+      handleSuccess(user);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("401")) {
+        setError("That verification code wasn't accepted.");
       } else if (msg.includes("429")) {
         setError("Too many attempts. Please try again later.");
       } else {
@@ -107,16 +217,19 @@ export function AuthForm({
       : mode === "admin"
         ? "Create admin account"
         : ownerIntent
-          ? "Create owner account"
+          ? "Create host account"
           : "Create account";
 
   if (registered) {
-    const goesToWorkspace = isOwnerCapable(registered) || isAdminCapable(registered);
+    const goesToWorkspace =
+      isOwnerCapable(registered) || isAdminCapable(registered);
     return (
       <RegistrationSuccess
         user={registered}
         busy={busy}
-        continueLabel={goesToWorkspace ? "Go to your dashboard" : "Start exploring stays"}
+        continueLabel={
+          goesToWorkspace ? "Go to your dashboard" : "Start exploring stays"
+        }
         onContinue={() => {
           setBusy(true);
           goHome(registered);
@@ -125,17 +238,100 @@ export function AuthForm({
     );
   }
 
+  if (mfaChallenge) {
+    return (
+      <form
+        onSubmit={submitMfa}
+        className={compact ? "space-y-4" : "surface-card space-y-4 p-6"}
+      >
+        <div className="space-y-1">
+          <h2 className="text-title-sm text-ink">Verify admin sign in</h2>
+          <p className="text-sm text-muted-foreground">
+            Enter the 6-digit code sent to {mfaChallenge.email}.
+          </p>
+        </div>
+        <Field label="Verification code" htmlFor="mfaCode" required>
+          <Input
+            id="mfaCode"
+            inputMode="numeric"
+            pattern="\d{6}"
+            maxLength={6}
+            required
+            value={mfaCode}
+            onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+            autoComplete="one-time-code"
+            placeholder="••••••"
+          />
+        </Field>
+        {error && (
+          <p className="text-sm text-error" role="alert">
+            {error}
+          </p>
+        )}
+        <Button
+          type="submit"
+          disabled={busy || mfaCode.length !== 6}
+          className="w-full"
+        >
+          {busy ? "Please wait…" : "Verify and continue"}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy}
+          className="w-full"
+          onClick={resetMfa}
+        >
+          Use a different account
+        </Button>
+      </form>
+    );
+  }
+
   return (
-    <form onSubmit={submit} className={compact ? "space-y-4" : "surface-card space-y-4 p-6"}>
+    <form
+      onSubmit={submit}
+      className={compact ? "space-y-4" : "surface-card space-y-4 p-6"}
+    >
       {mode !== "admin" && (
-        <GoogleAuthButton next={next} onSuccess={onSuccess} intent={ownerIntent ? "OWNER" : undefined} />
+        <GoogleAuthButton
+          next={next}
+          onSuccess={onSuccess}
+          onError={setError}
+          intent={ownerIntent ? "OWNER" : undefined}
+        />
       )}
       {(mode === "register" || mode === "admin") && (
         <Field label="Name" htmlFor="name">
-          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+          <Input
+            id="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="name"
+          />
         </Field>
       )}
-      <Field label="Email" htmlFor="email" required error={emailError ?? undefined}>
+      {(mode === "register" || mode === "admin") && (
+        <Field label="Phone" htmlFor="phone" required>
+          <Input
+            id="phone"
+            type="tel"
+            required
+            minLength={7}
+            maxLength={40}
+            inputMode="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            autoComplete="tel"
+          />
+        </Field>
+      )}
+      <Field
+        label="Email"
+        htmlFor="email"
+        required
+        error={emailError ?? undefined}
+      >
         <Input
           id="email"
           type="email"
@@ -166,7 +362,10 @@ export function AuthForm({
 
       {mode === "login" && (
         <div className="-mt-1 text-right">
-          <Link href="/forgot-password" className="text-caption font-medium text-primary">
+          <Link
+            href="/forgot-password"
+            className="text-caption font-medium text-primary"
+          >
             Forgot password?
           </Link>
         </div>
@@ -174,9 +373,13 @@ export function AuthForm({
 
       {mode === "register" && !ownerIntent && (
         <Field label="I'm registering as" htmlFor="role">
-          <Select id="role" value={role} onChange={(e) => setRole(e.target.value as "GUEST" | "OWNER")}>
+          <Select
+            id="role"
+            value={role}
+            onChange={(e) => setRole(e.target.value as "GUEST" | "OWNER")}
+          >
             <option value="GUEST">A guest booking stays</option>
-            <option value="OWNER">A property owner</option>
+            <option value="OWNER">A host listing my property</option>
           </Select>
         </Field>
       )}
@@ -212,7 +415,10 @@ export function AuthForm({
       {mode === "login" && (
         <p className="text-center text-caption">
           New to Staynex?{" "}
-          <Link href="/register" className="font-semibold text-primary">
+          <Link
+            href={withNext("/register", next)}
+            className="font-semibold text-primary"
+          >
             Create an account
           </Link>
         </p>
@@ -220,7 +426,10 @@ export function AuthForm({
       {mode === "register" && (
         <p className="text-center text-caption">
           Already have an account?{" "}
-          <Link href="/sign-in" className="font-semibold text-primary">
+          <Link
+            href={withNext("/sign-in", next)}
+            className="font-semibold text-primary"
+          >
             Sign in
           </Link>
         </p>
@@ -266,13 +475,21 @@ function RegistrationSuccess({
       </span>
       <div className="space-y-1">
         <h2 className="text-title-sm text-ink">
-          {firstName ? `Welcome to Staynex, ${firstName}!` : "Welcome to Staynex!"}
+          {firstName
+            ? `Welcome to Staynex, ${firstName}!`
+            : "Welcome to Staynex!"}
         </h2>
         <p className="text-muted-foreground">
-          Your account is ready{user.email ? ` for ${user.email}` : ""}. You&apos;re now signed in.
+          Your account is ready{user.email ? ` for ${user.email}` : ""}.
+          You&apos;re now signed in.
         </p>
       </div>
-      <Button type="button" onClick={onContinue} disabled={busy} className="w-full">
+      <Button
+        type="button"
+        onClick={onContinue}
+        disabled={busy}
+        className="w-full"
+      >
         {busy ? "Please wait…" : continueLabel}
       </Button>
     </div>

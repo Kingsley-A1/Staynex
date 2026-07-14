@@ -12,7 +12,10 @@ import type {
   OwnerPayoutMethodView,
   OwnerProfileView,
   OwnerSettingsView,
+  PayoutBankDirectoryView,
+  ResolvedPayoutAccount,
 } from "../../../types";
+import { BankDirectoryService } from "../payments/bank-directory.service";
 import type {
   CreateLocationInput,
   OwnerProfileInput,
@@ -25,10 +28,16 @@ import {
   toOwnerProfileView,
   toPayoutMethodView,
 } from "./mappers";
-import { encryptAccountNumber, last4, payoutEncryptionAvailable } from "./payout-crypto";
+import {
+  encryptAccountNumber,
+  last4,
+  payoutEncryptionAvailable,
+} from "./payout-crypto";
 
 @Injectable()
 export class OwnerService {
+  constructor(private readonly bankDirectory: BankDirectoryService) {}
+
   // --- Settings / onboarding snapshots -------------------------------------
 
   async getSettings(user: AuthUser): Promise<OwnerSettingsView> {
@@ -37,16 +46,22 @@ export class OwnerService {
       this.listLocations(user.id),
       this.getPayoutMethod(user.id),
     ]);
-    return { profile: toOwnerProfileView(user.name, profile), locations, payoutMethod };
+    return {
+      profile: toOwnerProfileView(user.name, profile),
+      locations,
+      payoutMethod,
+    };
   }
 
   async getOnboardingState(user: AuthUser): Promise<OwnerOnboardingState> {
-    const [profile, locations, payoutMethod, propertyCount] = await Promise.all([
-      this.profileRow(user.id),
-      this.listLocations(user.id),
-      this.getPayoutMethod(user.id),
-      prisma.property.count({ where: { ownerId: user.id } }),
-    ]);
+    const [profile, locations, payoutMethod, propertyCount] = await Promise.all(
+      [
+        this.profileRow(user.id),
+        this.listLocations(user.id),
+        this.getPayoutMethod(user.id),
+        prisma.property.count({ where: { ownerId: user.id } }),
+      ],
+    );
 
     const hasBusinessName = Boolean(profile?.businessName);
     const hasPhone = Boolean(profile?.phone);
@@ -65,7 +80,8 @@ export class OwnerService {
         hasPhone,
         hasLocation,
         hasPayoutOrSkipped,
-        complete: hasBusinessName && hasPhone && hasLocation && hasPayoutOrSkipped,
+        complete:
+          hasBusinessName && hasPhone && hasLocation && hasPayoutOrSkipped,
       },
       propertyCount,
     };
@@ -73,11 +89,16 @@ export class OwnerService {
 
   // --- Owner/business profile ----------------------------------------------
 
-  async updateProfile(user: AuthUser, input: OwnerProfileInput): Promise<OwnerProfileView> {
+  async updateProfile(
+    user: AuthUser,
+    input: OwnerProfileInput,
+  ): Promise<OwnerProfileView> {
     const profile = await prisma.ownerProfile.upsert({
       where: { userId: user.id },
       update: {
-        ...(input.businessName !== undefined ? { businessName: input.businessName } : {}),
+        ...(input.businessName !== undefined
+          ? { businessName: input.businessName }
+          : {}),
         ...(input.phone !== undefined ? { phone: input.phone } : {}),
       },
       create: {
@@ -110,15 +131,23 @@ export class OwnerService {
     return rows.map(toOwnerLocationView);
   }
 
-  async createLocation(ownerId: string, input: CreateLocationInput): Promise<OwnerLocationView> {
+  async createLocation(
+    ownerId: string,
+    input: CreateLocationInput,
+  ): Promise<OwnerLocationView> {
     await this.assertCityAndArea(input.cityId, input.areaId ?? null);
 
-    const existingCount = await prisma.ownerLocation.count({ where: { ownerId } });
+    const existingCount = await prisma.ownerLocation.count({
+      where: { ownerId },
+    });
     const makePrimary = input.isPrimary === true || existingCount === 0;
 
     const created = await prisma.$transaction(async (tx) => {
       if (makePrimary) {
-        await tx.ownerLocation.updateMany({ where: { ownerId }, data: { isPrimary: false } });
+        await tx.ownerLocation.updateMany({
+          where: { ownerId },
+          data: { isPrimary: false },
+        });
       }
       return tx.ownerLocation.create({
         data: {
@@ -154,7 +183,10 @@ export class OwnerService {
     const updated = await prisma.$transaction(async (tx) => {
       // Promote to primary (and demote the rest) when requested.
       if (input.isPrimary === true && !existing.isPrimary) {
-        await tx.ownerLocation.updateMany({ where: { ownerId }, data: { isPrimary: false } });
+        await tx.ownerLocation.updateMany({
+          where: { ownerId },
+          data: { isPrimary: false },
+        });
       }
       return tx.ownerLocation.update({
         where: { id: locationId },
@@ -162,8 +194,12 @@ export class OwnerService {
           ...(input.cityId !== undefined ? { cityId: input.cityId } : {}),
           ...(input.areaId !== undefined ? { areaId: input.areaId } : {}),
           ...(input.label !== undefined ? { label: input.label } : {}),
-          ...(input.addressLine !== undefined ? { addressLine: input.addressLine } : {}),
-          ...(input.isPrimary !== undefined ? { isPrimary: input.isPrimary } : {}),
+          ...(input.addressLine !== undefined
+            ? { addressLine: input.addressLine }
+            : {}),
+          ...(input.isPrimary !== undefined
+            ? { isPrimary: input.isPrimary }
+            : {}),
         },
         include: ownerLocationInclude,
       });
@@ -198,7 +234,9 @@ export class OwnerService {
     ]);
 
     if (profile?.onboardingCompletedAt && locationCount <= 1) {
-      throw new ConflictException("You must keep at least one location after completing onboarding.");
+      throw new ConflictException(
+        "You must keep at least one location after completing onboarding.",
+      );
     }
 
     const propertyCount = location._count.properties;
@@ -210,13 +248,16 @@ export class OwnerService {
         );
       }
       if (replacementLocationId === locationId) {
-        throw new BadRequestException("Replacement location must be a different location.");
+        throw new BadRequestException(
+          "Replacement location must be a different location.",
+        );
       }
       replacement = await prisma.ownerLocation.findFirst({
         where: { id: replacementLocationId, ownerId },
         select: { id: true },
       });
-      if (!replacement) throw new BadRequestException("Replacement location not found.");
+      if (!replacement)
+        throw new BadRequestException("Replacement location not found.");
     }
 
     await prisma.$transaction(async (tx) => {
@@ -233,7 +274,11 @@ export class OwnerService {
           orderBy: { createdAt: "asc" },
           select: { id: true },
         });
-        if (next) await tx.ownerLocation.update({ where: { id: next.id }, data: { isPrimary: true } });
+        if (next)
+          await tx.ownerLocation.update({
+            where: { id: next.id },
+            data: { isPrimary: true },
+          });
       }
     });
 
@@ -242,15 +287,35 @@ export class OwnerService {
 
   // --- Payout method --------------------------------------------------------
 
-  async getPayoutMethod(ownerId: string): Promise<OwnerPayoutMethodView | null> {
-    const method = await prisma.ownerPayoutMethod.findUnique({ where: { ownerId } });
+  async getPayoutMethod(
+    ownerId: string,
+  ): Promise<OwnerPayoutMethodView | null> {
+    const method = await prisma.ownerPayoutMethod.findUnique({
+      where: { ownerId },
+    });
     return method ? toPayoutMethodView(method) : null;
+  }
+
+  listPayoutBanks(): Promise<PayoutBankDirectoryView> {
+    return this.bankDirectory.list();
+  }
+
+  verifyPayoutAccount(
+    input: PayoutMethodInput,
+  ): Promise<ResolvedPayoutAccount> {
+    return this.bankDirectory.resolve(input.bankCode, input.accountNumber);
   }
 
   async upsertPayoutMethod(
     ownerId: string,
     input: PayoutMethodInput,
   ): Promise<OwnerPayoutMethodView> {
+    // Provider first: activate nothing until Paystack supplies the canonical
+    // bank and account-holder names for this exact bank-code/number pair.
+    const verified = await this.bankDirectory.resolve(
+      input.bankCode,
+      input.accountNumber,
+    );
     const accountNumberLast4 = last4(input.accountNumber);
     // Encrypt the full number only when a key is configured; otherwise keep masked.
     const accountNumberEnc = payoutEncryptionAvailable()
@@ -260,20 +325,22 @@ export class OwnerService {
     const method = await prisma.ownerPayoutMethod.upsert({
       where: { ownerId },
       update: {
-        bankName: input.bankName,
-        accountName: input.accountName,
+        bankCode: verified.bankCode,
+        bankName: verified.bankName,
+        accountName: verified.accountName,
         accountNumberLast4,
         accountNumberEnc,
-        provider: input.provider ?? null,
+        provider: verified.provider,
         status: "ACTIVE",
       },
       create: {
         ownerId,
-        bankName: input.bankName,
-        accountName: input.accountName,
+        bankCode: verified.bankCode,
+        bankName: verified.bankName,
+        accountName: verified.accountName,
         accountNumberLast4,
         accountNumberEnc,
-        provider: input.provider ?? null,
+        provider: verified.provider,
         status: "ACTIVE",
       },
     });
@@ -282,11 +349,17 @@ export class OwnerService {
 
   // --- Onboarding completion ------------------------------------------------
 
-  async completeOnboarding(user: AuthUser, skipPayout: boolean): Promise<OwnerOnboardingState> {
+  async completeOnboarding(
+    user: AuthUser,
+    skipPayout: boolean,
+  ): Promise<OwnerOnboardingState> {
     const [profile, locationCount, payoutMethod] = await Promise.all([
       this.profileRow(user.id),
       prisma.ownerLocation.count({ where: { ownerId: user.id } }),
-      prisma.ownerPayoutMethod.findUnique({ where: { ownerId: user.id }, select: { id: true } }),
+      prisma.ownerPayoutMethod.findUnique({
+        where: { ownerId: user.id },
+        select: { id: true },
+      }),
     ]);
 
     const missing: string[] = [];
@@ -294,7 +367,9 @@ export class OwnerService {
     if (!profile?.phone) missing.push("contact phone");
     if (locationCount === 0) missing.push("at least one location");
     if (missing.length > 0) {
-      throw new BadRequestException(`Add your ${missing.join(", ")} before finishing onboarding.`);
+      throw new BadRequestException(
+        `Add your ${missing.join(", ")} before finishing onboarding.`,
+      );
     }
     if (!payoutMethod && !skipPayout) {
       throw new BadRequestException(
@@ -318,15 +393,24 @@ export class OwnerService {
     });
   }
 
-  private async assertCityAndArea(cityId: string, areaId: string | null): Promise<void> {
-    const city = await prisma.city.findUnique({ where: { id: cityId }, select: { id: true } });
+  private async assertCityAndArea(
+    cityId: string,
+    areaId: string | null,
+  ): Promise<void> {
+    const city = await prisma.city.findUnique({
+      where: { id: cityId },
+      select: { id: true },
+    });
     if (!city) throw new BadRequestException("Select a valid city.");
     if (areaId) {
       const area = await prisma.area.findFirst({
         where: { id: areaId, cityId },
         select: { id: true },
       });
-      if (!area) throw new BadRequestException("Select an area that belongs to the chosen city.");
+      if (!area)
+        throw new BadRequestException(
+          "Select an area that belongs to the chosen city.",
+        );
     }
   }
 }

@@ -1,0 +1,58 @@
+// Serves the FCM background service worker at the origin root
+// (/firebase-messaging-sw.js) — the scope FCM requires. The worker carries the
+// PUBLIC Firebase config (non-secret NEXT_PUBLIC_* values) and shows background
+// notifications + routes clicks to the notification's deep link.
+
+export const dynamic = "force-static";
+
+export function GET(): Response {
+  const config = {
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "",
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "",
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "",
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "",
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "",
+  };
+
+  const body = `/* Staynex FCM background service worker (generated). */
+importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js");
+
+firebase.initializeApp(${JSON.stringify(config)});
+
+const messaging = firebase.messaging();
+
+messaging.onBackgroundMessage(function (payload) {
+  const title = (payload.notification && payload.notification.title) || "Staynex";
+  const body = (payload.notification && payload.notification.body) || "";
+  const link = (payload.data && payload.data.link) || "/";
+  self.registration.showNotification(title, {
+    body: body,
+    icon: "/icon.png",
+    badge: "/icon.png",
+    data: { link: link },
+  });
+});
+
+self.addEventListener("notificationclick", function (event) {
+  event.notification.close();
+  const link = (event.notification.data && event.notification.data.link) || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (clients) {
+      for (const client of clients) {
+        if (client.url.indexOf(link) !== -1 && "focus" in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(link);
+    })
+  );
+});
+`;
+
+  return new Response(body, {
+    headers: {
+      "Content-Type": "application/javascript; charset=utf-8",
+      "Cache-Control": "public, max-age=0, must-revalidate",
+      "Service-Worker-Allowed": "/",
+    },
+  });
+}

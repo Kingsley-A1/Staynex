@@ -337,6 +337,19 @@
   [aria-disabled="true"] { cursor: not-allowed; }
 }
 
+/* Staynex AI dock behaves like Chrome's companion panel: the workspace remains
+   interactive and keeps its own navigation instead of being covered by a modal. */
+#staynex-app-shell {
+  min-height: 100dvh;
+  transition: margin-right var(--duration-moderate) var(--ease-standard);
+}
+
+@media (min-width: 1024px) {
+  body.staynex-ai-docked #staynex-app-shell {
+    margin-right: var(--staynex-ai-dock-width, 420px);
+  }
+}
+
 /* =============================================================================
    COMPONENT CLASSES — composite roles & helpers (framework-agnostic shortcuts)
    Use alongside utilities; keeps type/elevation choices consistent.

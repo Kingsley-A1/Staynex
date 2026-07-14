@@ -1,13 +1,31 @@
 import { z } from "zod";
 
-const email = z.string().trim().toLowerCase().email("A valid email is required");
-const password = z.string().min(8, "Password must be at least 8 characters").max(200);
+const email = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email("A valid email is required");
+const password = z
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .max(200);
 const name = z.string().trim().min(1).max(120).optional();
+const phone = z
+  .string()
+  .trim()
+  .min(7, "Phone number is required")
+  .max(40)
+  .regex(/^\+?[0-9][0-9\s().-]*$/, "Enter a valid phone number")
+  .refine(
+    (value) => value.replace(/\D/g, "").length >= 7,
+    "Enter a valid phone number",
+  );
 
 export const registerSchema = z.object({
   email,
   password,
   name,
+  phone,
   // Public self-service registration is GUEST or OWNER only. Admins use the
   // access-code flow. `roleIntent` is accepted as an alias for `role`.
   role: z.enum(["GUEST", "OWNER"]).optional(),
@@ -16,11 +34,24 @@ export const registerSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 // Owner-specific registration. Same backend auth; owner intent is locked on.
-export const ownerRegisterSchema = z.object({ email, password, name });
+export const ownerRegisterSchema = z.object({ email, password, name, phone });
 export type OwnerRegisterInput = z.infer<typeof ownerRegisterSchema>;
 
 export const loginSchema = z.object({ email, password });
 export type LoginInput = z.infer<typeof loginSchema>;
+
+export const completeMfaSchema = z.object({
+  challengeId: z
+    .string()
+    .trim()
+    .min(1, "Verification challenge is required")
+    .max(200),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "Verification code must be 6 digits"),
+});
+export type CompleteMfaInput = z.infer<typeof completeMfaSchema>;
 
 export const googleSchema = z.object({
   idToken: z.string().min(1, "Google credential is required"),
@@ -34,7 +65,8 @@ export const forgotPasswordSchema = z.object({ email });
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 
 export const resetPasswordSchema = z.object({
-  token: z.string().min(1, "Reset token is required"),
+  email,
+  code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code from your email"),
   password,
 });
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
@@ -42,18 +74,28 @@ export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export const updateProfileSchema = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
-    email: z.string().trim().toLowerCase().email("A valid email is required").optional(),
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email("A valid email is required")
+      .optional(),
     phone: z.string().trim().max(40).nullable().optional(),
   })
-  .refine((v) => v.name !== undefined || v.email !== undefined || v.phone !== undefined, {
-    message: "Nothing to update",
-  });
+  .refine(
+    (v) =>
+      v.name !== undefined || v.email !== undefined || v.phone !== undefined,
+    {
+      message: "Nothing to update",
+    },
+  );
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
 export const adminRegisterSchema = z.object({
   email,
   password,
   name,
+  phone,
   accessCode: z.string().regex(/^\d{6}$/, "Access code must be 6 digits"),
 });
 export type AdminRegisterInput = z.infer<typeof adminRegisterSchema>;

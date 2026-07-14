@@ -6,6 +6,9 @@
     "noEmit": false,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
+    // JSX is used only by the react-pdf voucher template (*.tsx); .ts files are
+    // unaffected. Automatic runtime pulls react/jsx-runtime, so no React import.
+    "jsx": "react-jsx",
     "outDir": "dist"
   },
   "include": ["src", "config", "db", "types"],

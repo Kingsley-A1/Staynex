@@ -5,10 +5,9 @@ import { PropertyCard, PropertyCardSkeletonGrid } from "@/ui";
 import { SearchPanel } from "@/features/booking/search-panel";
 import { CITIES } from "@/features/properties/fixtures";
 import { searchProperties } from "@/lib/server-catalog";
-import { getServerUser } from "@/lib/server-auth";
 import type { PropertySummary } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Your stays — Staynex",
@@ -16,16 +15,13 @@ export const metadata: Metadata = {
 };
 
 export default async function StaysDashboardPage() {
-  const user = await getServerUser();
-  const firstName = user?.name?.trim().split(/\s+/)[0];
-
   return (
     <main className="layout-container space-y-12 py-8 sm:py-10">
       {/* Greeting + quick search render instantly */}
       <section className="space-y-5">
         <header className="space-y-1">
           <h1 className="text-display-sm text-ink">
-            {firstName ? `Welcome back, ${firstName}` : "Find your next stay"}
+            Find your next stay
           </h1>
           <p className="text-body-lg text-muted-foreground">
             Verified stays across our launch cities — pick up where you left off.

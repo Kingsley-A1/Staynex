@@ -84,6 +84,7 @@ export function toPaymentRow(p: PaymentRowData): AdminPaymentRow {
     reference: p.reference,
     bookingId: p.bookingId,
     propertyName: p.booking.roomUnit.roomType.property.name,
+    guestEmail: p.booking.guestEmail,
     amountKobo: grossAmountKobo, // COMPAT: gross
     grossAmountKobo,
     platformFeeKobo: p.platformFeeKobo,
@@ -108,7 +109,17 @@ export const payoutRowInclude = Prisma.validator<Prisma.PayoutInclude>()({
     },
   },
   property: { select: { name: true, city: { select: { name: true } } } },
-  owner: { select: { name: true, email: true } },
+  owner: {
+    select: {
+      name: true,
+      email: true,
+      // Masked destination so an admin settling manually can see where the
+      // money goes. Full account numbers stay encrypted; never on this row.
+      payoutMethod: {
+        select: { bankName: true, accountName: true, accountNumberLast4: true },
+      },
+    },
+  },
 });
 export type PayoutRowData = Prisma.PayoutGetPayload<{ include: typeof payoutRowInclude }>;
 
@@ -126,9 +137,14 @@ export function toPayoutRow(p: PayoutRowData): AdminPayoutRow {
     ownerPayoutKobo: p.amount,
     currency: p.currency,
     status: p.status as PayoutStatusValue,
+    bankName: p.owner.payoutMethod?.bankName ?? null,
+    accountName: p.owner.payoutMethod?.accountName ?? null,
+    accountNumberLast4: p.owner.payoutMethod?.accountNumberLast4 ?? null,
+    note: p.note,
     eligibleAt: p.eligibleAt.toISOString(),
     approvedAt: p.approvedAt ? p.approvedAt.toISOString() : null,
     paidAt: p.paidAt ? p.paidAt.toISOString() : null,
+    failedAt: p.failedAt ? p.failedAt.toISOString() : null,
     createdAt: p.createdAt.toISOString(),
   };
 }

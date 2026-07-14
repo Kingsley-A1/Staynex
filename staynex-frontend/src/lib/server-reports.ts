@@ -1,14 +1,16 @@
-// Server-only fetch helpers for owner/admin operational dashboards. These read
+// Server-only fetch helpers for host/admin operational dashboards. These read
 // real platform state (bookings, payments, audit, AI logs) and NEVER fall back
 // to fixtures — operational truth must not be faked. Auth is session-only: the
 // incoming request's cookies are forwarded to the backend, which resolves the
-// owner/admin from the session. On API failure they return
+// host/admin from the session. On API failure they return
 // `{ data: null, offline: true }` so pages render an honest "couldn't load" state.
 
 import { cookies } from "next/headers";
 import { API_BASE } from "@/lib/api-base";
 import type {
-  AdminBookingsView,
+  AdminBookingsPage,
+  AdminPaymentExceptionRow,
+  AdminPaymentsPage,
   AdminPayoutsView,
   AdminTestimonialRow,
   AiLogRow,
@@ -16,8 +18,10 @@ import type {
   AuditLogRow,
   BookingRow,
   OwnerBookingsView,
+  PropertyDetail,
   PropertySummary,
 } from "@/lib/types";
+import { adminListQueryString, type AdminListQuery } from "@/lib/api";
 
 export interface Loaded<T> {
   data: T | null;
@@ -44,13 +48,22 @@ async function load<T>(path: string): Promise<Loaded<T>> {
   }
 }
 
-export const getOwnerBookings = () => load<OwnerBookingsView>("/owner/bookings");
+export const getHostBookings = () => load<OwnerBookingsView>("/host/bookings");
 
-export const getOwnerBooking = (id: string) => load<BookingRow>(`/owner/bookings/${id}`);
+export const getHostBooking = (id: string) => load<BookingRow>(`/host/bookings/${id}`);
 
 export const getAdminApprovals = () => load<PropertySummary[]>("/admin/approvals");
 
-export const getAdminBookings = () => load<AdminBookingsView>("/admin/bookings");
+export const getAdminApproval = (id: string) => load<PropertyDetail>(`/admin/approvals/${id}`);
+
+export const getAdminBookings = (query?: AdminListQuery) =>
+  load<AdminBookingsPage>(`/admin/bookings${adminListQueryString(query)}`);
+
+export const getAdminPayments = (query?: AdminListQuery) =>
+  load<AdminPaymentsPage>(`/admin/payments${adminListQueryString(query)}`);
+
+export const getAdminPaymentExceptions = () =>
+  load<AdminPaymentExceptionRow[]>("/admin/payments/exceptions");
 
 export const getAdminPayouts = () => load<AdminPayoutsView>("/admin/payouts");
 

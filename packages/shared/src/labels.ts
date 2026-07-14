@@ -23,6 +23,7 @@ export const PAYMENT_STATE_LABELS: Record<PaymentState, string> = {
   PENDING: "Pending",
   SUCCESS: "Paid",
   FAILED: "Failed",
+  REQUIRES_REFUND: "Refund required",
   REFUNDED: "Refunded",
 };
 
@@ -49,5 +50,6 @@ export const PAYMENT_STATE_TONE: Record<PaymentState, StatusTone> = {
   PENDING: "warning",
   SUCCESS: "success",
   FAILED: "error",
+  REQUIRES_REFUND: "error",
   REFUNDED: "neutral",
 };

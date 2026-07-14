@@ -16,9 +16,10 @@ import {
 import { decryptAccountNumber } from "../owner/payout-crypto";
 
 /**
- * Super Admin user inspection. Listing + non-sensitive detail is available to any
- * admin; payout method details are restricted to ADMIN_MANAGER, and revealing the
- * full account number is ADMIN_MANAGER-only and always audited (skill.md §9).
+ * Super Admin user inspection. Listing + non-sensitive detail is available to
+ * any admin; user phone and payout details are restricted to ADMIN_MANAGER.
+ * Revealing the full account number is ADMIN_MANAGER-only and always audited
+ * (skill.md §9).
  */
 @Injectable()
 export class AdminUsersService {
@@ -89,7 +90,8 @@ export class AdminUsersService {
       id: user.id,
       name: user.name,
       email: user.email,
-      phone: user.phone,
+      phone: isManager ? user.phone : null,
+      phoneRestricted: !isManager && user.phone !== null,
       role: user.role,
       capabilities: deriveCapabilities(user.role, user.capabilities),
       createdAt: user.createdAt.toISOString(),
