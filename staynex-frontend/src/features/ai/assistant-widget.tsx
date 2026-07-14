@@ -598,8 +598,8 @@ export function AssistantWidget() {
         ? "md:inset-y-0 md:right-0 md:h-dvh md:w-[520px] md:rounded-none md:border-l md:border-border"
         : "md:inset-y-0 md:right-0 md:h-dvh md:w-[420px] md:rounded-none md:border-l md:border-border"
       : expanded
-        ? "md:h-[min(800px,calc(100dvh-32px))] md:w-[min(760px,calc(100vw-32px))] md:rounded-2xl md:border md:border-border"
-        : "md:h-[min(600px,calc(100dvh-32px))] md:w-[min(440px,calc(100vw-32px))] md:rounded-2xl md:border md:border-border";
+        ? "md:h-[min(800px,calc(100dvh-32px))] md:w-[min(760px,calc(100vw-32px))] md:rounded-lg md:border md:border-border"
+        : "md:h-[min(600px,calc(100dvh-32px))] md:w-[min(440px,calc(100vw-32px))] md:rounded-lg md:border md:border-border";
 
   return (
     <>
@@ -666,7 +666,7 @@ export function AssistantWidget() {
                   aria-label="Open chat history"
                   aria-expanded={historyOpen}
                   aria-controls="staynex-ai-history"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <MdHistory className="size-[18px]" aria-hidden />
                   Chats
@@ -734,7 +734,7 @@ export function AssistantWidget() {
                           key={s}
                           type="button"
                           onClick={() => void sendMessage(s)}
-                          className="inline-flex min-h-10 items-center gap-2 rounded-full bg-secondary px-3.5 py-2 text-left text-sm text-ink transition-colors hover:bg-primary-subtle hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="inline-flex min-h-10 items-center gap-2 rounded-md bg-secondary px-3.5 py-2 text-left text-sm text-ink transition-colors hover:bg-primary-subtle hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           <IconAi className="size-4 shrink-0 text-primary" />
                           {s}
@@ -761,7 +761,7 @@ export function AssistantWidget() {
                         }
                       >
                         <div
-                          className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                          className={`max-w-[88%] rounded-lg px-3.5 py-2.5 text-sm leading-relaxed ${
                             t.role === "USER"
                               ? "whitespace-pre-wrap rounded-br-md bg-primary text-primary-foreground"
                               : t.note === "refused"
@@ -811,7 +811,7 @@ export function AssistantWidget() {
                     e.preventDefault();
                     void sendMessage(input);
                   }}
-                  className="mx-auto max-w-2xl rounded-2xl border border-border bg-background/95 shadow-sm transition-all focus-within:border-primary/35 focus-within:shadow-md"
+                  className="mx-auto max-w-2xl rounded-lg border border-border bg-background/95 shadow-sm transition-all focus-within:border-primary/35 focus-within:shadow-md"
                 >
                   <div className="flex items-end gap-2 p-2.5">
                     <textarea
@@ -862,7 +862,7 @@ export function AssistantWidget() {
                     id="staynex-ai-history"
                     role="dialog"
                     aria-label="Chat history"
-                    className="absolute inset-y-0 left-0 z-20 flex w-[88%] max-w-[340px] animate-slide-in-left flex-col border-r border-border bg-surface-raised shadow-xl md:rounded-r-2xl"
+                    className="absolute inset-y-0 left-0 z-20 flex w-[88%] max-w-[340px] animate-slide-in-left flex-col border-r border-border bg-surface-raised shadow-xl md:rounded-r-lg"
                   >
                     <div className="flex items-center justify-between border-b border-border px-4 py-3">
                       <p className="font-semibold text-ink">Chats</p>
@@ -877,7 +877,7 @@ export function AssistantWidget() {
                       <button
                         type="button"
                         onClick={newChat}
-                        className="mb-3 flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:border-primary/30 hover:bg-secondary"
+                        className="mb-3 flex w-full items-center gap-2 rounded-md border border-border px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:border-primary/30 hover:bg-secondary"
                       >
                         <MdOutlineAddComment className="size-[18px]" /> New chat
                       </button>
@@ -1077,7 +1077,7 @@ function ThinkingIndicator() {
       <span className="sr-only">Staynex AI is thinking</span>
       <p
         aria-hidden
-        className="flex items-center gap-2 rounded-2xl rounded-bl-sm bg-secondary px-3 py-2 text-sm text-muted-foreground"
+        className="flex items-center gap-2 rounded-lg rounded-bl-sm bg-secondary px-3 py-2 text-sm text-muted-foreground"
       >
         <span key={phrase} className="animate-fade-in">
           {THINKING_PHRASES[phrase]}
