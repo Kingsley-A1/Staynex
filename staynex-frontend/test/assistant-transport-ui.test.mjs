@@ -25,6 +25,15 @@ test("SSE parsing survives CRLF proxy framing and heartbeat comments", () => {
   assert.equal(parseAssistantEvent(blocks[2]).conversationId, "c1");
 });
 
+test("final SSE metadata carries persisted ids and verified property cards", () => {
+  const event = parseAssistantEvent(
+    'data: {"type":"done","conversationId":"c1","userMessageId":"u1","messageId":"a1","properties":[{"id":"p1","name":"Marina Crest","slug":"marina-crest","cityName":"Calabar","fromPriceKobo":4500000}]}',
+  );
+  assert.equal(event.userMessageId, "u1");
+  assert.equal(event.messageId, "a1");
+  assert.equal(event.properties[0].fromPriceKobo, 4500000);
+});
+
 test("application and provider throttles have truthful, different copy", () => {
   const app = recoveryCopy("application_throttled");
   const provider = recoveryCopy("provider_rate_limited");
@@ -83,4 +92,30 @@ test("floating panel stays fully on-screen when expanded", () => {
 
   assert.equal(position.x + expanded.width, 1349);
   assert.equal(position.y + expanded.height, 752);
+});
+
+test("message actions are server-backed and the universal launcher stays compact", async () => {
+  const [widget, api, propertyCard] = await Promise.all([
+    readFile(
+      new URL("../src/features/ai/assistant-widget.tsx", import.meta.url),
+      "utf8",
+    ),
+    readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/ui/property-card.tsx", import.meta.url), "utf8"),
+  ]);
+
+  const launcher = widget.match(
+    /<button[\s\S]*?aria-label="Open Staynex AI"[\s\S]*?<\/button>/,
+  )?.[0];
+  assert.ok(launcher);
+  assert.doesNotMatch(launcher, /<IconAi/);
+  assert.match(widget, /"Helpful response"/);
+  assert.match(widget, /"Unhelpful response"/);
+  assert.match(widget, /label="Regenerate response"/);
+  assert.match(widget, /label="Edit message"/);
+  assert.match(widget, /variant="assistant"/);
+  assert.match(api, /method: "PUT"/);
+  assert.match(api, /\/feedback`/);
+  assert.match(propertyCard, /variant\?: "default" \| "assistant"/);
+  assert.match(propertyCard, /formatNairaFromKobo\(property\.fromPriceKobo\)/);
 });
