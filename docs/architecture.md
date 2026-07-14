@@ -89,9 +89,9 @@ last-turn edit/regeneration policy, identity-aware prompt context, grounding,
 and Gemini transport. The frontend owns streaming presentation and renders
 structured public property summaries through the shared `PropertyCard` UI.
 
-- Thumbs-up/down feedback is stored on the assistant message. A down rating on
-  the latest response adds a correction signal to the next generation, but it
-  never weakens grounding or deterministic safety gates.
+- Thumbs-up/down feedback is stored on the assistant message. When the most
+  recently submitted rating is negative, later generations receive a correction
+  signal, but it never weakens grounding or deterministic safety gates.
 - Retry and edit may replace only the latest completed turn. The prior assistant
   message is marked superseded atomically when its replacement is persisted, so
   provider failures do not erase history or create a second visible response.

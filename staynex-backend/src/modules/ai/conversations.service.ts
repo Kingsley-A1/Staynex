@@ -304,7 +304,9 @@ export class ConversationsService {
         role: AIMessageRole.AGENT,
         supersededAt: null,
       },
-      data: { feedback, feedbackAt: feedback ? new Date() : null },
+      // Keep the action timestamp when a rating is cleared so that clearing a
+      // newer rating does not accidentally reactivate an older correction.
+      data: { feedback, feedbackAt: new Date() },
     });
     if (updated.count !== 1) {
       throw new NotFoundException("Assistant message not found");
@@ -312,7 +314,7 @@ export class ConversationsService {
     return { messageId, feedback };
   }
 
-  /** The latest response's rating affects only the immediately following turn. */
+  /** The most recently submitted visible-message rating guides later turns. */
   async latestAgentFeedback(
     conversationId: string,
   ): Promise<AIMessageFeedback | null> {
@@ -321,8 +323,9 @@ export class ConversationsService {
         conversationId,
         role: AIMessageRole.AGENT,
         supersededAt: null,
+        feedbackAt: { not: null },
       },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      orderBy: [{ feedbackAt: "desc" }, { id: "desc" }],
       select: { feedback: true },
     });
     return latest?.feedback ?? null;

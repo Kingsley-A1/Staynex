@@ -367,12 +367,12 @@ nightly prices are retrieved from approved catalog rows for each turn. Property
 cards are display guidance only: exact date availability and booking/payment
 truth remain in their authoritative backend flows.
 
-Thumbs-down on the latest response adds a correction instruction to the next
-answer so the model re-checks verified facts and changes approach. It does not
-override the deterministic safety gate, grounding rules, or payment/booking
-authority. Retry/edit keep the prior response visible until a replacement is
-persisted, then mark it superseded in the same transaction as the new message
-and AI action log.
+When the most recently submitted message rating is thumbs-down, later answers
+receive a correction instruction so the model re-checks verified facts and
+changes approach. It does not override the deterministic safety gate, grounding
+rules, or payment/booking authority. Retry/edit keep the prior response visible
+until a replacement is persisted, then mark it superseded in the same
+transaction as the new message and AI action log.
 
 ### 9.13 Health — `/health`
 

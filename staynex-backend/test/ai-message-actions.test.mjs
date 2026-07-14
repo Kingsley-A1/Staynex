@@ -66,6 +66,8 @@ test("feedback and replacement persistence remain owner-scoped and atomic", asyn
   assert.match(conversations, /return prisma\.\$transaction\(async \(tx\)/);
   assert.match(conversations, /supersededAt: now/);
   assert.match(conversations, /tx\.aIActionLog\.create/);
+  assert.match(conversations, /orderBy: \[\{ feedbackAt: "desc" \}/);
+  assert.match(conversations, /data: \{ feedback, feedbackAt: new Date\(\) \}/);
   assert.match(schema, /enum AIMessageFeedback[\s\S]*UP[\s\S]*DOWN/);
   assert.match(schema, /propertyCards\s+Json\?/);
   assert.match(migration, /ADD COLUMN "propertyCards" JSONB/);

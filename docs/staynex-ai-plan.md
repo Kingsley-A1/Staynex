@@ -208,9 +208,9 @@ A professional Staynex AI is:
 ### Phase 6 — Advanced (post-MVP, optional)
 
 - ✅ **Server-backed message controls and rich grounding** — SHIPPED:
-  - Assistant messages persist helpful/unhelpful feedback. A down rating on the
-    latest response adds a correction signal to the next answer without
-    weakening deterministic guardrails or verified grounding.
+  - Assistant messages persist helpful/unhelpful feedback. When the most
+    recently submitted rating is negative, later answers receive a correction
+    signal without weakening deterministic guardrails or verified grounding.
   - Regenerate and edit operate only on the latest completed turn. The prior
     response remains visible until its replacement is persisted, then becomes
     superseded atomically with the replacement message and action log.
