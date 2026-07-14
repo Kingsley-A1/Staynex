@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { prisma } from "../../../db";
@@ -22,31 +23,40 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
  */
 @Injectable()
 export class BankDirectoryService {
+  private readonly logger = new Logger(BankDirectoryService.name);
+  private refreshInFlight: Promise<PayoutBankDirectoryView> | null = null;
+
   constructor(private readonly paystack: PaystackService) {}
 
   async list(): Promise<PayoutBankDirectoryView> {
-    const cached = await this.cachedBanks();
-    const refreshedAt = cached[0]?.lastSyncedAt ?? null;
+    let cached: Awaited<ReturnType<BankDirectoryService["cachedBanks"]>> = [];
+    try {
+      cached = await this.cachedBanks();
+    } catch (error) {
+      this.logger.warn(
+        `Bank directory cache read failed; trying Paystack: ${this.errorMessage(error)}`,
+      );
+    }
+
+    // Every row in a successful sync has the same timestamp. Taking the oldest
+    // makes a partially populated legacy cache stale instead of accidentally
+    // treating it as a complete, fresh provider snapshot.
+    const refreshedAt = cached.reduce<Date | null>(
+      (oldest, row) =>
+        !oldest || row.lastSyncedAt < oldest ? row.lastSyncedAt : oldest,
+      null,
+    );
     if (refreshedAt && Date.now() - refreshedAt.getTime() < CACHE_TTL_MS) {
       return this.toView(cached, "cache", refreshedAt);
     }
 
     try {
-      const providerBanks = await this.paystack.listBanks();
-      if (providerBanks.length === 0) {
-        throw new ServiceUnavailableException(
-          "The payment provider returned no banks",
-        );
-      }
-      const syncedAt = new Date();
-      await this.storeProviderBanks(providerBanks, syncedAt);
-      return {
-        banks: providerBanks.map((bank) => this.toOption(bank)),
-        source: "paystack",
-        refreshedAt: syncedAt.toISOString(),
-      };
+      return await this.refreshProviderBanks();
     } catch (error) {
       if (cached.length > 0 && refreshedAt) {
+        this.logger.warn(
+          `Paystack bank directory refresh failed; serving stale cache: ${this.errorMessage(error)}`,
+        );
         return this.toView(cached, "cache", refreshedAt);
       }
       throw error;
@@ -90,45 +100,69 @@ export class BankDirectoryService {
     banks: PaystackBank[],
     syncedAt: Date,
   ): Promise<void> {
-    const activeCodes = banks.map((bank) => bank.code);
-    await prisma.$transaction(async (tx) => {
-      await tx.bankDirectoryEntry.updateMany({
-        where: {
+    // This table is an unreferenced cache snapshot, not financial history.
+    // Replacing it atomically avoids hundreds of row-by-row upserts while still
+    // guaranteeing readers see either the previous complete list or the new one.
+    await prisma.$transaction([
+      prisma.bankDirectoryEntry.deleteMany({
+        where: { provider: PROVIDER, country: COUNTRY },
+      }),
+      prisma.bankDirectoryEntry.createMany({
+        data: banks.map((bank) => ({
           provider: PROVIDER,
           country: COUNTRY,
-          code: { notIn: activeCodes },
-        },
-        data: { active: false, lastSyncedAt: syncedAt },
-      });
-      for (const bank of banks) {
-        await tx.bankDirectoryEntry.upsert({
-          where: {
-            provider_country_code: {
-              provider: PROVIDER,
-              country: COUNTRY,
-              code: bank.code,
-            },
-          },
-          update: {
-            name: bank.name,
-            currency: bank.currency,
-            type: bank.type,
-            active: true,
-            lastSyncedAt: syncedAt,
-          },
-          create: {
-            provider: PROVIDER,
-            country: COUNTRY,
-            currency: bank.currency,
-            code: bank.code,
-            name: bank.name,
-            type: bank.type,
-            active: true,
-            lastSyncedAt: syncedAt,
-          },
-        });
-      }
+          currency: bank.currency,
+          code: bank.code,
+          name: bank.name,
+          type: bank.type,
+          active: true,
+          lastSyncedAt: syncedAt,
+        })),
+      }),
+    ]);
+  }
+
+  /**
+   * Collapse concurrent cold-cache requests into one provider refresh. Cache
+   * persistence is best-effort: Paystack remains authoritative, so a valid live
+   * response must not become a 500 merely because the fallback cache is down.
+   */
+  private refreshProviderBanks(): Promise<PayoutBankDirectoryView> {
+    if (this.refreshInFlight) return this.refreshInFlight;
+
+    const refresh = this.fetchAndStoreProviderBanks().finally(() => {
+      if (this.refreshInFlight === refresh) this.refreshInFlight = null;
     });
+    this.refreshInFlight = refresh;
+    return refresh;
+  }
+
+  private async fetchAndStoreProviderBanks(): Promise<PayoutBankDirectoryView> {
+    const providerBanks = await this.paystack.listBanks();
+    if (providerBanks.length === 0) {
+      throw new ServiceUnavailableException(
+        "The payment provider returned no banks",
+      );
+    }
+
+    const syncedAt = new Date();
+    try {
+      await this.storeProviderBanks(providerBanks, syncedAt);
+    } catch (error) {
+      this.logger.warn(
+        `Paystack bank directory cache write failed; serving live data: ${this.errorMessage(error)}`,
+      );
+    }
+
+    return {
+      banks: providerBanks.map((bank) => this.toOption(bank)),
+      source: "paystack",
+      refreshedAt: syncedAt.toISOString(),
+    };
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : "unknown error";
   }
 
   private toView(
