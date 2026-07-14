@@ -464,6 +464,10 @@ export interface AiLogRow {
 
 export interface AssistantReply {
   conversationId: string;
+  /** Persisted user message for this turn (existing for retry/edit). */
+  userMessageId: string;
+  /** Persisted assistant message produced by this turn. */
+  messageId: string;
   reply: string;
   /** True when the agent declined an unsafe/operational request. */
   refused: boolean;
@@ -471,6 +475,8 @@ export interface AssistantReply {
   unavailable: boolean;
   /** Verified facts the answer was grounded in (e.g. room prices). */
   groundedFacts: string[];
+  /** Verified public catalog snapshots rendered as in-chat stay cards. */
+  properties: PropertySummary[];
   /** Truthful recovery classification; app and provider limits stay distinct. */
   recovery: AssistantRecovery;
   /** Opaque diagnostics reference safe to share with support. */
@@ -489,12 +495,20 @@ export type AssistantRecovery =
   | "transport_interrupted";
 
 export type AgentMessageRole = "USER" | "AGENT";
+export type AgentMessageFeedback = "UP" | "DOWN";
 
 export interface AgentMessage {
   id: string;
   role: AgentMessageRole;
   content: string;
+  feedback: AgentMessageFeedback | null;
+  properties: PropertySummary[];
   createdAt: string;
+}
+
+export interface AgentMessageFeedbackResult {
+  messageId: string;
+  feedback: AgentMessageFeedback | null;
 }
 
 export interface AgentConversation {

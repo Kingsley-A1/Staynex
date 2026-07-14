@@ -17,7 +17,8 @@ interface KnowledgeEntry {
 
 const KNOWLEDGE: KnowledgeEntry[] = [
   {
-    match: /\b(bespoke|who (built|made|created|develop|owns)|behind staynex|kingsley|maduabuchi|the company|your (maker|creator|team))\b/i,
+    match:
+      /\b(bespoke|who (built|made|created|develop|owns)|behind staynex|kingsley|maduabuchi|the company|your (maker|creator|team))\b/i,
     content:
       "Staynex was built by Bespoke Technologies (bespoketech.com.ng); the platform was engineered by a team of perfectionist engineers led by Kingsley Maduabuchi to make the customer's booking experience stand out.",
   },
@@ -32,7 +33,8 @@ const KNOWLEDGE: KnowledgeEntry[] = [
       "Payments are processed securely through a trusted payment provider; Staynex never stores raw card details. A booking is confirmed only after Staynex verifies the payment — never on the client side.",
   },
   {
-    match: /\b(confirm|confirmation|confirmed|verified payment|booking status)\b/i,
+    match:
+      /\b(confirm|confirmation|confirmed|verified payment|booking status)\b/i,
     content:
       "A booking is confirmed only after Staynex verifies the payment. The live result is shown on the user's payment/confirmation page.",
   },
@@ -42,9 +44,10 @@ const KNOWLEDGE: KnowledgeEntry[] = [
       "Refunds and cancellations follow Staynex policy and are handled by the Staynex support team for the user's specific booking. Staynex AI cannot process them.",
   },
   {
-    match: /\b(verified|verify|trust|trusted|safe|legit|scam|approved|genuine)\b/i,
+    match:
+      /\b(verified|verify|trust|trusted|safe|safety|secure|security|legit|scam|approved|genuine|defen[cs]e in depth)\b/i,
     content:
-      "Every Staynex property is reviewed and approved by the Staynex team before it goes live, so users book verified stays.",
+      "Safety is a core Staynex value. Staynex uses security in depth: properties are reviewed before going live, availability and booking truth stay backend-authoritative, payments use a trusted provider without storing raw card details, and bookings are confirmed only after payment verification. This reduces risk without claiming that any online system is perfectly risk-free.",
   },
   {
     match: /\b(review|reviews|rating|ratings|testimonial)\b/i,
@@ -52,12 +55,14 @@ const KNOWLEDGE: KnowledgeEntry[] = [
       "Reviews on Staynex come only from guests with a confirmed stay, and each review is approved by the Staynex team before it appears publicly.",
   },
   {
-    match: /\b(list (my|a)|become (a )?(host|owner)|host my|rent out|earn|property owner|landlord)\b/i,
+    match:
+      /\b(list (my|a)|become (a )?(host|owner)|host my|rent out|earn|property owner|landlord)\b/i,
     content:
       "Property owners can list on Staynex: create a listing, get it approved by the Staynex team, then manage availability, bookings, and earnings from one dashboard. There is no upfront cost to start.",
   },
   {
-    match: /\b(support|help desk|contact|customer (care|service)|complain|complaint|reach (you|staynex))\b/i,
+    match:
+      /\b(support|help desk|contact|customer (care|service)|complain|complaint|reach (you|staynex))\b/i,
     content:
       "For account or booking issues, the user can contact Staynex support at support@staynexbookings.ng.",
   },

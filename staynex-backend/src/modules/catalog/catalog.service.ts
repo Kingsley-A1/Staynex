@@ -50,12 +50,13 @@ export class CatalogService {
     });
     if (cities.length === 0) return [];
 
-    const propertyIds = query.checkIn && query.checkOut
-      ? await this.availablePropertyIds(
-          cities.map((c) => c.id),
-          query,
-        )
-      : null;
+    const propertyIds =
+      query.checkIn && query.checkOut
+        ? await this.availablePropertyIds(
+            cities.map((c) => c.id),
+            query,
+          )
+        : null;
     if (propertyIds?.length === 0) return [];
 
     const rows = await prisma.property.findMany({
@@ -90,6 +91,46 @@ export class CatalogService {
     });
     if (!property) throw new NotFoundException("Property not found");
     return toPropertyDetail(property);
+  }
+
+  /**
+   * Resolve approved properties explicitly named in free text. This is used by
+   * Staynex AI before generation so property names and prices come from the
+   * public catalog rather than model inference.
+   */
+  async mentionedProperties(
+    message: string,
+    limit = 3,
+  ): Promise<PropertySummary[]> {
+    const candidates = await prisma.property.findMany({
+      where: { status: "APPROVED" },
+      orderBy: { updatedAt: "desc" },
+      take: 500,
+      select: { id: true, name: true, slug: true },
+    });
+    const normalizedMessage = normalizeSearchText(message);
+    const matchingIds = candidates
+      .filter((property) => {
+        const name = normalizeSearchText(property.name);
+        const slug = normalizeSearchText(property.slug.replace(/-/g, " "));
+        return (
+          (name.length >= 4 && normalizedMessage.includes(name)) ||
+          (slug.length >= 4 && normalizedMessage.includes(slug))
+        );
+      })
+      .slice(0, limit)
+      .map((property) => property.id);
+    if (matchingIds.length === 0) return [];
+
+    const rows = await prisma.property.findMany({
+      where: { id: { in: matchingIds }, status: "APPROVED" },
+      include: propertySummaryInclude,
+    });
+    const byId = new Map(rows.map((row) => [row.id, toPropertySummary(row)]));
+    return matchingIds.flatMap((id) => {
+      const property = byId.get(id);
+      return property ? [property] : [];
+    });
   }
 
   private async mostBookedProperties(): Promise<PropertySummary[]> {
@@ -169,7 +210,10 @@ export class CatalogService {
     }));
   }
 
-  private async availablePropertyIds(cityIds: string[], query: SearchQuery): Promise<string[]> {
+  private async availablePropertyIds(
+    cityIds: string[],
+    query: SearchQuery,
+  ): Promise<string[]> {
     if (!query.checkIn || !query.checkOut) return [];
     const nights = nightsOf(query.checkIn, query.checkOut);
     const roomTypes = await prisma.roomType.findMany({
@@ -187,11 +231,22 @@ export class CatalogService {
     for (const roomType of roomTypes) {
       if (
         roomType.availability.length === nights.length &&
-        roomType.availability.every((day) => day.totalUnits - day.bookedUnits - day.heldUnits > 0)
+        roomType.availability.every(
+          (day) => day.totalUnits - day.bookedUnits - day.heldUnits > 0,
+        )
       ) {
         ids.add(roomType.propertyId);
       }
     }
     return [...ids];
   }
+}
+
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }

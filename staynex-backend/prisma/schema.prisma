@@ -825,6 +825,11 @@ enum AIMessageRole {
   AGENT
 }
 
+enum AIMessageFeedback {
+  UP
+  DOWN
+}
+
 model AIConversation {
   id        String    @id @default(cuid())
   userId    String?
@@ -849,11 +854,18 @@ model AIMessage {
   conversationId String
   role           AIMessageRole
   content        String
+  feedback       AIMessageFeedback?
+  feedbackAt     DateTime?
+  supersededAt   DateTime?
+  /// Public, verified property summaries shown with an assistant response.
+  /// These are snapshots from the live catalog at generation time.
+  propertyCards  Json?
   createdAt      DateTime      @default(now())
 
   conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
+  @@index([conversationId, supersededAt, createdAt])
 }
 
 model AIActionLog {

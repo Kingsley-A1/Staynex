@@ -11,6 +11,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Res,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
@@ -22,6 +23,7 @@ import { ConversationsService } from "./conversations.service";
 import {
   assistantSchema,
   createConversationSchema,
+  messageFeedbackSchema,
   pinConversationSchema,
   renameConversationSchema,
 } from "./dto";
@@ -156,9 +158,12 @@ export class AiController {
         `data: ${JSON.stringify({
           type: "done",
           conversationId: "",
+          userMessageId: "",
+          messageId: "",
           refused: false,
           unavailable: true,
           groundedFacts: [],
+          properties: [],
           recovery: "transport_interrupted",
           requestId,
           error: true,
@@ -217,6 +222,23 @@ export class AiController {
   ) {
     const user = await this.auth.resolve(cookie);
     return this.conversations.messages(user, id);
+  }
+
+  @Put("conversations/:conversationId/messages/:messageId/feedback")
+  async feedback(
+    @Param("conversationId") conversationId: string,
+    @Param("messageId") messageId: string,
+    @Body() body: unknown,
+    @Headers("cookie") cookie: string | undefined,
+  ) {
+    const user = await this.auth.resolve(cookie);
+    const input = parseBody(messageFeedbackSchema, body);
+    return this.conversations.setMessageFeedback(
+      user,
+      conversationId,
+      messageId,
+      input.feedback,
+    );
   }
 
   @Patch("conversations/:id")

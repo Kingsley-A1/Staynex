@@ -1,12 +1,34 @@
 import { z } from "zod";
 
-export const assistantSchema = z.object({
-  message: z.string().trim().min(1, "Message is required").max(1000),
-  conversationId: z.string().optional(),
-  // Optional grounding context — when a property slug is supplied, the assistant
-  // answers from that property's verified public facts only.
-  propertySlug: z.string().optional(),
-});
+export const assistantSchema = z
+  .object({
+    message: z.string().trim().min(1, "Message is required").max(1000),
+    conversationId: z.string().optional(),
+    // Optional grounding context — when a property slug is supplied, the assistant
+    // answers from that property's verified public facts only.
+    propertySlug: z.string().optional(),
+    operation: z
+      .discriminatedUnion("type", [
+        z.object({
+          type: z.literal("retry"),
+          assistantMessageId: z.string().min(1),
+        }),
+        z.object({
+          type: z.literal("edit"),
+          userMessageId: z.string().min(1),
+        }),
+      ])
+      .optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.operation && !value.conversationId) {
+      context.addIssue({
+        code: "custom",
+        path: ["conversationId"],
+        message: "Conversation is required for retry or edit",
+      });
+    }
+  });
 
 export type AssistantInput = z.infer<typeof assistantSchema>;
 
@@ -20,4 +42,8 @@ export const renameConversationSchema = z.object({
 
 export const pinConversationSchema = z.object({
   pinned: z.boolean(),
+});
+
+export const messageFeedbackSchema = z.object({
+  feedback: z.enum(["UP", "DOWN"]).nullable(),
 });
