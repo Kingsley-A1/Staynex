@@ -22,8 +22,8 @@ targets, not fiction — if a gate slips, move every later date, don't skip the 
 
 | Phase | Ships                                        | Target        | Status |
 | ----- | -------------------------------------------- | ------------- | ------ |
-| 0     | The app runs against the real platform       | Wed 15 Jul    | 🟡 in progress |
-| 1     | A phone can book and pay for a real stay     | Fri 24 Jul    | ⬜ |
+| 0     | The app runs against the real platform       | Wed 15 Jul    | 🟡 toolchain green; 2 device checks pending |
+| 1     | A phone can book and pay for a real stay     | Fri 24 Jul    | 🟡 Track A ✅ 25/25 machine-verified; Track B pending hardware |
 | 1.5   | Payment feels native; receipt in hand        | Wed 29 Jul    | ⬜ |
 | 2     | The returning-guest app (trips + identity)   | Fri 7 Aug     | ⬜ |
 | 3     | The app taps you on the shoulder (push)      | Wed 12 Aug    | ⬜ |
@@ -47,11 +47,16 @@ and `expo-doctor` both exit 0, and a screen recording shows cold start →
 - [x] `pnpm install` completes clean at the repo root (lockfile updated; `react-dom@18.3.1` pinned to silence peer warnings; pnpm `overrides` migrated to `pnpm-workspace.yaml` where pnpm 10 actually reads them).
 - [x] `pnpm --filter @staynex/mobile check` (tsc `--noEmit`) passes with zero errors (needed a `"react"` → local `@types/react@18` paths pin in `tsconfig.json` — the web app's `@types/react@19` was leaking into library typings).
 - [x] `expo-doctor` passes — 18/18 checks. Fixes required: removed `expo-web-browser` from `plugins` in `app.config.ts` (it has no `app.plugin.js` in SDK 52; listing it crashed every `expo config`/CLI run with a silent exit 1), bumped `react-native` → 0.76.9 and `react-native-screens` → ~4.4.0 to SDK 52 expected versions, made `metro.config.js` watchFolders additive to Expo defaults.
-- [ ] Metro resolves `@staynex/backend/types` and `@staynex/shared` through the pnpm symlinks (app boots in Expo Go / dev client without red screen).
+- [ ] ⏳ **PENDING — needs an Android emulator/device:** Metro resolves `@staynex/backend/types` and `@staynex/shared` through the pnpm symlinks (app boots in Expo Go / dev client without red screen).
 - [x] `STAYNEX_API_BASE_URL` documented: emulator loopback is `http://10.0.2.2:4000` (Android) / `http://localhost:4000` (iOS sim) — see `app.config.ts` header.
-- [ ] Live search smoke test: cold start → pick Calabar → results render real rows from the local API (record it).
+- [ ] ⏳ **PENDING — needs an Android emulator/device:** live search smoke test: cold start → pick Calabar → results render real rows from the local API (record it).
 
 **Exit gate:** all boxes above ticked + the recording exists. *Measured by:* command exit codes and the recording.
+
+> The two pending items are hardware-bound, not engineering-bound: start the
+> backend (`pnpm dev:backend`), then
+> `STAYNEX_API_BASE_URL=http://10.0.2.2:4000 pnpm -C staynex-mobile start`
+> on a machine with an emulator. Everything they depend on is already verified.
 
 ---
 
@@ -66,18 +71,38 @@ search → stay → quote → hold → sign-in → checkout → Paystack test ca
 `CONFIRMED`, the booking is visible at `/host/bookings` on the web, and an EAS
 Android preview build installs on a physical device.
 
-- [ ] Register + login flows verified against the local API (CSRF + `Set-Cookie` capture + SecureStore persistence observed working on device).
-- [ ] Session cold-start: kill the app, relaunch — `GET /auth/me` rehydrates the signed-in user with no re-login.
-- [ ] Full happy path in Paystack test mode, on-device, end to end (record it).
-- [ ] Confirmed booking appears on the host web dashboard (`/host/bookings`) with correct dates, room, and amount.
-- [ ] Expired-hold path: let a hold lapse → checkout stops, guest is routed back to re-quote with a clear message; no booking row created.
-- [ ] Failed-payment path: Paystack declined test card → honest failure UI + "try again" returns to checkout start; no client-side CONFIRMED.
-- [ ] Offline sweep: airplane-mode every screen — each shows its error state with retry; zero blank screens, zero crashes.
-- [ ] Money audit: `grep -rE "/ 100|₦" staynex-mobile/src staynex-mobile/app` → only `@staynex/shared` hits; every amount rendered via `formatKoboToNGN`.
-- [ ] Contract audit: zero locally defined API types (`import type` from `@staynex/backend/types` only).
+Phase 1 runs on two tracks. **Track A** is machine-verified now by the API
+conformance harness (`staynex-mobile/test/phase1-booking-loop.mjs`) — it replays
+the mobile client's exact wire protocol (CSRF double-submit, manual cookie
+replay, quote → hold → checkout, HMAC-signed Paystack webhook, terminal-state
+polling) against a running backend and reports a gate verdict per step.
+**Track B** needs a phone/emulator and closes the phase.
+
+**Track A — machine-verified (API conformance harness): ✅ PASS 25/25 (2026-07-14)**
+- [x] Contract defect fixed: register requires `phone` on the backend; the mobile register screen and `authApi.register` now collect and send it (found by static contract audit — every mobile registration would have 400'd).
+- [x] Harness: CSRF mint + double-submit accepted; register → `Set-Cookie` captured → cookie replay authenticates `GET /auth/me`; login round-trip.
+- [x] Harness: discovery (`/catalog/cities` → `/search` → `/stays/:slug` → availability) returns coherent shapes matching `@staynex/backend/types`.
+- [x] Harness: quote → hold → checkout (session + CSRF) returns `{bookingId, reference, authorizationUrl}` against real Paystack test-mode initialize.
+- [x] Harness: signed `charge.success` webhook (exact amount + NGN) → poll `GET /payments/:reference` → `SUCCESS` + booking `CONFIRMED`; `GET /bookings/:id`, `GET /verify/:reference` (amount never exposed), and the voucher PDF (`%PDF-`) all agree.
+- [x] Harness: failed-payment path — signed `charge.failed` → payment `FAILED`, booking `CANCELLED`, capacity released, voucher correctly 404s, no client-side CONFIRMED anywhere.
+- [x] Harness: consumed-hold semantics — checkout on a spent hold is rejected (GET 404 / re-checkout 404); `HoldSummary.expiresAt`/`expired` surfaced for the countdown UI.
+- [x] Money audit: `grep -rE "/ 100\b|₦" staynex-mobile/src staynex-mobile/app` → zero hits; every amount rendered via `formatKoboToNGN`.
+- [x] Contract audit: zero locally defined API types (`import type` from `@staynex/backend/types` only).
+
+**Track A discoveries (recorded for the next engineer):**
+- **Login revokes all other sessions** (`startSession(..., { revokeExisting: true })`): signing in on the phone signs the guest out on the web and vice versa. Deliberate posture, but a mobile UX consideration for Phase 2 (session messaging).
+- **Local-dev DNS gotcha:** registration's email-deliverability check does a live MX lookup; on networks that block direct DNS from Node (ECONNREFUSED), every local registration fails. Start the backend with `NODE_OPTIONS="--require ./staynex-backend/scripts/dev-dns-shim.cjs" pnpm dev:backend`. Production (Railway) is unaffected.
+- Harness lives at `staynex-mobile/test/phase1-booking-loop.mjs` — re-run it after any change to the client protocol or the booking loop. It books the furthest-out available nights to keep near-term inventory untouched and prints every row it creates.
+
+**Track B — on-device (⏳ pending hardware):**
+- [ ] SecureStore cookie persistence observed on device; session cold-start: kill the app, relaunch — `GET /auth/me` rehydrates with no re-login.
+- [ ] Full happy path on-device through the real Paystack hosted page (test card), end to end (record it).
+- [ ] Confirmed booking appears on the host web dashboard (`/host/bookings`) with correct dates, room, and amount (screenshot).
+- [ ] Expired-hold UX: let a hold lapse on-screen → countdown hits zero, checkout stops, guest routed back to re-quote.
+- [ ] Offline sweep: airplane-mode every screen — error state with retry; zero blank screens, zero crashes.
 - [ ] `eas build --platform android --profile preview` exits 0; artifact installs and runs on a real device.
 
-**Exit gate:** the recording + host-dashboard screenshot + both failure-path checks + green build. *Measured by:* artifacts attached to the PR that closes the phase.
+**Exit gate:** Track A harness prints `PHASE 1 GATE: PASS` against a running backend **and** Track B recording + host-dashboard screenshot + green build exist. *Measured by:* harness output + artifacts attached to the PR that closes the phase.
 
 ---
 

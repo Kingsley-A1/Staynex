@@ -75,7 +75,12 @@ export const authApi = {
   me: () => api.get<AuthUser | null>("/auth/me"),
   login: (body: { email: string; password: string }) =>
     api.post<AuthUser>("/auth/login", body),
-  register: (body: { email: string; password: string; name?: string; role?: "GUEST" | "OWNER" }) =>
-    api.post<AuthUser>("/auth/register", body),
+  register: (body: {
+    email: string;
+    password: string;
+    phone: string; // required by the backend registerSchema (min 7 digits)
+    name?: string;
+    role?: "GUEST" | "OWNER";
+  }) => api.post<AuthUser>("/auth/register", body),
   logout: () => api.post<{ ok: true }>("/auth/logout"),
 };

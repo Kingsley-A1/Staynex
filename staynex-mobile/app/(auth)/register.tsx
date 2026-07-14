@@ -25,6 +25,7 @@ export default function RegisterScreen() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
 
   const mutation = useMutation({
@@ -32,6 +33,7 @@ export default function RegisterScreen() {
       authApi.register({
         email: email.trim(),
         password,
+        phone: phone.trim(),
         name: name.trim() || undefined,
         role: "GUEST",
       }),
@@ -43,7 +45,9 @@ export default function RegisterScreen() {
     },
   });
 
-  const canSubmit = email.trim().length > 3 && password.length >= 8;
+  // Mirrors the backend registerSchema: valid email, >= 7 phone digits, 8+ char password.
+  const phoneDigits = phone.replace(/\D/g, "").length;
+  const canSubmit = email.trim().length > 3 && phoneDigits >= 7 && password.length >= 8;
 
   return (
     <Screen padded>
@@ -70,6 +74,16 @@ export default function RegisterScreen() {
               keyboardType="email-address"
               autoComplete="email"
               textContentType="emailAddress"
+            />
+          </Field>
+          <Field label="Phone">
+            <TextField
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="e.g. 08030000000"
+              keyboardType="phone-pad"
+              autoComplete="tel"
+              textContentType="telephoneNumber"
             />
           </Field>
           <Field label="Password" hint="At least 8 characters">

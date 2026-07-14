@@ -49,11 +49,11 @@ export function TextField({
   value: string;
   onChangeText: (v: string) => void;
   placeholder?: string;
-  keyboardType?: "default" | "email-address";
+  keyboardType?: "default" | "email-address" | "phone-pad";
   autoCapitalize?: "none" | "sentences" | "words";
   secureTextEntry?: boolean;
-  autoComplete?: "email" | "password" | "name" | "off";
-  textContentType?: "emailAddress" | "password" | "name" | "newPassword";
+  autoComplete?: "email" | "password" | "name" | "tel" | "off";
+  textContentType?: "emailAddress" | "password" | "name" | "newPassword" | "telephoneNumber";
 }) {
   return (
     <TextInput
