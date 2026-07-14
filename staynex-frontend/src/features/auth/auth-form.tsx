@@ -30,12 +30,14 @@ export function AuthForm({
   onSuccess,
   compact = false,
   roleIntent,
+  requireAdmin = false,
 }: {
   mode: Mode;
   next?: string;
   onSuccess?: (user: AuthUser) => void;
   compact?: boolean;
   roleIntent?: "OWNER";
+  requireAdmin?: boolean;
 }) {
   const ownerIntent = mode === "register" && roleIntent === "OWNER";
 
@@ -76,6 +78,13 @@ export function AuthForm({
   }
 
   function handleSuccess(user: AuthUser) {
+    if (requireAdmin && !isAdminCapable(user)) {
+      setBusy(false);
+      setError(
+        "This account is signed in, but it does not have admin access. Use an authorized staff account or contact support.",
+      );
+      return;
+    }
     if (onSuccess) {
       onSuccess(user);
     } else if (mode === "register") {
@@ -150,8 +159,24 @@ export function AuthForm({
         );
         if (/email|domain|deliverable/i.test(detail)) setEmailError(detail);
         else setError(detail);
-      } else if (msg.includes("403")) {
-        setError("That admin access code wasn't accepted.");
+      } else if (err instanceof ApiError && err.status === 403) {
+        setError(
+          mode === "admin"
+            ? "That admin access code wasn't accepted."
+            : apiErrorMessage(
+                err,
+                "This sign-in request could not be verified. Refresh the page and try again.",
+              ),
+        );
+      } else if (err instanceof ApiError && err.status === 503) {
+        setError(
+          mode === "login"
+            ? "Admin verification is temporarily unavailable. Try again shortly or contact support."
+            : apiErrorMessage(
+                err,
+                "Admin account setup is temporarily unavailable.",
+              ),
+        );
       } else if (msg.includes("429")) {
         setError("Too many attempts. Please try again later.");
       } else {
