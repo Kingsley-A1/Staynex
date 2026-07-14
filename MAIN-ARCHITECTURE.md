@@ -20,12 +20,18 @@ Hosts list properties (admin-reviewed), manage rooms/availability, and are paid
 out net of a platform fee. Admins review listings, manage money exceptions, and
 settle payouts.
 
-**Two deployables, one repo:**
+**Deployables, one repo:**
 
-| App         | Path                | Stack                                 | Host    |
-| ----------- | ------------------- | ------------------------------------- | ------- |
-| Backend API | `staynex-backend/`  | NestJS 11 + Prisma 6 (CockroachDB)    | Railway |
-| Frontend    | `staynex-frontend/` | Next.js 15 (App Router) + Tailwind v4 | Vercel  |
+| App         | Path                | Stack                                 | Host                     |
+| ----------- | ------------------- | ------------------------------------- | ------------------------ |
+| Backend API | `staynex-backend/`  | NestJS 11 + Prisma 6 (CockroachDB)    | Railway                  |
+| Frontend    | `staynex-frontend/` | Next.js 15 (App Router) + Tailwind v4 | Vercel                   |
+| Mobile      | `staynex-mobile/`   | Expo SDK 52 (React Native) + Expo Router | EAS (staged, not live) |
+
+The mobile app (staged on `staynex-mobile-staging`) is a pure API client: it
+imports contracts from `@staynex/backend/types`, formats money via
+`@staynex/shared`, and never holds booking/payment truth. Its stage review and
+delivery path live in `Staynex_plan.md` → Mobile App Workstream.
 
 External services: **Paystack** (payments), **Cloudflare R2** (media, S3 API),
 **Resend** (email), **Firebase Cloud Messaging / HTTP v1** (web push),
@@ -116,6 +122,17 @@ staynex-frontend/
                            api-base.ts, types.ts (mirrors backend contracts),
                            firebase-*.ts, format.ts
   src/styles/              theme.css (design tokens), motion.css
+
+staynex-mobile/            Expo app (staged): guest booking loop, Phase 0/1
+  app/                     Expo Router screens: (tabs) search/account, (auth),
+                           stays/[slug], booking/{quote,checkout,confirmation},
+                           payment/[reference]
+  src/core/                client.ts (cookie-replay fetch), session.ts, env.ts
+  src/data/api.ts          Typed API services (contracts from backend types)
+  src/ui/                  Native primitives (Button, PropertyCard, form, states)
+
+packages/shared/           @staynex/shared — kobo→NGN formatter, status labels,
+                           brand tokens (zero runtime deps; used by mobile)
 ```
 
 ---
