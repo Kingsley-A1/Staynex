@@ -12,6 +12,7 @@ import { NotificationCenter } from "@/components/notification-center";
 import { NAV_ICONS, IconChevronLeft } from "@/components/icons";
 import type { WorkspaceNavItem } from "@/components/nav-config";
 import { Breadcrumbs, type BreadcrumbItem } from "@/ui";
+import { SkipLink } from "@/components/skip-link";
 
 export interface AccountSummary {
   name: string;
@@ -128,6 +129,7 @@ export function DashboardChrome({
         collapsed ? "lg:grid-cols-[76px_1fr]" : "lg:grid-cols-[248px_1fr]",
       )}
     >
+      <SkipLink />
       {/* Desktop sidebar — collapsible icon rail */}
       <aside className="sticky top-0 hidden h-dvh flex-col border-r border-border bg-surface-raised lg:flex">
         {/* Brand + collapse toggle */}
@@ -185,11 +187,6 @@ export function DashboardChrome({
             collapsed ? "px-2" : "px-3",
           )}
         >
-          {!collapsed && (
-            <p className="px-3 pb-1 text-overline text-muted-foreground">
-              {workspace}
-            </p>
-          )}
           <NavList items={nav} active={active} collapsed={collapsed} />
         </nav>
 
@@ -199,7 +196,7 @@ export function DashboardChrome({
 
       {/* Right column: a utility top bar (bell everywhere; logo + nav on mobile) + main */}
       <div className="flex min-w-0 flex-col">
-        <header className="flex h-16 items-center justify-between gap-3 border-b border-border bg-surface-raised px-4 lg:justify-end">
+        <header className="flex h-16 items-center justify-between gap-3 border-b border-border bg-surface-raised px-4 sm:px-6">
           <Link
             href="/"
             aria-label="Staynex Bookings home"
@@ -211,6 +208,9 @@ export function DashboardChrome({
               hideSuffixOnMobile
             />
           </Link>
+          <p className="hidden text-sm font-semibold text-ink lg:block">
+            {workspace}
+          </p>
           <div className="flex items-center gap-3">
             <NotificationCenter />
             <span className="text-overline text-muted-foreground lg:hidden">
@@ -222,7 +222,7 @@ export function DashboardChrome({
           </div>
         </header>
 
-        <main className="layout-container py-6 sm:py-8">
+        <main id="main-content" tabIndex={-1} className="layout-container py-6 sm:py-8">
           <Breadcrumbs
             items={workspaceBreadcrumbs(pathname, nav)}
             className="mb-5"

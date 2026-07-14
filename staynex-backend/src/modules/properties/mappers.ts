@@ -33,7 +33,9 @@ export const propertyDetailInclude = Prisma.validator<Prisma.PropertyInclude>()(
       orderBy: { createdAt: "asc" },
       include: {
         media: { orderBy: { sortOrder: "asc" } },
-        _count: { select: { roomUnits: true } },
+        _count: {
+          select: { roomUnits: { where: { isActive: true } } },
+        },
       },
     },
     reviewRuns: {

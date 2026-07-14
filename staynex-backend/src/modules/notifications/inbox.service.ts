@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { prisma } from "../../../db";
 import type { NotificationRow, NotificationsPage } from "../../../types";
 import { afterCursor, decodeCursor, encodeCursor } from "../../common/pagination";
@@ -28,6 +28,14 @@ export class InboxService {
       nextCursor: rows.length > take && last ? encodeCursor(last.createdAt, last.id) : null,
       unreadCount,
     };
+  }
+
+  async getOne(userId: string, id: string): Promise<NotificationRow> {
+    const notification = await prisma.notification.findFirst({
+      where: { id, userId, channel: "IN_APP" },
+    });
+    if (!notification) throw new NotFoundException("Notification not found");
+    return toRow(notification);
   }
 
   /** Mark the given notifications read — or all of the user's unread ones. */

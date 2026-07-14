@@ -82,7 +82,7 @@ export default async function EditPropertyPage({
               target={{ kind: "property", id: property.id }}
               media={property.media}
               heading="Property photos"
-              description="Guests see the cover photo first. At least 4 photos are needed to go live; large photos are resized automatically."
+              description="Guests see the cover photo first. Add at least 4 sharp landscape photos; 1600px wide or larger is recommended. Large originals are optimized automatically."
             />
           </section>
           <section id="review-status" className="scroll-mt-24">

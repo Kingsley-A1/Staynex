@@ -7,6 +7,7 @@ export {
 export { Badge, ReviewStatusBadge, StatusBadge } from "./badge";
 export { Field, Input, Textarea, Select } from "./field";
 export { CurrencyInput } from "./currency-input";
+export { CodeInput } from "./code-input";
 export { PasswordInput } from "./password-input";
 export { Stepper, type Step } from "./stepper";
 export { KpiCard } from "./kpi-card";

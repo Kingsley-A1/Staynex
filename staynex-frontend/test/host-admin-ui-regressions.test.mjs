@@ -95,3 +95,71 @@ test("welcome gradient avoids oversized conic textures and blur filters", async 
   assert.match(gradient, /sx-gradient-drift-a/);
   assert.doesNotMatch(gradient, /conic-gradient|220vw|filter:\s*blur/);
 });
+
+test("host room counts use explicit accessible increase and decrease controls", async () => {
+  const [rooms, api] = await Promise.all([
+    source("../src/features/properties/room-manager.tsx"),
+    source("../src/lib/api.ts"),
+  ]);
+  assert.match(rooms, /Physical rooms/);
+  assert.match(rooms, /aria-label={`Remove one/);
+  assert.match(rooms, /aria-label={`Add one/);
+  assert.match(rooms, /aria-live="polite"/);
+  assert.match(api, /removeRoomUnit/);
+});
+
+test("host workspace label moves to the desktop header without sidebar duplication", async () => {
+  const [chrome, hostNav, layout] = await Promise.all([
+    source("../src/components/dashboard-chrome.tsx"),
+    source("../src/components/nav-config.ts"),
+    source("../src/app/(host)/host/layout.tsx"),
+  ]);
+  assert.match(layout, /workspace="Host Workspace"/);
+  assert.match(chrome, /hidden text-sm font-semibold text-ink lg:block/);
+  const hostItems = hostNav.slice(
+    hostNav.indexOf("export const HOST_NAV"),
+    hostNav.indexOf("export const ADMIN_NAV"),
+  );
+  assert.doesNotMatch(hostItems, /section: "Workspace"/);
+});
+
+test("notification inbox opens complete ID views with a reusable safe source CTA", async () => {
+  const [list, detail, sourceButton] = await Promise.all([
+    source("../src/features/notifications/notifications-view.tsx"),
+    source("../src/features/notifications/notification-detail-view.tsx"),
+    source("../src/features/notifications/view-source-button.tsx"),
+  ]);
+  assert.match(list, /encodeURIComponent\(item\.id\)/);
+  assert.match(detail, /Notification ID:/);
+  assert.match(detail, /<ViewSourceButton/);
+  assert.match(sourceButton, /View source/);
+  assert.match(sourceButton, /!href\.startsWith\("\/\/"\)/);
+});
+
+test("admin MFA uses one accessible OTP field rendered as six cells", async () => {
+  const [form, codeInput] = await Promise.all([
+    source("../src/features/auth/auth-form.tsx"),
+    source("../src/ui/code-input.tsx"),
+  ]);
+  assert.match(form, /<CodeInput/);
+  assert.match(codeInput, /grid-cols-6/);
+  assert.match(codeInput, /autoComplete="one-time-code"/);
+  assert.match(codeInput, /aria-invalid/);
+});
+
+test("guest images use bounded high-quality optimization and offline navigation fallback", async () => {
+  const [image, gallery, config, worker, reporter] = await Promise.all([
+    source("../src/ui/optimized-fill-image.tsx"),
+    source("../src/ui/room-gallery-carousel.tsx"),
+    source("../next.config.ts"),
+    source("../src/app/firebase-messaging-sw.js/route.ts"),
+    source("../src/components/web-vitals-reporter.tsx"),
+  ]);
+  assert.match(image, /quality = 82/);
+  assert.match(gallery, /quality=\{88\}/);
+  assert.match(config, /qualities: \[75, 82, 88\]/);
+  assert.match(worker, /caches\.match\("\/offline"\)/);
+  assert.match(reporter, /LCP: 2_500/);
+  assert.match(reporter, /INP: 200/);
+  assert.match(reporter, /CLS: 0\.1/);
+});

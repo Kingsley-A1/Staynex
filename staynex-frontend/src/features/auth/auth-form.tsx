@@ -2,7 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 import Link from "next/link";
-import { Button, Field, Input, PasswordInput, Select } from "@/ui";
+import { Button, CodeInput, Field, Input, PasswordInput, Select } from "@/ui";
 import { GoogleAuthButton } from "@/features/auth/google-auth-button";
 import { authDestination } from "@/features/auth/navigate";
 import { ApiError, apiErrorMessage, authApi } from "@/lib/api";
@@ -250,19 +250,24 @@ export function AuthForm({
             Enter the 6-digit code sent to {mfaChallenge.email}.
           </p>
         </div>
-        <Field label="Verification code" htmlFor="mfaCode" required>
-          <Input
+        <fieldset className="space-y-2">
+          <legend className="text-label text-ink">
+            Verification code <span className="text-error">*</span>
+          </legend>
+          <CodeInput
             id="mfaCode"
-            inputMode="numeric"
-            pattern="\d{6}"
-            maxLength={6}
-            required
             value={mfaCode}
-            onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
-            autoComplete="one-time-code"
-            placeholder="••••••"
+            onChange={setMfaCode}
+            required
+            disabled={busy}
+            invalid={Boolean(error)}
+            describedBy="mfa-code-hint"
+            autoFocus
           />
-        </Field>
+          <p id="mfa-code-hint" className="text-caption">
+            Enter all six digits. You can paste the code from your email.
+          </p>
+        </fieldset>
         {error && (
           <p className="text-sm text-error" role="alert">
             {error}

@@ -22,6 +22,14 @@ export class NotificationsController {
     return this.inbox.list(user.id, input.cursor, input.take);
   }
 
+  @Get(":id")
+  async getOne(
+    @CurrentUser() user: AuthUser,
+    @Param("id") id: string,
+  ) {
+    return this.inbox.getOne(user.id, id);
+  }
+
   @Post("read")
   @RateLimit({
     bucket: "notifications:read",

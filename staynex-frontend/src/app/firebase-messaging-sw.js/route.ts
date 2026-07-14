@@ -14,7 +14,12 @@ export function GET(): Response {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "",
   };
 
-  const body = `/* Staynex FCM background service worker (generated). */
+  const firebaseConfigured = Boolean(
+    config.apiKey && config.projectId && config.messagingSenderId && config.appId,
+  );
+
+  const firebaseWorker = firebaseConfigured
+    ? `
 importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js");
 
@@ -45,7 +50,47 @@ self.addEventListener("notificationclick", function (event) {
       if (self.clients.openWindow) return self.clients.openWindow(link);
     })
   );
+});`
+    : "";
+
+  const body = `/* Staynex FCM background service worker (generated). */
+const OFFLINE_CACHE = "staynex-offline-v1";
+
+self.addEventListener("install", function (event) {
+  event.waitUntil(
+    caches.open(OFFLINE_CACHE)
+      .then(function (cache) { return cache.addAll(["/offline", "/icon.png"]); })
+      .then(function () { return self.skipWaiting(); })
+  );
 });
+
+self.addEventListener("activate", function (event) {
+  event.waitUntil(
+    caches.keys()
+      .then(function (keys) {
+        return Promise.all(keys.filter(function (key) {
+          return key.startsWith("staynex-offline-") && key !== OFFLINE_CACHE;
+        }).map(function (key) { return caches.delete(key); }));
+      })
+      .then(function () { return self.clients.claim(); })
+  );
+});
+
+self.addEventListener("fetch", function (event) {
+  if (event.request.method !== "GET" || event.request.mode !== "navigate") return;
+  event.respondWith(
+    fetch(event.request).catch(function () {
+      return caches.match("/offline").then(function (response) {
+        return response || new Response("Staynex is offline", {
+          status: 503,
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        });
+      });
+    })
+  );
+});
+
+${firebaseWorker}
 `;
 
   return new Response(body, {

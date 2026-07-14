@@ -20,12 +20,18 @@ Hosts list properties (admin-reviewed), manage rooms/availability, and are paid
 out net of a platform fee. Admins review listings, manage money exceptions, and
 settle payouts.
 
-**Two deployables, one repo:**
+**Deployables, one repo:**
 
-| App         | Path                | Stack                                 | Host    |
-| ----------- | ------------------- | ------------------------------------- | ------- |
-| Backend API | `staynex-backend/`  | NestJS 11 + Prisma 6 (CockroachDB)    | Railway |
-| Frontend    | `staynex-frontend/` | Next.js 15 (App Router) + Tailwind v4 | Vercel  |
+| App         | Path                | Stack                                 | Host                     |
+| ----------- | ------------------- | ------------------------------------- | ------------------------ |
+| Backend API | `staynex-backend/`  | NestJS 11 + Prisma 6 (CockroachDB)    | Railway                  |
+| Frontend    | `staynex-frontend/` | Next.js 15 (App Router) + Tailwind v4 | Vercel                   |
+| Mobile      | `staynex-mobile/`   | Expo SDK 52 (React Native) + Expo Router | EAS (staged, not live) |
+
+The mobile app (staged on `staynex-mobile-staging`) is a pure API client: it
+imports contracts from `@staynex/backend/types`, formats money via
+`@staynex/shared`, and never holds booking/payment truth. Its stage review and
+delivery path live in `Staynex_plan.md` → Mobile App Workstream.
 
 External services: **Paystack** (payments), **Cloudflare R2** (media, S3 API),
 **Resend** (email), **Firebase Cloud Messaging / HTTP v1** (web push),
@@ -116,6 +122,17 @@ staynex-frontend/
                            api-base.ts, types.ts (mirrors backend contracts),
                            firebase-*.ts, format.ts
   src/styles/              theme.css (design tokens), motion.css
+
+staynex-mobile/            Expo app (staged): guest booking loop, Phase 0/1
+  app/                     Expo Router screens: (tabs) search/account, (auth),
+                           stays/[slug], booking/{quote,checkout,confirmation},
+                           payment/[reference]
+  src/core/                client.ts (cookie-replay fetch), session.ts, env.ts
+  src/data/api.ts          Typed API services (contracts from backend types)
+  src/ui/                  Native primitives (Button, PropertyCard, form, states)
+
+packages/shared/           @staynex/shared — kobo→NGN formatter, status labels,
+                           brand tokens (zero runtime deps; used by mobile)
 ```
 
 ---
@@ -320,7 +337,8 @@ Host views (`OwnerBookingsController`, OWNER): `GET /host/bookings`,
 
 - Properties (`/host/properties`): `GET`, `POST`, `GET/:id`, `PATCH/:id`, `POST/:id/submit`.
 - Rooms (`/host`): `GET /host/properties/:propertyId/room-types`, `POST /host/room-types`,
-  `PATCH /host/room-types/:id`, `GET /host/room-types/:roomTypeId/units`, `POST /host/room-units`.
+  `PATCH /host/room-types/:id`, `GET /host/room-types/:roomTypeId/units`, `POST /host/room-units`,
+  `DELETE /host/room-types/:roomTypeId/units` (safely deactivate one uncommitted unit).
 - Onboarding/settings (`/host`): `POST /host/become`, `GET /host/onboarding`,
   `POST /host/onboarding/complete`, `GET /host/settings`, `PATCH /host/settings/profile`,
   `GET|POST /host/settings/locations`, `PATCH|DELETE /host/settings/locations/:id`,
@@ -337,7 +355,8 @@ Host views (`OwnerBookingsController`, OWNER): `GET /host/bookings`,
 
 ### 9.10 Notifications — `/notifications` (session)
 
-`GET /notifications` (inbox, keyset paginated + unreadCount), `POST /notifications/read`,
+`GET /notifications` (inbox, keyset paginated + unreadCount),
+`GET /notifications/:id` (user-scoped in-app detail), `POST /notifications/read`,
 `POST /notifications/devices` (register FCM token), `DELETE /notifications/devices/:token`.
 
 ### 9.11 Admin — `/admin` (ADMIN)
@@ -392,7 +411,7 @@ transaction as the new message and AI action log.
 - **Password reset:** emailed **6-digit code** (scrypt-hashed, looked up by
   user, 15-min TTL, 5-attempt cap). No link, no account enumeration.
 - **CSRF:** `csrfProtection` (main.ts) enforces origin + `X-CSRF-Token`
-  (matching the `sx_csrf` cookie from `GET /auth/csrf`) on mutating requests.
+  (matching the `staynex_csrf` cookie from `GET /auth/csrf`) on mutating requests.
 - **Rate limiting:** in-memory `RateLimiterService` via `@RateLimit({bucket,
 limit, windowMs, keyBy})` (`SecurityModule` is `@Global`).
 - **Webhook integrity:** Paystack `POST /payments/paystack/webhook` verifies an
@@ -497,6 +516,11 @@ The trust anchor for check-in is **live server truth**, not a screenshot.
   Use tokens (`text-ink`, `bg-success-surface`, …), not raw colors.
 - **Media:** `next/image` optimizes R2 images when `NEXT_PUBLIC_MEDIA_BASE_URL`
   is set (allowlisted in `next.config.ts`); otherwise images render unoptimized.
+  Guest galleries use an explicit high-fidelity quality tier while responsive
+  `sizes` and AVIF/WebP output keep delivery bounded.
+- **Resilience and vitals:** the generated root service worker provides a
+  navigation-only `/offline` fallback without caching authenticated pages.
+  Field reporting records whether LCP ≤2.5s, INP ≤200ms, and CLS ≤0.1.
 - **Host availability:** `features/properties/availability-editor.tsx` presents
   30-day and 90-day quick-open actions plus a custom-range option. Quick setup
   offers all active units for the chosen room type; advanced availability lets

@@ -30,27 +30,23 @@ export const HOST_NAV: WorkspaceNavItem[] = [
     href: "/host/dashboard",
     label: "Dashboard",
     icon: "overview",
-    section: "Workspace",
   },
   {
     href: "/host/properties",
     label: "Properties",
     icon: "properties",
-    section: "Workspace",
     entityLabel: "Property",
   },
   {
     href: "/host/bookings",
     label: "Bookings",
     icon: "bookings",
-    section: "Workspace",
     entityLabel: "Booking",
   },
   {
     href: "/host/notifications",
     label: "Notifications",
     icon: "notifications",
-    section: "Workspace",
   },
   {
     href: "/host/onboarding",

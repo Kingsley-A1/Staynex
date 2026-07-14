@@ -64,6 +64,10 @@ const nextConfig: NextConfig = {
   },
   images: {
     formats: ["image/avif", "image/webp"],
+    // A small allowlist keeps the optimizer cache bounded. Guest galleries use
+    // 88 to avoid visible double-compression after host-side upload encoding;
+    // cards use 82 and workspace thumbnails stay at 75.
+    qualities: [75, 82, 88],
     minimumCacheTTL: 60 * 60 * 24 * 30,
     remotePatterns: mediaPattern ? [mediaPattern] : [],
   },

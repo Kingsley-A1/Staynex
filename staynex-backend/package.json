@@ -21,6 +21,7 @@
     "test:ai": "node --experimental-strip-types --test test/ai-reliability.test.mjs test/ai-message-actions.test.mjs",
     "test:payments": "pnpm build && node --test test/paystack-bank-verification.test.mjs",
     "test:availability": "pnpm build && node --test test/availability.test.cjs",
+    "test:workspace": "pnpm build && node --test test/rooms.test.cjs test/notification-inbox.test.cjs",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "prisma:push": "prisma db push --schema prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma",

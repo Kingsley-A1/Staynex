@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ApiError, notificationsApi } from "@/lib/api";
 import {
   disablePush,
@@ -40,6 +40,7 @@ function timeAgo(iso: string): string {
  */
 export function NotificationsView() {
   const router = useRouter();
+  const pathname = usePathname();
   const [items, setItems] = useState<NotificationRow[]>([]);
   const [unread, setUnread] = useState(0);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -102,7 +103,7 @@ export function NotificationsView() {
     await notificationsApi.markRead().catch(() => {});
   }
 
-  async function openItem(item: NotificationRow) {
+  function openItem(item: NotificationRow) {
     if (!item.readAt) {
       setItems((prev) =>
         prev.map((n) =>
@@ -110,9 +111,9 @@ export function NotificationsView() {
         ),
       );
       setUnread((u) => Math.max(0, u - 1));
-      await notificationsApi.markRead([item.id]).catch(() => {});
+      void notificationsApi.markRead([item.id]).catch(() => {});
     }
-    if (item.linkUrl) router.push(item.linkUrl);
+    router.push(`${pathname.replace(/\/$/, "")}/${encodeURIComponent(item.id)}`);
   }
 
   async function turnOnPush() {
@@ -230,19 +231,14 @@ export function NotificationsView() {
                   key={n.id}
                   className={n.readAt ? "" : "bg-primary-subtle/25"}
                 >
-                  {n.linkUrl ? (
-                    <button
-                      type="button"
-                      onClick={() => void openItem(n)}
-                      className="block w-full border-b border-border px-4 py-4 text-left transition-colors last:border-b-0 hover:bg-secondary"
-                    >
-                      {inner}
-                    </button>
-                  ) : (
-                    <div className="border-b border-border px-4 py-4 last:border-b-0">
-                      {inner}
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => openItem(n)}
+                    aria-label={`Read notification: ${n.title}`}
+                    className="block w-full border-b border-border px-4 py-4 text-left transition-colors last:border-b-0 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    {inner}
+                  </button>
                 </li>
               );
             })}

@@ -25,6 +25,8 @@ function isWebVitalPayload(value: unknown): value is {
   rating?: string;
   navigationType?: string;
   route?: string;
+  target?: number;
+  targetMet?: boolean;
 } {
   if (!value || typeof value !== "object") return false;
   const metric = value as Record<string, unknown>;
@@ -33,6 +35,9 @@ function isWebVitalPayload(value: unknown): value is {
     typeof metric.name === "string" &&
     METRIC_NAMES.has(metric.name) &&
     typeof metric.value === "number" &&
-    Number.isFinite(metric.value)
+    Number.isFinite(metric.value) &&
+    (metric.target === undefined ||
+      (typeof metric.target === "number" && Number.isFinite(metric.target))) &&
+    (metric.targetMet === undefined || typeof metric.targetMet === "boolean")
   );
 }

@@ -36,6 +36,7 @@ import type {
   HoldSummary,
   MediaItem,
   MediaUploadTarget,
+  NotificationRow,
   NotificationsPage,
   OwnerBookingsView,
   OwnerLocationView,
@@ -258,6 +259,11 @@ export const hostApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  removeRoomUnit: (roomTypeId: string) =>
+    request<{ unitCount: number }>(
+      `/host/room-types/${encodeURIComponent(roomTypeId)}/units`,
+      { method: "DELETE" },
+    ),
   requestUpload: (body: {
     scope: "property" | "room";
     filename: string;
@@ -848,6 +854,10 @@ export const notificationsApi = {
   list: (cursor?: string) =>
     request<NotificationsPage>(
       `/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+    ),
+  get: (id: string) =>
+    request<NotificationRow>(
+      `/notifications/${encodeURIComponent(id)}`,
     ),
   markRead: (ids?: string[]) =>
     request<{ updated: number }>("/notifications/read", {

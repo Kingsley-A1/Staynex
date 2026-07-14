@@ -15,6 +15,7 @@ const brandFont = Plus_Jakarta_Sans({
 });
 import { PageLoadingLine } from "@/components/page-loading-line";
 import { WebVitalsReporter } from "@/components/web-vitals-reporter";
+import { OfflineServiceWorker } from "@/components/offline-service-worker";
 import { DeferredAssistantWidget } from "@/features/ai/deferred-assistant-widget";
 import {
   DEFAULT_DESCRIPTION,
@@ -102,6 +103,7 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <PageLoadingLine />
           <WebVitalsReporter />
+          <OfflineServiceWorker />
           <Analytics />
         </Suspense>
         <script
