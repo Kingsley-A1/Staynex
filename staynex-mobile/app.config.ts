@@ -5,9 +5,9 @@
 //   GOOGLE_CLIENT_ID      optional — Google sign-in (Phase 2)
 //   EAS_PROJECT_ID        optional — set by `eas init`
 //
-// Local dev example:
-//   STAYNEX_API_BASE_URL=http://10.0.2.2:8080 npx expo start   (Android emulator)
-//   STAYNEX_API_BASE_URL=http://localhost:8080 npx expo start  (iOS simulator)
+// Local dev example (the API listens on 4000 — see MAIN-ARCHITECTURE.md §9):
+//   STAYNEX_API_BASE_URL=http://10.0.2.2:4000 npx expo start   (Android emulator)
+//   STAYNEX_API_BASE_URL=http://localhost:4000 npx expo start  (iOS simulator)
 
 import type { ExpoConfig } from "expo/config";
 
@@ -35,9 +35,10 @@ const config: ExpoConfig = {
     },
   },
   plugins: [
+    // expo-web-browser is runtime-only in SDK 52 (no app.plugin.js) — listing it
+    // here makes the plugin resolver require its native entry and crash the CLI.
     "expo-router",
     "expo-secure-store",
-    "expo-web-browser",
     "expo-font",
   ],
   extra: {

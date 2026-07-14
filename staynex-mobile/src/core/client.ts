@@ -5,9 +5,14 @@
 //   1. captures `staynex_session` from `Set-Cookie` on responses, and
 //   2. replays it as a `Cookie:` header on every subsequent request,
 // persisting the value in `expo-secure-store` so the session survives restarts.
+//
+// CSRF: the API guards every mutating route with a double-submit check — the
+// `staynex_csrf` cookie must match the `x-csrf-token` header. This client mints
+// a token from `GET /auth/csrf` once per launch and sends it as both, so the
+// pair always matches by construction.
 
 import * as SecureStore from "expo-secure-store";
-import { API_BASE_URL, SESSION_COOKIE } from "./env";
+import { API_BASE_URL, CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE } from "./env";
 
 /** Thrown for any non-2xx response. `status` enables precise handling. */
 export class ApiError extends Error {
@@ -53,6 +58,51 @@ async function captureSessionCookie(res: Response): Promise<void> {
   }
 }
 
+// --- CSRF (double-submit) -------------------------------------------------
+// The token is not a server-side secret: the middleware only checks that the
+// cookie and header values match. One token per app launch is sufficient; it
+// is re-minted once if the server ever rejects it.
+
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+let csrfToken: string | null = null;
+let csrfInFlight: Promise<string> | null = null;
+
+async function mintCsrfToken(): Promise<string> {
+  const res = await fetch(`${API_BASE_URL}/auth/csrf`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, res.statusText, "Couldn't initialise a secure session.");
+  }
+  const data = (await res.json()) as { csrfToken?: unknown };
+  if (typeof data.csrfToken !== "string" || !data.csrfToken) {
+    throw new ApiError(0, "Bad CSRF response", "Couldn't initialise a secure session.");
+  }
+  return data.csrfToken;
+}
+
+async function ensureCsrfToken(): Promise<string> {
+  if (csrfToken) return csrfToken;
+  if (!csrfInFlight) {
+    csrfInFlight = mintCsrfToken()
+      .then((token) => {
+        csrfToken = token;
+        return token;
+      })
+      .finally(() => {
+        csrfInFlight = null;
+      });
+  }
+  return csrfInFlight;
+}
+
+function isCsrfRejection(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 403 && /csrf/i.test(err.detail ?? "");
+}
+
+// ---------------------------------------------------------------------------
+
 interface RequestOptions {
   body?: unknown;
   signal?: AbortSignal;
@@ -63,12 +113,35 @@ async function request<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
+  try {
+    return await performRequest<T>(method, path, options);
+  } catch (err) {
+    // A stale/rejected CSRF token is recoverable: mint a fresh one and retry once.
+    if (!isCsrfRejection(err)) throw err;
+    csrfToken = null;
+    return performRequest<T>(method, path, options);
+  }
+}
+
+async function performRequest<T>(
+  method: string,
+  path: string,
+  options: RequestOptions = {},
+): Promise<T> {
   const cookie = await readSessionCookie();
   const headers: Record<string, string> = {
     Accept: "application/json",
     "Content-Type": "application/json",
   };
-  if (cookie) headers["Cookie"] = `${SESSION_COOKIE}=${cookie}`;
+
+  const cookies: string[] = [];
+  if (cookie) cookies.push(`${SESSION_COOKIE}=${cookie}`);
+  if (!SAFE_METHODS.has(method)) {
+    const token = await ensureCsrfToken();
+    headers[CSRF_HEADER] = token;
+    cookies.push(`${CSRF_COOKIE}=${token}`);
+  }
+  if (cookies.length > 0) headers["Cookie"] = cookies.join("; ");
 
   let res: Response;
   try {

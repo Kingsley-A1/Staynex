@@ -16,15 +16,13 @@ const workspaceRoot = path.resolve(projectRoot, "..");
 const config = getDefaultConfig(projectRoot);
 
 // 1. Watch the whole workspace so changes in packages/shared trigger reloads.
-config.watchFolders = [workspaceRoot];
+//    Additive: Expo's defaults must stay present (expo-doctor checks this).
+config.watchFolders = [...(config.watchFolders ?? []), workspaceRoot];
 
 // 2. Resolve from the app first, then the hoisted workspace root.
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, "node_modules"),
   path.resolve(workspaceRoot, "node_modules"),
 ];
-
-// pnpm's nested, symlinked layout breaks Metro's default hierarchical lookup.
-config.resolver.disableHierarchicalLookup = true;
 
 module.exports = config;

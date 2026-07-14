@@ -6,7 +6,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@staynex/shared": ["../packages/shared/src/index.ts"],
-      "@staynex/backend/types": ["../staynex-backend/types/index.ts"]
+      "@staynex/backend/types": ["../staynex-backend/types/index.ts"],
+      "react": ["./node_modules/@types/react"]
     }
   },
   "include": [

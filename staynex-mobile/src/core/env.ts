@@ -27,3 +27,7 @@ export const GOOGLE_CLIENT_ID = extra.googleClientId ?? null;
 
 /** Backend session cookie name (not a secret — the cookie value is). */
 export const SESSION_COOKIE = "staynex_session";
+
+/** Backend CSRF double-submit cookie + header (staynex-backend/src/common/security.ts). */
+export const CSRF_COOKIE = "staynex_csrf";
+export const CSRF_HEADER = "x-csrf-token";
