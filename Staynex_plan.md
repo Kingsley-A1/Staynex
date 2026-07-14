@@ -114,7 +114,7 @@ What is already good in `staynex-mobile/`:
 ### P0 blockers (nothing ships until these are fixed)
 
 1. **Workspace registration missing.** `pnpm-workspace.yaml` lists `packages/*` but not `staynex-mobile`, so its `workspace:*` dependencies (`@staynex/shared`, `@staynex/backend`) cannot install and `tsc`/`expo-doctor` cannot run.
-2. **CSRF will 403 every mobile write.** The backend requires the `sx_csrf` cookie + `X-CSRF-Token` header on **all** mutating requests (only the Paystack webhook is exempt — `staynex-backend/src/common/security.ts`). The mobile client never fetches `GET /auth/csrf` or sends the header, so login, register, quote, hold, and checkout will all fail with 403. Fix belongs in `staynex-mobile/src/core/client.ts` (bootstrap the token, capture the `sx_csrf` cookie, replay both); no backend change needed.
+2. **CSRF will 403 every mobile write.** The backend requires the `staynex_csrf` cookie + `X-CSRF-Token` header on **all** mutating requests (only the Paystack webhook is exempt — `staynex-backend/src/common/security.ts`). The mobile client never fetches `GET /auth/csrf` or sends the header, so login, register, quote, hold, and checkout will all fail with 403. Fix belongs in `staynex-mobile/src/core/client.ts` (bootstrap the token, capture the `staynex_csrf` cookie, replay both); no backend change needed.
 3. **Paystack return UX.** The backend always sets `callback_url` to the web `{APP_URL}/payment/status`, so the in-app browser never redirects to the app scheme and `openAuthSessionAsync` only resolves when the guest closes it manually. Polling still resolves truth, so this is Phase 1 hardening: either a deep-link-aware callback (backend accepts a mobile return hint) or an interstitial web page that deep-links back.
 
 ### Parity gaps (known, scheduled — not blockers)
@@ -123,10 +123,14 @@ What is already good in `staynex-mobile/`:
 
 ### Focus path (in order — do not skip gates)
 
+> Execution detail, SMART goals, target dates, and per-phase exit gates live in
+> **`staynex-mobile/IMPLEMENTATION-CHECKLIST.md`** — tick work off there. The
+> outline below is the summary.
+
 **Phase 0 exit — make it run (immediate):**
-- [ ] Add `staynex-mobile` to `pnpm-workspace.yaml`; `pnpm install` resolves `workspace:*` deps.
-- [ ] Add CSRF bootstrap to the mobile fetch client (blocker 2).
-- [ ] `pnpm --filter @staynex/mobile check` (tsc) passes; `expo-doctor` passes.
+- [x] Add `staynex-mobile` to `pnpm-workspace.yaml`; `pnpm install` resolves `workspace:*` deps.
+- [x] Add CSRF bootstrap to the mobile fetch client (blocker 2).
+- [x] `pnpm --filter @staynex/mobile check` (tsc) passes; `expo-doctor` passes 18/18.
 - [ ] Cold start on an emulator; live `GET /search?city=Calabar` renders real data from the local API.
 
 **Phase 1 exit — prove the loop (next):**
