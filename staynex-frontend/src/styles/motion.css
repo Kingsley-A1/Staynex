@@ -243,10 +243,9 @@
   }
 
   /* ---------------------------------------------------------------------------
-     Animated brand gradient (component: <AnimatedGradient/>). Two oversized
-     conic layers rotate slowly via a GPU transform (a static gradient rotating
-     is cheap and razor-sharp — no per-frame gradient repaint). Sized in viewport
-     units so the inscribed circle always covers the surface, hiding the corners.
+     Crisp welcome gradient (component: <AnimatedGradient/>). Layered radial
+     colour fields drift subtly over a clean linear base without blur filters.
+     oversized textures, or per-frame gradient repainting.
      ------------------------------------------------------------------------- */
   .animated-gradient {
     position: absolute;
@@ -254,55 +253,71 @@
     overflow: hidden;
     pointer-events: none;
     isolation: isolate;
+    background: linear-gradient(
+      128deg,
+      var(--color-surface-raised) 0%,
+      var(--color-primary-subtle) 34%,
+      var(--color-success-surface) 68%,
+      var(--color-warning-surface) 100%
+    );
   }
   .animated-gradient__layer {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    width: max(220vw, 220vh);
-    height: max(220vw, 220vh);
-    translate: -50% -50%;
-    transform-origin: center;
+    inset: -8%;
     will-change: transform;
     backface-visibility: hidden;
   }
   .animated-gradient__layer--a {
-    background: conic-gradient(
-      from 90deg,
-      #27187d,
-      #0ea5e9,
-      #14b8a6,
-      #f59e0b,
-      #27187d
-    );
-    opacity: 0.26;
-    animation: sx-gradient-rotate 48s linear infinite;
+    background:
+      radial-gradient(
+        circle at 13% 26%,
+        color-mix(in srgb, var(--color-primary) 20%, transparent) 0 8%,
+        color-mix(in srgb, var(--color-primary) 8%, transparent) 18%,
+        transparent 34%
+      ),
+      radial-gradient(
+        circle at 86% 18%,
+        color-mix(in srgb, var(--color-info) 16%, transparent) 0 7%,
+        color-mix(in srgb, var(--color-info) 6%, transparent) 18%,
+        transparent 32%
+      );
+    animation: sx-gradient-drift-a 18s ease-in-out infinite alternate;
   }
   .animated-gradient__layer--b {
-    background: conic-gradient(
-      from 250deg,
-      #14b8a6,
-      #27187d,
-      #0ea5e9,
-      #f59e0b,
-      #14b8a6
-    );
-    opacity: 0.16;
-    animation: sx-gradient-rotate 72s linear infinite reverse;
+    background:
+      radial-gradient(
+        circle at 72% 82%,
+        color-mix(in srgb, var(--color-success) 16%, transparent) 0 8%,
+        color-mix(in srgb, var(--color-success) 6%, transparent) 19%,
+        transparent 34%
+      ),
+      radial-gradient(
+        circle at 26% 88%,
+        color-mix(in srgb, var(--color-warning) 14%, transparent) 0 7%,
+        color-mix(in srgb, var(--color-warning) 5%, transparent) 18%,
+        transparent 32%
+      );
+    animation: sx-gradient-drift-b 24s ease-in-out infinite alternate;
   }
   /* Keeps the reading area clean — colour reads toward the edges, not behind text. */
   .animated-gradient__veil {
     position: absolute;
     inset: 0;
-    background: radial-gradient(
-      118% 92% at 50% 24%,
-      rgba(255, 255, 255, 0.92) 32%,
-      rgba(255, 255, 255, 0) 80%
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-surface-raised) 8%, transparent) 0%,
+      transparent 46%,
+      color-mix(in srgb, var(--color-surface-raised) 42%, transparent) 100%
     );
   }
-  @keyframes sx-gradient-rotate {
+  @keyframes sx-gradient-drift-a {
     to {
-      transform: rotate(360deg);
+      transform: translate3d(2.5%, -1.5%, 0);
+    }
+  }
+  @keyframes sx-gradient-drift-b {
+    to {
+      transform: translate3d(-2%, 1.5%, 0);
     }
   }
 

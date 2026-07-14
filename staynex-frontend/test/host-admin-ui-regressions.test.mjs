@@ -33,3 +33,60 @@ test("room creation closes after save and R2 signed PUT origins are allowed by C
   assert.match(config, /r2\.cloudflarestorage\.com/);
   assert.match(config, /mediaUploadOrigin/);
 });
+
+test("property review blockers link to every editable remediation section", async () => {
+  const review = await source(
+    "../src/features/properties/review-status-panel.tsx",
+  );
+  for (const key of [
+    "owner_identity",
+    "payout_ready",
+    "property_details",
+    "location_ready",
+    "media_ready",
+    "rooms_ready",
+    "availability_ready",
+    "duplicate_listing",
+    "content_safety",
+  ]) {
+    assert.match(review, new RegExp(`${key}:`));
+  }
+  assert.match(review, /check\.status === "FAIL"/);
+  assert.match(review, /aria-label={`Edit/);
+});
+
+test("property editor exposes availability and places photos before review status", async () => {
+  const [page, availability] = await Promise.all([
+    source("../src/app/(host)/host/properties/[id]/page.tsx"),
+    source("../src/features/properties/availability-editor.tsx"),
+  ]);
+  assert.ok(
+    page.indexOf('id="property-photos"') < page.indexOf('id="review-status"'),
+  );
+  assert.match(page, /<AvailabilityEditor/);
+  assert.match(availability, /hostApi\.setCapacity/);
+  assert.match(availability, /Available rooms per night/);
+  assert.match(availability, /30 open days required for review/);
+});
+
+test("workspace chrome uses the shared accessible breadcrumb", async () => {
+  const [breadcrumb, chrome] = await Promise.all([
+    source("../src/ui/breadcrumb.tsx"),
+    source("../src/components/dashboard-chrome.tsx"),
+  ]);
+  assert.match(breadcrumb, /aria-label="Breadcrumb"/);
+  assert.match(breadcrumb, /aria-current/);
+  assert.match(chrome, /workspaceBreadcrumbs/);
+  assert.match(chrome, /<Breadcrumbs/);
+});
+
+test("welcome gradient avoids oversized conic textures and blur filters", async () => {
+  const motion = await source("../src/styles/motion.css");
+  const gradient = motion.slice(
+    motion.indexOf(".animated-gradient {"),
+    motion.indexOf(".page-loading-line {"),
+  );
+  assert.match(gradient, /linear-gradient/);
+  assert.match(gradient, /sx-gradient-drift-a/);
+  assert.doesNotMatch(gradient, /conic-gradient|220vw|filter:\s*blur/);
+});

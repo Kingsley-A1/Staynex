@@ -151,7 +151,7 @@ function Hero() {
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-md leading-relaxed text-muted-foreground">
             Search verified hotels, resorts, and apartments with real-time
-            availability, seamless payments, engineerd secure by default.
+            availability, seamless payments, and security engineered in.
           </p>
         </div>
 
@@ -163,7 +163,7 @@ function Hero() {
           {[
             "Secure Paystack payments",
             "Verified properties",
-            "Instant confirmation",
+            "Payment-verified bookings",
           ].map((t) => (
             <li key={t} className="inline-flex items-center gap-1.5">
               <IconCheck className="size-4 text-success" />
@@ -277,8 +277,8 @@ function FeaturedStays({
                 Live stays will appear here.
               </h3>
               <p className="mx-auto mt-2 max-w-md text-body-sm text-muted-foreground">
-                Once approved properties are uploaded, this section will show the
-                newest stays and booking-driven popular stays automatically.
+                Once approved properties are uploaded, this section will show
+                the newest stays and booking-driven popular stays automatically.
               </p>
               {!live && (
                 <p className="mt-3 text-caption">
@@ -349,9 +349,7 @@ function StayCard({
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-        <span
-          className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-success-border bg-success-surface px-2.5 py-1 text-2xs font-semibold text-success"
-        >
+        <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-success-border bg-success-surface px-2.5 py-1 text-2xs font-semibold text-success">
           <span className="size-1.5 rounded-full bg-success" />
           Verified
         </span>

@@ -14,6 +14,8 @@ export interface WorkspaceNavItem extends NavItem {
   icon: IconName;
   /** Group heading shown above the item in the expanded sidebar. */
   section?: string;
+  /** Singular entity name used for safe dynamic-route breadcrumb labels. */
+  entityLabel?: string;
 }
 
 export const GUEST_NAV: NavItem[] = [
@@ -24,23 +26,93 @@ export const GUEST_NAV: NavItem[] = [
 ];
 
 export const HOST_NAV: WorkspaceNavItem[] = [
-  { href: "/host/dashboard", label: "Dashboard", icon: "overview", section: "Workspace" },
-  { href: "/host/properties", label: "Properties", icon: "properties", section: "Workspace" },
-  { href: "/host/bookings", label: "Bookings", icon: "bookings", section: "Workspace" },
-  { href: "/host/notifications", label: "Notifications", icon: "notifications", section: "Workspace" },
-  { href: "/host/onboarding", label: "Onboarding", icon: "onboarding", section: "Account" },
-  { href: "/host/settings", label: "Settings", icon: "settings", section: "Account" },
+  {
+    href: "/host/dashboard",
+    label: "Dashboard",
+    icon: "overview",
+    section: "Workspace",
+  },
+  {
+    href: "/host/properties",
+    label: "Properties",
+    icon: "properties",
+    section: "Workspace",
+    entityLabel: "Property",
+  },
+  {
+    href: "/host/bookings",
+    label: "Bookings",
+    icon: "bookings",
+    section: "Workspace",
+    entityLabel: "Booking",
+  },
+  {
+    href: "/host/notifications",
+    label: "Notifications",
+    icon: "notifications",
+    section: "Workspace",
+  },
+  {
+    href: "/host/onboarding",
+    label: "Onboarding",
+    icon: "onboarding",
+    section: "Account",
+  },
+  {
+    href: "/host/settings",
+    label: "Settings",
+    icon: "settings",
+    section: "Account",
+  },
 ];
 
 export const ADMIN_NAV: WorkspaceNavItem[] = [
   { href: "/admin", label: "Overview", icon: "overview", section: "Workspace" },
-  { href: "/admin/approvals", label: "Approvals", icon: "approvals", section: "Operations" },
-  { href: "/admin/bookings", label: "Bookings & payments", icon: "bookings", section: "Operations" },
-  { href: "/admin/payouts", label: "Payouts", icon: "payouts", section: "Operations" },
-  { href: "/admin/users", label: "Users", icon: "users", section: "People" },
-  { href: "/admin/notifications", label: "Notifications", icon: "notifications", section: "People" },
-  { href: "/admin/testimonials", label: "Testimonials", icon: "testimonials", section: "Trust" },
+  {
+    href: "/admin/approvals",
+    label: "Approvals",
+    icon: "approvals",
+    section: "Operations",
+    entityLabel: "Approval",
+  },
+  {
+    href: "/admin/bookings",
+    label: "Bookings & payments",
+    icon: "bookings",
+    section: "Operations",
+    entityLabel: "Booking",
+  },
+  {
+    href: "/admin/payouts",
+    label: "Payouts",
+    icon: "payouts",
+    section: "Operations",
+  },
+  {
+    href: "/admin/users",
+    label: "Users",
+    icon: "users",
+    section: "People",
+    entityLabel: "User",
+  },
+  {
+    href: "/admin/notifications",
+    label: "Notifications",
+    icon: "notifications",
+    section: "People",
+  },
+  {
+    href: "/admin/testimonials",
+    label: "Testimonials",
+    icon: "testimonials",
+    section: "Trust",
+  },
   { href: "/admin/audit", label: "Audit log", icon: "audit", section: "Trust" },
   { href: "/admin/ai-logs", label: "AI logs", icon: "ai", section: "Trust" },
-  { href: "/admin/settings", label: "Settings", icon: "settings", section: "System" },
+  {
+    href: "/admin/settings",
+    label: "Settings",
+    icon: "settings",
+    section: "System",
+  },
 ];

@@ -11,6 +11,7 @@ import { MobileNav } from "@/components/mobile-nav";
 import { NotificationCenter } from "@/components/notification-center";
 import { NAV_ICONS, IconChevronLeft } from "@/components/icons";
 import type { WorkspaceNavItem } from "@/components/nav-config";
+import { Breadcrumbs, type BreadcrumbItem } from "@/ui";
 
 export interface AccountSummary {
   name: string;
@@ -29,6 +30,65 @@ function activeHref(pathname: string, items: WorkspaceNavItem[]): string {
     }
   }
   return best;
+}
+
+function workspaceBreadcrumbs(
+  pathname: string,
+  items: WorkspaceNavItem[],
+): BreadcrumbItem[] {
+  const root = items[0];
+  if (!root) return [];
+
+  const active = activeHref(pathname, items);
+  const section = items.find((item) => item.href === active) ?? root;
+  const breadcrumbs: BreadcrumbItem[] = [
+    { label: root.label, href: root.href },
+  ];
+
+  if (!active) {
+    const rootSegment = root.href.split("/").filter(Boolean)[0];
+    const routeSegment = pathname
+      .split("/")
+      .filter(Boolean)
+      .find((segment) => segment !== rootSegment);
+    if (routeSegment) {
+      breadcrumbs.push({ label: humanizeSegment(routeSegment) });
+    } else {
+      breadcrumbs[0] = { label: root.label };
+    }
+    return breadcrumbs;
+  }
+
+  if (section.href !== root.href) {
+    breadcrumbs.push({ label: section.label, href: section.href });
+  }
+
+  const remainder = active
+    ? pathname.slice(active.length).split("/").filter(Boolean)
+    : [];
+  if (remainder.length > 0) {
+    const entity = section.entityLabel ?? section.label;
+    breadcrumbs.push({
+      label:
+        remainder[0] === "new"
+          ? `New ${entity.toLowerCase()}`
+          : `${entity} details`,
+    });
+  } else {
+    breadcrumbs[breadcrumbs.length - 1] = {
+      label: breadcrumbs[breadcrumbs.length - 1].label,
+    };
+  }
+
+  return breadcrumbs;
+}
+
+function humanizeSegment(segment: string): string {
+  return segment
+    .split("-")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 export function DashboardChrome({
@@ -74,16 +134,32 @@ export function DashboardChrome({
         <div
           className={cn(
             "flex h-16 shrink-0 items-center border-b border-border",
-            collapsed ? "flex-col justify-center gap-2 py-2" : "justify-between px-4",
+            collapsed
+              ? "flex-col justify-center gap-2 py-2"
+              : "justify-between px-4",
           )}
         >
-          <Link href="/" aria-label="Staynex Bookings home" className="inline-flex items-center">
+          <Link
+            href="/"
+            aria-label="Staynex Bookings home"
+            className="inline-flex items-center"
+          >
             {collapsed ? (
               <span className="relative block size-8 overflow-hidden rounded-md">
-                <Image src="/icon.png" alt="Staynex Bookings" fill sizes="32px" className="object-cover" />
+                <Image
+                  src="/icon.png"
+                  alt="Staynex Bookings"
+                  fill
+                  sizes="32px"
+                  className="object-cover"
+                />
               </span>
             ) : (
-              <Brandmark iconClassName="size-7" textClassName="text-base" hideSuffixOnMobile />
+              <Brandmark
+                iconClassName="size-7"
+                textClassName="text-base"
+                hideSuffixOnMobile
+              />
             )}
           </Link>
           <button
@@ -92,17 +168,27 @@ export function DashboardChrome({
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <IconChevronLeft className={cn("size-5 transition-transform", collapsed && "rotate-180")} />
+            <IconChevronLeft
+              className={cn(
+                "size-5 transition-transform",
+                collapsed && "rotate-180",
+              )}
+            />
           </button>
         </div>
 
         {/* Nav */}
         <nav
           aria-label="Workspace sections"
-          className={cn("flex-1 overflow-y-auto py-3", collapsed ? "px-2" : "px-3")}
+          className={cn(
+            "flex-1 overflow-y-auto py-3",
+            collapsed ? "px-2" : "px-3",
+          )}
         >
           {!collapsed && (
-            <p className="px-3 pb-1 text-overline text-muted-foreground">{workspace}</p>
+            <p className="px-3 pb-1 text-overline text-muted-foreground">
+              {workspace}
+            </p>
           )}
           <NavList items={nav} active={active} collapsed={collapsed} />
         </nav>
@@ -119,18 +205,30 @@ export function DashboardChrome({
             aria-label="Staynex Bookings home"
             className="inline-flex items-center lg:hidden"
           >
-            <Brandmark iconClassName="size-7" textClassName="text-base" hideSuffixOnMobile />
+            <Brandmark
+              iconClassName="size-7"
+              textClassName="text-base"
+              hideSuffixOnMobile
+            />
           </Link>
           <div className="flex items-center gap-3">
             <NotificationCenter />
-            <span className="text-overline text-muted-foreground lg:hidden">{workspace}</span>
+            <span className="text-overline text-muted-foreground lg:hidden">
+              {workspace}
+            </span>
             <div className="lg:hidden">
               <MobileNav items={nav} workspace={workspace} account={account} />
             </div>
           </div>
         </header>
 
-        <main className="layout-container py-8">{children}</main>
+        <main className="layout-container py-6 sm:py-8">
+          <Breadcrumbs
+            items={workspaceBreadcrumbs(pathname, nav)}
+            className="mb-5"
+          />
+          {children}
+        </main>
       </div>
     </div>
   );
@@ -151,15 +249,21 @@ function NavList({
       {items.map((item) => {
         const Icon = NAV_ICONS[item.icon];
         const isActive = item.href === active;
-        const showHeading = !collapsed && item.section && item.section !== lastSection;
-        const showDivider = collapsed && item.section && item.section !== lastSection;
+        const showHeading =
+          !collapsed && item.section && item.section !== lastSection;
+        const showDivider =
+          collapsed && item.section && item.section !== lastSection;
         lastSection = item.section;
         return (
           <li key={item.href}>
             {showHeading && (
-              <p className="px-3 pb-1 pt-3 text-overline text-muted-foreground">{item.section}</p>
+              <p className="px-3 pb-1 pt-3 text-overline text-muted-foreground">
+                {item.section}
+              </p>
             )}
-            {showDivider && <div className="mx-2 my-1.5 border-t border-border" />}
+            {showDivider && (
+              <div className="mx-2 my-1.5 border-t border-border" />
+            )}
             <Link
               href={item.href}
               aria-current={isActive ? "page" : undefined}
@@ -190,10 +294,23 @@ function NavList({
   );
 }
 
-function AccountFooter({ account, collapsed }: { account: AccountSummary; collapsed: boolean }) {
-  const initial = (account.name?.trim() || account.email || "?").charAt(0).toUpperCase();
+function AccountFooter({
+  account,
+  collapsed,
+}: {
+  account: AccountSummary;
+  collapsed: boolean;
+}) {
+  const initial = (account.name?.trim() || account.email || "?")
+    .charAt(0)
+    .toUpperCase();
   return (
-    <div className={cn("shrink-0 border-t border-border", collapsed ? "p-2" : "p-3")}>
+    <div
+      className={cn(
+        "shrink-0 border-t border-border",
+        collapsed ? "p-2" : "p-3",
+      )}
+    >
       <Link
         href={account.href}
         title={collapsed ? account.name : undefined}
@@ -207,9 +324,13 @@ function AccountFooter({ account, collapsed }: { account: AccountSummary; collap
         </span>
         {!collapsed && (
           <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-ink">{account.name}</span>
+            <span className="block truncate text-sm font-semibold text-ink">
+              {account.name}
+            </span>
             {account.email && (
-              <span className="block truncate text-caption text-muted-foreground">{account.email}</span>
+              <span className="block truncate text-caption text-muted-foreground">
+                {account.email}
+              </span>
             )}
           </span>
         )}

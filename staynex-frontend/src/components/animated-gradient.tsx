@@ -3,8 +3,8 @@ import { cn } from "@/lib/cn";
 /**
  * AnimatedGradient — a reusable, decorative brand gradient field.
  *
- * Two crisp conic layers (the same indigo / cyan / teal / amber mix as
- * `.attention-border`) revolve very slowly in opposite directions, so the
+ * Crisp indigo, cyan, teal, and amber colour fields drift a few pixels over a
+ * clean linear base instead of scaling or rotating an oversized texture, so the
  * colour shifts subtly rather than sweeping — calm and professional, never
  * loud. A soft white veil keeps the reading area clean while colour lives
  * toward the edges. Sharp by design: no blur, so it never looks cloudy.
