@@ -115,4 +115,10 @@ export const ADMIN_NAV: WorkspaceNavItem[] = [
     icon: "settings",
     section: "System",
   },
+  {
+    href: "/admin/support",
+    label: "Support",
+    icon: "support",
+    section: "System",
+  },
 ];

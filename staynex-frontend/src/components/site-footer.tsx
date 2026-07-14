@@ -21,6 +21,7 @@ const footerColumns = [
   {
     title: "Support",
     links: [
+      ["Contact support", "/support"],
       ["Docs", "/docs"],
       ["Terms", "/terms"],
       ["Policies", "/policies"],

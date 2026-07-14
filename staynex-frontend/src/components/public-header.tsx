@@ -15,6 +15,12 @@ export function PublicHeader() {
         </Link>
         <nav className="flex items-center gap-2 text-sm font-medium">
           <Link
+            href="/support"
+            className="hidden whitespace-nowrap rounded-md px-3 py-2 text-muted-foreground hover:text-ink lg:inline-flex"
+          >
+            Support
+          </Link>
+          <Link
             href="/reviews"
             className="hidden whitespace-nowrap rounded-md px-3 py-2 text-muted-foreground hover:text-ink sm:inline-flex"
           >

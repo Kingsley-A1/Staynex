@@ -147,6 +147,16 @@ export function IconOnboarding({ className }: IconProps) {
   );
 }
 
+export function IconSupport({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M4 13v-2a8 8 0 0 1 16 0v2" />
+      <path d="M4 13a2 2 0 0 1 2-2h1v6H6a2 2 0 0 1-2-2v-2ZM20 13a2 2 0 0 0-2-2h-1v6h1a2 2 0 0 0 2-2v-2Z" />
+      <path d="M17 17c0 2-1.8 3-4 3h-1" />
+    </svg>
+  );
+}
+
 /* --- UI / chrome --- */
 export function IconChevronLeft({ className }: IconProps) {
   return (
@@ -239,6 +249,7 @@ export type IconName =
   | "settings"
   | "properties"
   | "onboarding"
+  | "support"
   | "notifications";
 
 export const NAV_ICONS: Record<IconName, ComponentType<IconProps>> = {
@@ -253,5 +264,6 @@ export const NAV_ICONS: Record<IconName, ComponentType<IconProps>> = {
   settings: IconSettings,
   properties: IconProperties,
   onboarding: IconOnboarding,
+  support: IconSupport,
   notifications: IconBell,
 };

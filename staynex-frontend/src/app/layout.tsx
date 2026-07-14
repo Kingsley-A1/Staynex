@@ -23,9 +23,11 @@ import {
   getSiteOrigin,
   getSiteUrl,
 } from "@/lib/seo";
+import { getSupportContact } from "@/lib/support-contact";
 
 const appUrl = getSiteUrl();
 const appOrigin = getSiteOrigin();
+const supportContact = getSupportContact();
 
 const organizationJsonLd = {
   "@context": "https://schema.org",
@@ -37,7 +39,8 @@ const organizationJsonLd = {
   slogan: "Book trusted stays, confidently.",
   contactPoint: {
     "@type": "ContactPoint",
-    email: "support@staynexbookings.ng",
+    ...(supportContact.email ? { email: supportContact.email } : {}),
+    ...(supportContact.phone ? { telephone: supportContact.phone } : {}),
     contactType: "customer support",
   },
 };
