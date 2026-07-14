@@ -4,10 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import { LinkButton } from "@/ui";
 import { catalogApi, hostApiSettings } from "@/lib/api";
 import type { CityOption, OwnerSettingsView } from "@/lib/types";
-import { HostLocationsManager, HostPayoutCard, HostProfileCard } from "./host-cards";
+import {
+  HostLocationsManager,
+  HostPayoutCard,
+  HostProfileCard,
+} from "./host-cards";
 
-export function HostSettings() {
-  const [data, setData] = useState<OwnerSettingsView | null | undefined>(undefined);
+export function HostSettings({ edit }: { edit?: "payout" }) {
+  const [data, setData] = useState<OwnerSettingsView | null | undefined>(
+    undefined,
+  );
   const [cities, setCities] = useState<CityOption[]>([]);
 
   const reload = useCallback(async () => {
@@ -29,7 +35,11 @@ export function HostSettings() {
   }, []);
 
   if (data === undefined) {
-    return <p className="surface-card p-6 text-muted-foreground">Loading your settings…</p>;
+    return (
+      <p className="surface-card p-6 text-muted-foreground">
+        Loading your settings…
+      </p>
+    );
   }
   if (data === null) {
     return (
@@ -37,16 +47,32 @@ export function HostSettings() {
         <p className="text-muted-foreground">
           You need a host account to manage these settings.
         </p>
-        <LinkButton href="/host/register?next=/host/onboarding">Become a host</LinkButton>
+        <LinkButton href="/host/register?next=/host/onboarding">
+          Become a host
+        </LinkButton>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <HostProfileCard profile={data.profile} onChanged={reload} />
-      <HostLocationsManager locations={data.locations} cities={cities} onChanged={reload} />
-      <HostPayoutCard payoutMethod={data.payoutMethod} onChanged={reload} />
+      <section id="business-profile" className="scroll-mt-24">
+        <HostProfileCard profile={data.profile} onChanged={reload} />
+      </section>
+      <section id="operating-locations" className="scroll-mt-24">
+        <HostLocationsManager
+          locations={data.locations}
+          cities={cities}
+          onChanged={reload}
+        />
+      </section>
+      <section id="payout-method" className="scroll-mt-24">
+        <HostPayoutCard
+          payoutMethod={data.payoutMethod}
+          onChanged={reload}
+          initialEditing={edit === "payout"}
+        />
+      </section>
     </div>
   );
 }

@@ -118,9 +118,11 @@ export function HostProfileCard({
 export function HostPayoutCard({
   payoutMethod,
   onChanged,
+  initialEditing = false,
 }: {
   payoutMethod: OwnerPayoutMethodView | null;
   onChanged: Reload;
+  initialEditing?: boolean;
 }) {
   const [banks, setBanks] = useState<PayoutBankOption[]>([]);
   const [bankCode, setBankCode] = useState(payoutMethod?.bankCode ?? "");
@@ -209,6 +211,7 @@ export function HostPayoutCard({
       onCancel={reset}
       onSave={save}
       canSave={verified}
+      initialEditing={initialEditing}
       summary={
         payoutMethod ? (
           <dl>

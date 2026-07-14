@@ -1,5 +1,9 @@
-import { Badge, ReviewStatusBadge } from "@/ui";
-import type { PropertyDetail, PropertyReviewCheckView } from "@/lib/types";
+import { Badge, LinkButton, ReviewStatusBadge } from "@/ui";
+import type {
+  PropertyDetail,
+  PropertyReviewCheckKey,
+  PropertyReviewCheckView,
+} from "@/lib/types";
 
 export function ReviewStatusPanel({ property }: { property: PropertyDetail }) {
   const latest = property.latestReview;
@@ -18,20 +22,31 @@ export function ReviewStatusPanel({ property }: { property: PropertyDetail }) {
 
       {latest && (
         <div className="grid gap-3 text-sm sm:grid-cols-2">
-          <ReviewMetric label="Source" value={latest.source === "AUTO_REVIEW" ? "Auto-review" : "Admin"} />
+          <ReviewMetric
+            label="Source"
+            value={latest.source === "AUTO_REVIEW" ? "Auto-review" : "Admin"}
+          />
           <ReviewMetric label="Risk score" value={`${latest.riskScore}/100`} />
           <ReviewMetric
             label="Reviewed"
-            value={latest.completedAt ? formatDateTime(latest.completedAt) : "—"}
+            value={
+              latest.completedAt ? formatDateTime(latest.completedAt) : "—"
+            }
           />
           <ReviewMetric
             label="Scheduled"
-            value={property.scheduledPublishAt ? formatDateTime(property.scheduledPublishAt) : "—"}
+            value={
+              property.scheduledPublishAt
+                ? formatDateTime(property.scheduledPublishAt)
+                : "—"
+            }
           />
         </div>
       )}
 
-      {latest?.summary && <p className="text-body-sm text-muted-foreground">{latest.summary}</p>}
+      {latest?.summary && (
+        <p className="text-body-sm text-muted-foreground">{latest.summary}</p>
+      )}
 
       {hasChecks && (
         <ul className="space-y-2">
@@ -44,13 +59,44 @@ export function ReviewStatusPanel({ property }: { property: PropertyDetail }) {
                 <p className="font-semibold text-ink">{check.label}</p>
                 <p className="text-caption">{check.details}</p>
               </div>
-              <CheckBadge check={check} />
+              <div className="flex shrink-0 items-center gap-2">
+                <CheckBadge check={check} />
+                {check.status === "FAIL" && (
+                  <LinkButton
+                    href={reviewFixHref(check.key, property.id)}
+                    variant="secondary"
+                    size="sm"
+                    aria-label={`Edit ${check.label.toLowerCase()}`}
+                  >
+                    Edit
+                  </LinkButton>
+                )}
+              </div>
             </li>
           ))}
         </ul>
       )}
     </section>
   );
+}
+
+function reviewFixHref(
+  key: PropertyReviewCheckKey,
+  propertyId: string,
+): string {
+  const details = `/host/properties/${propertyId}?edit=details#property-details`;
+  const targets: Record<PropertyReviewCheckKey, string> = {
+    owner_identity: "/settings",
+    payout_ready: "/host/settings?edit=payout#payout-method",
+    property_details: details,
+    location_ready: details,
+    media_ready: "#property-photos",
+    rooms_ready: "#room-types",
+    availability_ready: "#availability",
+    duplicate_listing: details,
+    content_safety: details,
+  };
+  return targets[key];
 }
 
 function ReviewMetric({ label, value }: { label: string; value: string }) {
@@ -64,21 +110,35 @@ function ReviewMetric({ label, value }: { label: string; value: string }) {
 
 function CheckBadge({ check }: { check: PropertyReviewCheckView }) {
   if (check.status === "PASS") {
-    return <Badge className="border-success-border bg-success-surface text-success">Pass</Badge>;
+    return (
+      <Badge className="border-success-border bg-success-surface text-success">
+        Pass
+      </Badge>
+    );
   }
   if (check.status === "WARNING") {
-    return <Badge className="border-warning-border bg-warning-surface text-warning">Warning</Badge>;
+    return (
+      <Badge className="border-warning-border bg-warning-surface text-warning">
+        Warning
+      </Badge>
+    );
   }
-  return <Badge className="border-error-border bg-error-surface text-error">Fail</Badge>;
+  return (
+    <Badge className="border-error-border bg-error-surface text-error">
+      Fail
+    </Badge>
+  );
 }
 
 function reviewSummary(property: PropertyDetail): string {
   if (property.reviewStatus === "SCHEDULED" && property.scheduledPublishAt) {
     return `Passed checks. Auto-publish is scheduled for ${formatDateTime(property.scheduledPublishAt)}.`;
   }
-  if (property.reviewStatus === "FAILED") return "Checklist blockers need changes.";
+  if (property.reviewStatus === "FAILED")
+    return "Checklist blockers need changes.";
   if (property.reviewStatus === "PUBLISHED") return "Published after review.";
-  if (property.reviewStatus === "MANUAL_REVIEW") return "Admin has requested a manual follow-up.";
+  if (property.reviewStatus === "MANUAL_REVIEW")
+    return "Admin has requested a manual follow-up.";
   if (property.reviewStatus === "PENDING") return "Review is running.";
   return "Not currently submitted for review.";
 }

@@ -1,13 +1,4 @@
-export type PropertyReviewCheckKey =
-  | "owner_identity"
-  | "payout_ready"
-  | "property_details"
-  | "location_ready"
-  | "media_ready"
-  | "rooms_ready"
-  | "availability_ready"
-  | "duplicate_listing"
-  | "content_safety";
+import type { PropertyReviewCheckKey } from "../../../types";
 
 export type PropertyReviewCheckStatus = "PASS" | "FAIL" | "WARNING";
 export type PropertyReviewCheckSeverity = "BLOCKER" | "WARNING";
@@ -116,7 +107,9 @@ function ownerIdentityCheck(
   );
 }
 
-function payoutReadyCheck(facts: PropertyReviewFacts): PropertyReviewPolicyCheck {
+function payoutReadyCheck(
+  facts: PropertyReviewFacts,
+): PropertyReviewPolicyCheck {
   return check(
     "payout_ready",
     "Payout readiness",
@@ -156,7 +149,9 @@ function locationReadyCheck(
   );
 }
 
-function mediaReadyCheck(facts: PropertyReviewFacts): PropertyReviewPolicyCheck {
+function mediaReadyCheck(
+  facts: PropertyReviewFacts,
+): PropertyReviewPolicyCheck {
   return check(
     "media_ready",
     "Property photos",
@@ -167,7 +162,9 @@ function mediaReadyCheck(facts: PropertyReviewFacts): PropertyReviewPolicyCheck 
   );
 }
 
-function roomsReadyCheck(facts: PropertyReviewFacts): PropertyReviewPolicyCheck {
+function roomsReadyCheck(
+  facts: PropertyReviewFacts,
+): PropertyReviewPolicyCheck {
   const isPassing =
     facts.roomTypeCount > 0 &&
     facts.pricedRoomTypeCount === facts.roomTypeCount &&

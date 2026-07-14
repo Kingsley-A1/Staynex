@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type {
   MediaItem,
   PropertyDetail,
+  PropertyReviewCheckKey,
   PropertyReviewCheckStatus,
   PropertyReviewRunView,
   PropertyReviewSource,
@@ -14,31 +15,34 @@ import type {
 // Shared query shapes + Prisma -> contract mappers. Centralized so the owner and
 // admin surfaces return identical property shapes (no duplicated mapping logic).
 
-export const propertySummaryInclude = Prisma.validator<Prisma.PropertyInclude>()({
-  city: { select: { name: true } },
-  media: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } },
-  roomTypes: { select: { basePriceKobo: true } },
-});
+export const propertySummaryInclude =
+  Prisma.validator<Prisma.PropertyInclude>()({
+    city: { select: { name: true } },
+    media: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } },
+    roomTypes: { select: { basePriceKobo: true } },
+  });
 export type PropertySummaryRow = Prisma.PropertyGetPayload<{
   include: typeof propertySummaryInclude;
 }>;
 
-export const propertyDetailInclude = Prisma.validator<Prisma.PropertyInclude>()({
-  city: { select: { name: true } },
-  media: { orderBy: { sortOrder: "asc" } },
-  roomTypes: {
-    orderBy: { createdAt: "asc" },
-    include: {
-      media: { orderBy: { sortOrder: "asc" } },
-      _count: { select: { roomUnits: true } },
+export const propertyDetailInclude = Prisma.validator<Prisma.PropertyInclude>()(
+  {
+    city: { select: { name: true } },
+    media: { orderBy: { sortOrder: "asc" } },
+    roomTypes: {
+      orderBy: { createdAt: "asc" },
+      include: {
+        media: { orderBy: { sortOrder: "asc" } },
+        _count: { select: { roomUnits: true } },
+      },
+    },
+    reviewRuns: {
+      orderBy: { createdAt: "desc" },
+      take: 1,
+      include: { checks: { orderBy: { createdAt: "asc" } } },
     },
   },
-  reviewRuns: {
-    orderBy: { createdAt: "desc" },
-    take: 1,
-    include: { checks: { orderBy: { createdAt: "asc" } } },
-  },
-});
+);
 export type PropertyDetailRow = Prisma.PropertyGetPayload<{
   include: typeof propertyDetailInclude;
 }>;
@@ -119,7 +123,7 @@ function toReviewRun(
     completedAt: run.completedAt?.toISOString() ?? null,
     checks: run.checks.map((check) => ({
       id: check.id,
-      key: check.key,
+      key: check.key as PropertyReviewCheckKey,
       label: check.label,
       status: check.status as PropertyReviewCheckStatus,
       severity: check.severity,

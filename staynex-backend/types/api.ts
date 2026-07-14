@@ -24,9 +24,20 @@ export type PropertyReviewSource = "AUTO_REVIEW" | "ADMIN_OVERRIDE";
 
 export type PropertyReviewCheckStatus = "PASS" | "FAIL" | "WARNING";
 
+export type PropertyReviewCheckKey =
+  | "owner_identity"
+  | "payout_ready"
+  | "property_details"
+  | "location_ready"
+  | "media_ready"
+  | "rooms_ready"
+  | "availability_ready"
+  | "duplicate_listing"
+  | "content_safety";
+
 export interface PropertyReviewCheckView {
   id: string;
-  key: string;
+  key: PropertyReviewCheckKey;
   label: string;
   status: PropertyReviewCheckStatus;
   severity: string;

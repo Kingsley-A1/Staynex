@@ -10,17 +10,23 @@ import type { CityOption } from "@/features/properties/fixtures";
 export function PropertyForm({
   cities,
   property,
+  initialEditing = false,
 }: {
   cities: CityOption[];
   property?: PropertyDetail;
+  initialEditing?: boolean;
 }) {
   const router = useRouter();
   const editing = Boolean(property);
   const initialCityId = property
-    ? (cities.find((c) => c.name === property.cityName)?.id ?? cities[0]?.id ?? "")
+    ? (cities.find((c) => c.name === property.cityName)?.id ??
+      cities[0]?.id ??
+      "")
     : (cities[0]?.id ?? "");
 
-  const [mode, setMode] = useState<"view" | "edit">(editing ? "view" : "edit");
+  const [mode, setMode] = useState<"view" | "edit">(
+    editing && !initialEditing ? "view" : "edit",
+  );
   const [name, setName] = useState(property?.name ?? "");
   const [cityId, setCityId] = useState(initialCityId);
   const [description, setDescription] = useState(property?.description ?? "");
@@ -48,12 +54,20 @@ export function PropertyForm({
     setError(null);
     try {
       if (editing && property) {
-        await hostApi.updateProperty(property.id, { name, cityId, description });
+        await hostApi.updateProperty(property.id, {
+          name,
+          cityId,
+          description,
+        });
         setMode("view");
         setJustSaved(true);
         router.refresh();
       } else {
-        const created = await hostApi.createProperty({ name, cityId, description });
+        const created = await hostApi.createProperty({
+          name,
+          cityId,
+          description,
+        });
         router.push(`/host/properties/${created.id}`);
       }
     } catch (err) {
@@ -64,7 +78,8 @@ export function PropertyForm({
   }
 
   if (editing && property && mode === "view") {
-    const cityName = cities.find((c) => c.id === cityId)?.name ?? property.cityName;
+    const cityName =
+      cities.find((c) => c.id === cityId)?.name ?? property.cityName;
     return (
       <div className="surface-card max-w-2xl space-y-5 p-5 sm:p-6">
         {justSaved && (
@@ -87,7 +102,9 @@ export function PropertyForm({
           <div>
             <dt className="text-label text-muted-foreground">Description</dt>
             <dd className="whitespace-pre-wrap text-ink">
-              {property.description || <span className="text-muted-foreground">Not set</span>}
+              {property.description || (
+                <span className="text-muted-foreground">Not set</span>
+              )}
             </dd>
           </div>
         </dl>
@@ -99,7 +116,10 @@ export function PropertyForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="surface-card max-w-2xl space-y-5 p-5 sm:p-6">
+    <form
+      onSubmit={onSubmit}
+      className="surface-card max-w-2xl space-y-5 p-5 sm:p-6"
+    >
       <Field label="Property name" htmlFor="name" required>
         <Input
           id="name"
@@ -111,7 +131,12 @@ export function PropertyForm({
         />
       </Field>
       <Field label="City" htmlFor="city" required>
-        <Select id="city" value={cityId} onChange={(e) => setCityId(e.target.value)} required>
+        <Select
+          id="city"
+          value={cityId}
+          onChange={(e) => setCityId(e.target.value)}
+          required
+        >
           {cities.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -141,7 +166,12 @@ export function PropertyForm({
           {pending ? "Saving…" : editing ? "Save changes" : "Create draft"}
         </Button>
         {editing && (
-          <Button type="button" variant="ghost" onClick={cancelEdit} disabled={pending}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={cancelEdit}
+            disabled={pending}
+          >
             Cancel
           </Button>
         )}
