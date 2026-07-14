@@ -22,10 +22,10 @@ settle payouts.
 
 **Two deployables, one repo:**
 
-| App | Path | Stack | Host |
-|---|---|---|---|
-| Backend API | `staynex-backend/` | NestJS 11 + Prisma 6 (CockroachDB) | Railway |
-| Frontend | `staynex-frontend/` | Next.js 15 (App Router) + Tailwind v4 | Vercel |
+| App         | Path                | Stack                                 | Host    |
+| ----------- | ------------------- | ------------------------------------- | ------- |
+| Backend API | `staynex-backend/`  | NestJS 11 + Prisma 6 (CockroachDB)    | Railway |
+| Frontend    | `staynex-frontend/` | Next.js 15 (App Router) + Tailwind v4 | Vercel  |
 
 External services: **Paystack** (payments), **Cloudflare R2** (media, S3 API),
 **Resend** (email), **Firebase Cloud Messaging / HTTP v1** (web push),
@@ -128,21 +128,21 @@ Frontend browser vars live **only** in `staynex-frontend/.env.local` (all
 
 **Backend (`staynex-backend/.env`)** — validated in `config/env.ts`:
 
-| Var | Purpose |
-|---|---|
-| `DATABASE_URL` | CockroachDB (`&connect_timeout=30` to survive serverless resume) |
-| `API_PORT`, `CORS_ORIGIN` | Listen port; allowed browser origin |
-| `NEXT_PUBLIC_APP_URL` | Backend-consumed: Paystack callback, reset/verify links, push deep links, CORS. (The only `NEXT_PUBLIC_*` kept server-side.) |
-| `PAYSTACK_SECRET_KEY`, `PAYSTACK_PUBLIC_KEY` | Payments + webhook HMAC |
-| `PLATFORM_FEE` | Commission percent (e.g. `10`); snapshot to bps at checkout |
-| `OWNER_PAYOUT_ENCRYPTION_KEY` | Encrypts stored payout bank details |
-| `CLOUDFLARE_R2_*` | Account/keys/bucket for media (S3 API) |
-| `CLOUDFLARE_R2_PUBLIC_BASE_URL` | Public media base (mirror as `NEXT_PUBLIC_MEDIA_BASE_URL`) |
-| `RESEND_API_KEY`, `EMAIL_FROM` | Transactional email |
-| `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_SERVICE_ACCOUNT_KEY` / `FIREBASE_PRIVATE_KEY` | FCM HTTP v1 service-account auth |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in verification |
-| `GEMINI_API_KEY` | AI assistant |
-| `ADMIN_REVIEWER_ACCESS_CODE`, `ADMIN_MANAGER_ACCESS_CODE` | Admin registration codes (role by code) |
+| Var                                                                                                     | Purpose                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                                                          | CockroachDB (`&connect_timeout=30` to survive serverless resume)                                                             |
+| `API_PORT`, `CORS_ORIGIN`                                                                               | Listen port; allowed browser origin                                                                                          |
+| `NEXT_PUBLIC_APP_URL`                                                                                   | Backend-consumed: Paystack callback, reset/verify links, push deep links, CORS. (The only `NEXT_PUBLIC_*` kept server-side.) |
+| `PAYSTACK_SECRET_KEY`, `PAYSTACK_PUBLIC_KEY`                                                            | Payments + webhook HMAC                                                                                                      |
+| `PLATFORM_FEE`                                                                                          | Commission percent (e.g. `10`); snapshot to bps at checkout                                                                  |
+| `OWNER_PAYOUT_ENCRYPTION_KEY`                                                                           | Encrypts stored payout bank details                                                                                          |
+| `CLOUDFLARE_R2_*`                                                                                       | Account/keys/bucket for media (S3 API)                                                                                       |
+| `CLOUDFLARE_R2_PUBLIC_BASE_URL`                                                                         | Public media base (mirror as `NEXT_PUBLIC_MEDIA_BASE_URL`)                                                                   |
+| `RESEND_API_KEY`, `EMAIL_FROM`                                                                          | Transactional email                                                                                                          |
+| `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_SERVICE_ACCOUNT_KEY` / `FIREBASE_PRIVATE_KEY` | FCM HTTP v1 service-account auth                                                                                             |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`                                                              | Google sign-in verification                                                                                                  |
+| `GEMINI_API_KEY`                                                                                        | AI assistant                                                                                                                 |
+| `ADMIN_REVIEWER_ACCESS_CODE`, `ADMIN_MANAGER_ACCESS_CODE`                                               | Admin registration codes (role by code)                                                                                      |
 
 **Frontend (`staynex-frontend/.env.local`)** — all `NEXT_PUBLIC_*`:
 `API_URL`, `APP_URL`, `GOOGLE_CLIENT_ID`, `MEDIA_BASE_URL`,
@@ -155,6 +155,7 @@ Frontend browser vars live **only** in `staynex-frontend/.env.local` (all
 Entities and the relationships that matter. `schema.prisma` is authoritative.
 
 **Identity & access**
+
 - `User` — `email?`, `name?`, `phone?`, `passwordHash?` (scrypt `salt:hash`),
   `role` (compat mirror) + `UserCapability[]` (forward-compatible source of
   truth; `GUEST` is implicit). Relations to everything a person owns/does.
@@ -167,6 +168,7 @@ Entities and the relationships that matter. `schema.prisma` is authoritative.
 - `OwnerPayoutMethod` — encrypted bank details (`accountNumberLast4` shown).
 
 **Supply**
+
 - `Property` — `ownerId`, `cityId`, `areaId?`, `status` (DRAFT→APPROVED…),
   `reviewStatus`, `contentVersion`, `scheduledPublishAt`. Has `RoomType[]`,
   `PropertyMedia[]`, `PropertyReviewRun[]`.
@@ -178,6 +180,7 @@ Entities and the relationships that matter. `schema.prisma` is authoritative.
   `bookedUnits`, `heldUnits`. **The capacity authority.**
 
 **Demand & money**
+
 - `BookingHold` — 15-min TTL, allocates a free `RoomUnit`, snapshots price.
 - `Booking` — `status` (HOLD/PENDING_PAYMENT/CONFIRMED/CANCELLED/EXPIRED),
   dates, occupancy (`adults/children/infants`), `guestEmail?`, `roomUnitId`.
@@ -191,11 +194,14 @@ Entities and the relationships that matter. `schema.prisma` is authoritative.
   state-changing verify, per admin money action, always with an `outcome`.
 
 **Engagement**
+
 - `Testimonial` — tied to a booking; PENDING_REVIEW → APPROVED (admin).
 - `Notification` — one row per channel (IN_APP/EMAIL/PUSH) with `type`,
   `status`, `dedupeKey` (unique, idempotency), `payload` (outbox), `attempts`.
 - `DeviceToken` — FCM registration per user/device.
-- `AIConversation` / messages — assistant history.
+- `AIConversation` / `AIMessage` — assistant history. Agent messages can store
+  `UP`/`DOWN` feedback, a feedback timestamp, a superseded timestamp for safe
+  last-turn replacement, and verified public property-card snapshots.
 - `AuditLog` — admin actions on properties/money (skill.md §9).
 
 ---
@@ -221,6 +227,7 @@ availability counters or booking/payment status. Every money transition returns
 an explicit outcome that the caller writes to `PaymentEvent`.
 
 Module dependency notes (no cycles at runtime):
+
 - `AuthModule ⇄ NotificationsModule` are mutually dependent
   (`AuthService` needs `EmailService`; `NotificationsController` needs
   `SessionGuard`) and are wired with **`forwardRef()`** on both sides.
@@ -241,32 +248,36 @@ Base URL (local): **`http://localhost:4000`**. No global prefix.
 Most write endpoints are rate-limited (`@RateLimit`) and CSRF-protected (see §10).
 
 ### 9.1 Auth — `/auth` (`AuthController`)
-| Method | Path | Auth | Purpose |
-|---|---|---|---|
-| GET | `/auth/csrf` | public | Issue CSRF cookie + token |
-| POST | `/auth/register` | public | Guest/owner registration → session cookie |
-| POST | `/auth/host/register` | public | Owner-intent registration |
-| POST | `/auth/admin/register` | public | Admin registration via 6-digit access code |
-| POST | `/auth/login` | public | Password login (may return `{mfaRequired}`) |
-| POST | `/auth/mfa/complete` | public | Complete admin-manager MFA |
-| POST | `/auth/google` | public | Google ID-token sign-in (guest/owner intent) |
-| POST | `/auth/password/forgot` | public | Email a 6-digit reset code (generic OK) |
-| POST | `/auth/password/reset` | public | Reset with `{email, code, password}` |
-| PATCH | `/auth/profile` | session | Update name/email/phone |
-| DELETE | `/auth/profile` | session | Delete account |
-| POST | `/auth/logout` | public | Clear session + CSRF cookies |
-| GET | `/auth/sessions` | session | List active sessions |
-| POST | `/auth/sessions/revoke-others` | session | Revoke all other sessions |
-| GET | `/auth/me` | public | Current user or `null` |
+
+| Method | Path                           | Auth    | Purpose                                      |
+| ------ | ------------------------------ | ------- | -------------------------------------------- |
+| GET    | `/auth/csrf`                   | public  | Issue CSRF cookie + token                    |
+| POST   | `/auth/register`               | public  | Guest/owner registration → session cookie    |
+| POST   | `/auth/host/register`          | public  | Owner-intent registration                    |
+| POST   | `/auth/admin/register`         | public  | Admin registration via 6-digit access code   |
+| POST   | `/auth/login`                  | public  | Password login (may return `{mfaRequired}`)  |
+| POST   | `/auth/mfa/complete`           | public  | Complete admin-manager MFA                   |
+| POST   | `/auth/google`                 | public  | Google ID-token sign-in (guest/owner intent) |
+| POST   | `/auth/password/forgot`        | public  | Email a 6-digit reset code (generic OK)      |
+| POST   | `/auth/password/reset`         | public  | Reset with `{email, code, password}`         |
+| PATCH  | `/auth/profile`                | session | Update name/email/phone                      |
+| DELETE | `/auth/profile`                | session | Delete account                               |
+| POST   | `/auth/logout`                 | public  | Clear session + CSRF cookies                 |
+| GET    | `/auth/sessions`               | session | List active sessions                         |
+| POST   | `/auth/sessions/revoke-others` | session | Revoke all other sessions                    |
+| GET    | `/auth/me`                     | public  | Current user or `null`                       |
 
 ### 9.2 Settings — `/settings` (`SettingsController`, session)
+
 `GET /settings/profile`, `PATCH /settings/profile`.
 
 ### 9.3 Discovery — root (`CatalogController`, public)
+
 `GET /search`, `GET /catalog/cities`, `GET /catalog/home`, `GET /stays/:slug`.
 Areas: `GET /areas` (public); admin `GET|POST /admin/areas`, `PATCH /admin/areas/:id` (ADMIN).
 
 ### 9.4 Availability — `/availability`
+
 `GET /availability/room-types/:roomTypeId` (public);
 `PUT /availability/capacity` (OWNER — set totalUnits per date).
 
@@ -278,31 +289,35 @@ never calculates or overwrites remaining inventory. Setting `totalUnits` to
 zero closes the selected nights to new bookings.
 
 ### 9.5 Booking loop — root (`BookingsController`)
-| Method | Path | Auth | Purpose |
-|---|---|---|---|
-| POST | `/bookings/quote` | public | Price + availability for dates/guests |
-| POST | `/bookings/holds` | public | Place a 15-min hold (allocates a unit) |
-| GET | `/bookings/holds/:id` | public | Hold summary / expiry |
-| POST | `/checkout` | session | Hold → PENDING_PAYMENT booking + Paystack init |
-| GET | `/bookings/:id` | public | Booking view (confirmation page source) |
+
+| Method | Path                  | Auth    | Purpose                                        |
+| ------ | --------------------- | ------- | ---------------------------------------------- |
+| POST   | `/bookings/quote`     | public  | Price + availability for dates/guests          |
+| POST   | `/bookings/holds`     | public  | Place a 15-min hold (allocates a unit)         |
+| GET    | `/bookings/holds/:id` | public  | Hold summary / expiry                          |
+| POST   | `/checkout`           | session | Hold → PENDING_PAYMENT booking + Paystack init |
+| GET    | `/bookings/:id`       | public  | Booking view (confirmation page source)        |
 
 Host views (`OwnerBookingsController`, OWNER): `GET /host/bookings`,
 `GET /host/bookings/:id`.
 
 ### 9.6 Payments — `/payments` (`PaymentsWebhookController`)
-| Method | Path | Auth | Purpose |
-|---|---|---|---|
-| POST | `/payments/paystack/webhook` | public (HMAC) | Paystack events; SHA512 verified against raw body |
-| GET | `/payments/:reference` | public | Reconciled payment/booking status (debounced verify) |
+
+| Method | Path                         | Auth          | Purpose                                              |
+| ------ | ---------------------------- | ------------- | ---------------------------------------------------- |
+| POST   | `/payments/paystack/webhook` | public (HMAC) | Paystack events; SHA512 verified against raw body    |
+| GET    | `/payments/:reference`       | public        | Reconciled payment/booking status (debounced verify) |
 
 ### 9.7 Vouchers & verification — root (`VoucherController`, public)
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/verify/:reference` | Live verification card (JSON; **no amount/PII beyond masked email**) |
-| GET | `/vouchers/:reference/pdf` | Canonical PDF receipt (only when paid+confirmed; 404 otherwise) |
-| GET | `/vouchers/:reference/qr.svg` | SVG QR pointing to `{APP_URL}/verify/<reference>` |
+
+| Method | Path                          | Purpose                                                              |
+| ------ | ----------------------------- | -------------------------------------------------------------------- |
+| GET    | `/verify/:reference`          | Live verification card (JSON; **no amount/PII beyond masked email**) |
+| GET    | `/vouchers/:reference/pdf`    | Canonical PDF receipt (only when paid+confirmed; 404 otherwise)      |
+| GET    | `/vouchers/:reference/qr.svg` | SVG QR pointing to `{APP_URL}/verify/<reference>`                    |
 
 ### 9.8 Host workspace — `/host` (OWNER)
+
 - Properties (`/host/properties`): `GET`, `POST`, `GET/:id`, `PATCH/:id`, `POST/:id/submit`.
 - Rooms (`/host`): `GET /host/properties/:propertyId/room-types`, `POST /host/room-types`,
   `PATCH /host/room-types/:id`, `GET /host/room-types/:roomTypeId/units`, `POST /host/room-units`.
@@ -315,15 +330,18 @@ Host views (`OwnerBookingsController`, OWNER): `GET /host/bookings`,
   `PUT .../order`, `PATCH|DELETE property-media/:mediaId`, `PATCH|DELETE room-media/:mediaId`.
 
 ### 9.9 Reviews — `/reviews`
+
 `GET /reviews` (public, approved only); `GET /reviews/booking/:bookingId/context` (session);
 `POST /reviews/booking/:bookingId` (session). Admin: `GET /admin/testimonials`,
 `POST /admin/testimonials/:id/decision` (ADMIN).
 
 ### 9.10 Notifications — `/notifications` (session)
+
 `GET /notifications` (inbox, keyset paginated + unreadCount), `POST /notifications/read`,
 `POST /notifications/devices` (register FCM token), `DELETE /notifications/devices/:token`.
 
 ### 9.11 Admin — `/admin` (ADMIN)
+
 - Approvals: `GET /admin/approvals`, `GET /admin/approvals/:id`, `POST /admin/approvals/:id/decision`.
 - Money ops: `GET /admin/bookings`, `GET /admin/payments`, `GET /admin/payments/exceptions`,
   `POST /admin/payments/:reference/reverify`, `POST /admin/payments/:reference/refund`,
@@ -333,13 +351,31 @@ Host views (`OwnerBookingsController`, OWNER): `GET /host/bookings`,
 - Users: `GET /admin/users`, `GET /admin/users/:id`, `POST /admin/users/:id/payout-method/reveal`.
 
 ### 9.12 AI assistant — `/ai` (`AiController`)
+
 `POST /ai/assistant`, `POST /ai/assistant/stream` (SSE), plus conversation
 history CRUD: `GET|POST /ai/conversations`, `GET /ai/conversations/:id/messages`,
 `PATCH /ai/conversations/:id`, `POST /ai/conversations/:id/pin`,
-`DELETE /ai/conversations/:id`. Ownership is resolved from the session cookie
-when present (history is user-scoped); the assistant answers guests too.
+`DELETE /ai/conversations/:id`, and idempotent message feedback via
+`PUT /ai/conversations/:conversationId/messages/:messageId/feedback`.
+Assistant requests may carry a `retry` or `edit` operation for the latest
+completed turn. Ownership is resolved from the session cookie when present
+(history is user-scoped); the assistant answers guests too.
+
+Assistant replies and final SSE metadata include persisted user/agent message
+ids plus verified `PropertySummary[]` cards. Current names, images, and starting
+nightly prices are retrieved from approved catalog rows for each turn. Property
+cards are display guidance only: exact date availability and booking/payment
+truth remain in their authoritative backend flows.
+
+Thumbs-down on the latest response adds a correction instruction to the next
+answer so the model re-checks verified facts and changes approach. It does not
+override the deterministic safety gate, grounding rules, or payment/booking
+authority. Retry/edit keep the prior response visible until a replacement is
+persisted, then mark it superseded in the same transaction as the new message
+and AI action log.
 
 ### 9.13 Health — `/health`
+
 `GET /health` (liveness), `GET /health/ready` (readiness/DB).
 
 ---
@@ -358,7 +394,7 @@ when present (history is user-scoped); the assistant answers guests too.
 - **CSRF:** `csrfProtection` (main.ts) enforces origin + `X-CSRF-Token`
   (matching the `sx_csrf` cookie from `GET /auth/csrf`) on mutating requests.
 - **Rate limiting:** in-memory `RateLimiterService` via `@RateLimit({bucket,
-  limit, windowMs, keyBy})` (`SecurityModule` is `@Global`).
+limit, windowMs, keyBy})` (`SecurityModule` is `@Global`).
 - **Webhook integrity:** Paystack `POST /payments/paystack/webhook` verifies an
   HMAC-SHA512 signature over the **raw** body (`rawBody: true` in bootstrap).
 - **Transport/headers:** `securityHeaders`, request size limits, JSON
@@ -430,12 +466,12 @@ The trust anchor for check-in is **live server truth**, not a screenshot.
 
 ## 14. Background / interval services
 
-| Service | Cadence | Job |
-|---|---|---|
-| `BookingMaintenanceService` | interval | Release expired holds & abandoned PENDING bookings; hourly check-in reminders |
-| `NotificationDispatcherService` | ~2 min | Retry FAILED / crash-stuck outbox EMAIL/PUSH rows |
-| Property auto-review scheduler | interval | Publish properties whose `scheduledPublishAt` elapsed and content is still current |
-| DB warm-up | boot | `connectWithRetry` bounds CockroachDB cold-start; `PrismaExceptionFilter` maps transient DB failures to `503` |
+| Service                         | Cadence  | Job                                                                                                           |
+| ------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
+| `BookingMaintenanceService`     | interval | Release expired holds & abandoned PENDING bookings; hourly check-in reminders                                 |
+| `NotificationDispatcherService` | ~2 min   | Retry FAILED / crash-stuck outbox EMAIL/PUSH rows                                                             |
+| Property auto-review scheduler  | interval | Publish properties whose `scheduledPublishAt` elapsed and content is still current                            |
+| DB warm-up                      | boot     | `connectWithRetry` bounds CockroachDB cold-start; `PrismaExceptionFilter` maps transient DB failures to `503` |
 
 ---
 
@@ -445,12 +481,18 @@ The trust anchor for check-in is **live server truth**, not a screenshot.
   confirmed, auth pages), `(host)` (host workspace), `(admin)` (admin console),
   plus standalone `verify/[reference]` (reception, `noindex`).
 - **Data fetching:** server components use `src/lib/server-catalog.ts` /
-  `server-reports.ts` (public API, with fixture fallbacks for *display only* —
+  `server-reports.ts` (public API, with fixture fallbacks for _display only_ —
   never for booking/payment truth). Client components use `src/lib/api.ts`
   (`credentials: include`, CSRF header on mutations). `API_BASE` from
   `src/lib/api-base.ts`.
 - **Contracts:** `src/lib/types.ts` mirrors `staynex-backend/types` — keep them
   in lockstep when a response shape changes.
+- **Staynex AI:** streamed messages expose server-backed helpful/unhelpful
+  feedback, latest-response regeneration, latest-user-message editing, and
+  structured verified property cards rendered through `src/ui/property-card.tsx`.
+  Signed-in users receive sanitized first-name personalization. The floating
+  launcher stays text-only (`Ask Staynex AI`) to keep the universal affordance
+  compact.
 - **Design system:** tokens in `src/styles/theme.css`; primitives in `src/ui`.
   Use tokens (`text-ink`, `bg-success-surface`, …), not raw colors.
 - **Media:** `next/image` optimizes R2 images when `NEXT_PUBLIC_MEDIA_BASE_URL`
@@ -580,4 +622,3 @@ curl "http://localhost:4000/vouchers/<reference>/qr.svg"
 - **outbox** — a stored notification payload retried until delivered.
 - **capability** — a granted privilege (`OWNER`/`ADMIN_*`); `GUEST` is implicit.
 - **voucher** — the canonical Booking Confirmation & Receipt PDF.
-```

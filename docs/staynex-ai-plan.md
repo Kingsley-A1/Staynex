@@ -1,4 +1,5 @@
 @Depricated
+
 # Staynex AI — Professionalization Plan
 
 > A deep review of the current Staynex AI (assistant) implementation and a phased,
@@ -16,28 +17,28 @@
 
 **Backend (`staynex-backend/src/modules/ai/`)**
 
-| Piece | State |
-|---|---|
-| `AssistantService.ask()` | Pipeline: deterministic **safety gate** → **canned trained answers** → **Gemini** call. Solid safety-first ordering. |
-| Safety guardrail | Regex matchers for refunds, payment confirmation, availability guarantees, private-data, legal. Deterministic, never reaches the model. Good defense-in-depth, but brittle (regex only). |
-| Conversation store | ✅ **Server-persisted.** `AIConversation`, `AIMessage`, `AIActionLog` in Prisma. Soft-delete, pin, rename, auto-title, per-user scoping. This is already real. |
-| Grounding | ✅ Now intent-based: property page facts **and** real approved listings for a named city (Phase 2). Was previously property-slug-only. |
-| Conversation memory | ✅ Now replays the last ~12 turns to the model (Phase 1). Was previously single-message (no memory). |
-| Model | `gemini-2.5-flash`, temp 0.3, 512 max tokens. ✅ Now retries 429/503 with backoff honoring `Retry-After`. |
-| Rename to "Staynex AI" | ✅ Done in system prompt, canned replies, controller. |
+| Piece                    | State                                                                                                                                                                                    |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AssistantService.ask()` | Pipeline: deterministic **safety gate** → **canned trained answers** → **Gemini** call. Solid safety-first ordering.                                                                     |
+| Safety guardrail         | Regex matchers for refunds, payment confirmation, availability guarantees, private-data, legal. Deterministic, never reaches the model. Good defense-in-depth, but brittle (regex only). |
+| Conversation store       | ✅ **Server-persisted.** `AIConversation`, `AIMessage`, `AIActionLog` in Prisma. Soft-delete, pin, rename, auto-title, per-user scoping. This is already real.                           |
+| Grounding                | ✅ Now intent-based: property page facts **and** real approved listings for a named city (Phase 2). Was previously property-slug-only.                                                   |
+| Conversation memory      | ✅ Now replays the last ~12 turns to the model (Phase 1). Was previously single-message (no memory).                                                                                     |
+| Model                    | `gemini-2.5-flash`, temp 0.3, 512 max tokens. ✅ Now retries 429/503 with backoff honoring `Retry-After`.                                                                                |
+| Rename to "Staynex AI"   | ✅ Done in system prompt, canned replies, controller.                                                                                                                                    |
 
 **Frontend (`staynex-frontend/src/features/ai/assistant-widget.tsx`)**
 
-| Piece | State |
-|---|---|
-| Panel + FAB | Slide-in dialog, suggestions, history panel. |
-| Close button | ✅ Added (prominent, always visible). |
-| Auto-expanding input | ✅ Textarea grows with content; Enter sends, Shift+Enter newlines. |
-| Message state | ⚠️ **Local React state only.** On reopen, the active conversation is not restored unless the user manually opens history and clicks a chat. |
-| Reply rendering | ✅ Formatted (bold, lists, line breaks) via zero-dep `FormattedMessage` (Phase 3). Was plain text with raw `**`/`1.`. |
-| Grounded sources | ✅ `/stays/<slug>` paths in replies now render as deep links (Phase 3). A labelled sources block remains a future refinement. |
-| Disclaimer | ✅ Persistent, under the input bar (Phase 3). Was shown once in the empty state only. |
-| Rate limiting | ✅ 10 req/60s per user/IP on the assistant endpoint (Phase 4). |
+| Piece                | State                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Panel + FAB          | Slide-in dialog, suggestions, history panel.                                                                                                |
+| Close button         | ✅ Added (prominent, always visible).                                                                                                       |
+| Auto-expanding input | ✅ Textarea grows with content; Enter sends, Shift+Enter newlines.                                                                          |
+| Message state        | ⚠️ **Local React state only.** On reopen, the active conversation is not restored unless the user manually opens history and clicks a chat. |
+| Reply rendering      | ✅ Formatted (bold, lists, line breaks) via zero-dep `FormattedMessage` (Phase 3). Was plain text with raw `**`/`1.`.                       |
+| Grounded sources     | ✅ `/stays/<slug>` paths in replies now render as deep links (Phase 3). A labelled sources block remains a future refinement.               |
+| Disclaimer           | ✅ Persistent, under the input bar (Phase 3). Was shown once in the empty state only.                                                       |
+| Rate limiting        | ✅ 10 req/60s per user/IP on the assistant endpoint (Phase 4).                                                                              |
 
 ### 1.1 The single biggest gap — ✅ RESOLVED (Phase 1)
 
@@ -111,14 +112,14 @@ A professional Staynex AI is:
       and grounds in real approved listings (name, from-price, `/stays/<slug>` path),
       or an explicit "no listings" fact so the model can't hallucinate one.
   - ✅ Retrieved facts injected under the existing "Verified facts you may use"
-    block; the hard rule (*never state a price/detail not in the verified facts*)
+    block; the hard rule (_never state a price/detail not in the verified facts_)
     is unchanged.
   - ✅ Grounded facts now embed property slugs (`/stays/<slug>`) so the Phase 3 UI
     can deep-link.
   - ✅ **Decision:** deterministic retrieve-then-ground (not open Gemini
     function-calling) — safer, matches the safety-first posture. Revisit in Phase 6.
 - **Measurable exit gate:** "Show me stays in Uyo" returns an answer grounded in
-  actual approved listings with correct prices; the AI still refuses to *guarantee*
+  actual approved listings with correct prices; the AI still refuses to _guarantee_
   date availability. ✅ (Backend.) The visible **sources UI / deep links** are
   Phase 3 — the user asked for the disclaimer/sources to render **under the input
   bar, not atop the panel.**
@@ -179,7 +180,7 @@ A professional Staynex AI is:
   - ✅ **Live retrieval each turn** (`groundFacts`) — pulls fresh from the DB, not
     cached knowledge:
     - open property → rooms + a **live approved-review summary** (avg + count;
-      *omitted entirely when there are no reviews* — never fabricated).
+      _omitted entirely when there are no reviews_ — never fabricated).
     - named city → real approved listings (Phase 2).
     - coverage questions → **live cities served + approved-stay count**.
   - ✅ **Knowledge base** (`staynex-knowledge.ts`) — curated, truthful entries
@@ -206,6 +207,19 @@ A professional Staynex AI is:
 
 ### Phase 6 — Advanced (post-MVP, optional)
 
+- ✅ **Server-backed message controls and rich grounding** — SHIPPED:
+  - Assistant messages persist helpful/unhelpful feedback. A down rating on the
+    latest response adds a correction signal to the next answer without
+    weakening deterministic guardrails or verified grounding.
+  - Regenerate and edit operate only on the latest completed turn. The prior
+    response remains visible until its replacement is persisted, then becomes
+    superseded atomically with the replacement message and action log.
+  - Live approved catalog matches now return structured `PropertySummary`
+    metadata with current starting prices, so the browser renders verified stay
+    cards instead of relying on model-generated links alone.
+  - Signed-in users receive sanitized first-name personalization. Safety is a
+    core value proposition expressed as security in depth, without absolute
+    security claims or AI authority over bookings/payments.
 - ✅ **Streaming responses (SSE)** — SHIPPED (the simplest, highest-impact item;
   no new infrastructure). The reply now streams in token-by-token:
   - Backend: `GeminiService.streamText()` (SSE over `:streamGenerateContent`,
@@ -217,8 +231,8 @@ A professional Staynex AI is:
   - Frontend: `askAgentStream()` reads the SSE body and fires `onChunk`/`onDone`;
     the widget appends deltas live and "Thinking…" shows only until the first
     chunk. Partial-stream interruptions and 429s degrade gracefully.
-- ⏳ Gemini **function-calling** for live date-availability *lookups* (still never
-  *guarantees*), behind the existing safety gate — deferred (highest complexity).
+- ⏳ Gemini **function-calling** for live date-availability _lookups_ (still never
+  _guarantees_), behind the existing safety gate — deferred (highest complexity).
 - ⏳ Embeddings-based semantic retrieval over the knowledge base + listings —
   deferred (new infra).
 - ⏳ Multilingual support (en first) — deferred (broad surface).
@@ -230,6 +244,7 @@ A professional Staynex AI is:
 ## 4. Cross-cutting safety rules (unchanged, enforced every phase)
 
 From skill.md §9/§11 — the AI MUST NOT:
+
 - Confirm/verify/process payments, or claim a booking is confirmed.
 - Promise or guarantee availability for specific dates.
 - Promise, approve, or process refunds.
@@ -258,6 +273,7 @@ going beyond verified facts.
   cheapest and is sufficient for the current grounded, short-answer use.
 
 Sources:
+
 - [Rate limits | Gemini API | Google AI for Developers](https://ai.google.dev/gemini-api/docs/rate-limits)
 - [Gemini API Free Tier 2026: 1,500 Req/Day, 1M TPM](https://tokenmix.ai/blog/gemini-api-free-tier-limits)
 - [Gemini 2.0 Flash vs Gemini 2.5 Flash — comparison](https://docsbot.ai/models/compare/gemini-2-0-flash/gemini-2-5-flash)

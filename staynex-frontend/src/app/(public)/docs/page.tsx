@@ -5,7 +5,7 @@ import { PagesHero } from "@/components/pages-hero";
 export const metadata: Metadata = {
   title: "Documentation | How Staynex Bookings works",
   description:
-    "A complete guide to Staynex Bookings — searching stays, checking availability, secure Paystack payments, confirmations, reviews, hosting, and support.",
+    "A complete guide to Staynex Bookings — verified stays, security in depth, live availability, secure payments, Staynex AI, hosting, and support.",
   alternates: { canonical: "/docs" },
   openGraph: {
     title: "Staynex Bookings Documentation",
@@ -45,11 +45,15 @@ const DOCS: DocGroup[] = [
         id: "overview",
         title: "What Staynex Bookings is",
         summary:
-          "A platform for booking trusted, verified stays with secure payment and real-time availability.",
+          "A platform for booking trusted, verified stays with security in depth, secure payment, and real-time availability.",
         blocks: [
           {
             kind: "p",
             text: "Staynex Bookings connects guests with verified hotels, resorts, apartments, and short-let stays. Every property is reviewed before it appears publicly, availability is shown in real time, and bookings are only confirmed after payment is verified.",
+          },
+          {
+            kind: "p",
+            text: "Safety is a core Staynex value. Our security-in-depth approach combines property review, backend-authoritative availability, secure payment handling, payment-before-confirmation, and privacy-conscious support. No online platform is completely risk-free, so Staynex keeps live platform verification as the source of truth.",
           },
           {
             kind: "p",
@@ -60,8 +64,7 @@ const DOCS: DocGroup[] = [
       {
         id: "booking-loop",
         title: "The booking journey at a glance",
-        summary:
-          "From search to confirmation in a few clear steps.",
+        summary: "From search to confirmation in a few clear steps.",
         blocks: [
           {
             kind: "steps",
@@ -150,7 +153,8 @@ const DOCS: DocGroup[] = [
       {
         id: "payments",
         title: "Paying securely",
-        summary: "Payments are processed by Paystack. Card details are never stored by Staynex.",
+        summary:
+          "Payments are processed by Paystack. Card details are never stored by Staynex.",
         blocks: [
           {
             kind: "p",
@@ -189,7 +193,8 @@ const DOCS: DocGroup[] = [
       {
         id: "accounts",
         title: "Accounts & sign in",
-        summary: "Create an account to book, track stays, and manage your details.",
+        summary:
+          "Create an account to book, track stays, and manage your details.",
         blocks: [
           {
             kind: "p",
@@ -272,18 +277,28 @@ const DOCS: DocGroup[] = [
       {
         id: "assistant",
         title: "The Staynex AI",
-        summary: "An AI assistant that helps you find and book stays.",
+        summary:
+          "A personalized, feedback-aware AI guide for verified stays and current prices.",
         blocks: [
           {
             kind: "p",
-            text: "The Staynex AI helps you search stays, compare rooms, understand policies, and move through the booking steps with confidence. It is a guide — it will not invent availability, confirm payments, or promise refunds. For anything that affects money or a confirmed booking, it points you to the verified step in the product.",
+            text: "Staynex AI helps you search stays, compare rooms and current starting prices, understand policies, and move through the booking steps with confidence. When verified properties match your question, it can show their stay cards directly in the conversation. Signed-in users receive name-aware guidance, while conversation history remains scoped to the account or guest conversation.",
+          },
+          {
+            kind: "p",
+            text: "You can mark an answer helpful or unhelpful, regenerate the latest response, or edit your latest message. Feedback is stored by Staynex, and a negative rating tells the assistant to re-check verified facts and use a clearer approach on the next answer.",
+          },
+          {
+            kind: "p",
+            text: "Staynex AI is a guide, not a booking or payment authority. It will not invent availability, confirm payments, promise refunds, or replace the live property, checkout, payment-status, and support flows. This separation is part of Staynex security in depth.",
           },
         ],
       },
       {
         id: "trust-safety",
         title: "Trust & safety",
-        summary: "Verification, secure payments, and honest reviews.",
+        summary:
+          "Security in depth through verification, backend authority, secure payments, and honest reviews.",
         blocks: [
           {
             kind: "list",
@@ -292,6 +307,7 @@ const DOCS: DocGroup[] = [
               "Bookings are confirmed only after payment is verified.",
               "Payments run through Paystack; raw card data is never stored by Staynex.",
               "Reviews are linked to real bookings before publication.",
+              "Staynex AI can guide and retrieve verified public facts, but it cannot change availability, bookings, payments, or refunds.",
             ],
           },
         ],
@@ -303,7 +319,7 @@ const DOCS: DocGroup[] = [
         blocks: [
           {
             kind: "p",
-            text: "If something does not look right with a search, a payment, or a confirmed booking, keep your booking reference ready and contact support at support@staynexbookings.ng. You can also review our Terms, Policies, and Legal pages for the details that govern bookings and use of the platform.",
+            text: "If something does not look right with a search, a payment, or a confirmed booking, keep your booking reference ready and use the Contact support page for the currently configured email and phone options. You can also review our Terms, Policies, and Legal pages for the details that govern bookings and use of the platform.",
           },
         ],
       },
@@ -315,6 +331,7 @@ const RELATED_LINKS: ReadonlyArray<readonly [string, string]> = [
   ["Browse stays", "/search"],
   ["List your property", "/list-your-property"],
   ["Reviews", "/reviews"],
+  ["Contact support", "/support"],
   ["Terms", "/terms"],
   ["Policies", "/policies"],
   ["Legal", "/legal"],
@@ -329,7 +346,7 @@ export default function DocsPage() {
         eyebrow="Documentation"
         title="How Staynex Bookings works,"
         gradientText="end to end"
-        intro="A clear guide for guests and hosts — searching stays, checking availability, paying securely with Paystack, confirmations, reviews, hosting, and support."
+        intro="A clear guide for guests and hosts — verified stays, security in depth, live availability, secure payments, Staynex AI, confirmations, hosting, and support."
       />
 
       <section className="layout-container py-12 sm:py-16">

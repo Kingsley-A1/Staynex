@@ -81,6 +81,29 @@ frontend -x backend internals
 
 If a type represents API input/output, keep it in `staynex-backend/types`. If it represents database persistence only, keep it in Prisma and backend internals.
 
+## Staynex AI Boundary
+
+Staynex AI remains a guide over verified platform data, never an authority of
+record. The NestJS AI module owns conversation persistence, message feedback,
+last-turn edit/regeneration policy, identity-aware prompt context, grounding,
+and Gemini transport. The frontend owns streaming presentation and renders
+structured public property summaries through the shared `PropertyCard` UI.
+
+- Thumbs-up/down feedback is stored on the assistant message. A down rating on
+  the latest response adds a correction signal to the next generation, but it
+  never weakens grounding or deterministic safety gates.
+- Retry and edit may replace only the latest completed turn. The prior assistant
+  message is marked superseded atomically when its replacement is persisted, so
+  provider failures do not erase history or create a second visible response.
+- Property names, images, and `fromPriceKobo` values come from the live approved
+  catalog at generation time and are persisted as public display snapshots with
+  the assistant message. Exact date availability still comes only from the
+  property/availability flow.
+- A signed-in user's sanitized first name may personalize wording. No private
+  user data is added to property cards, feedback logs, or grounding facts.
+- Safety is a core value proposition: the prompt explains Staynex security in
+  depth without claiming perfect security or giving AI booking/payment authority.
+
 ## Core Flow
 
 The first POC must prove:
