@@ -27,7 +27,7 @@ targets, not fiction — if a gate slips, move every later date, don't skip the 
 | 1.5   | Payment feels native; receipt in hand        | Wed 29 Jul    | 🟡 engineering ✅ 28/28; device auto-return gate pending hardware |
 | 2     | The returning-guest app (trips + identity)   | Fri 7 Aug     | 🟡 engineering ✅ 19/19; new-device demo pending hardware |
 | 3     | The app taps you on the shoulder (push)      | Wed 12 Aug    | 🟡 engineering ✅ 17/17; lock-screen delivery pending hardware |
-| 4     | Concierge in your pocket (Staynex AI)        | Fri 21 Aug    | ⬜ |
+| 4     | Concierge in your pocket (Staynex AI)        | Fri 21 Aug    | 🟡 engineering ✅ 23/23; on-device demo pending hardware |
 | 5     | Hosts run their business from a phone        | Fri 28 Aug    | ⬜ |
 | 6     | Staynex installed from the store             | Fri 11 Sep    | ⬜ |
 
@@ -201,14 +201,19 @@ conversation on-device (SSE from `POST /ai/assistant/stream`), see verified
 property cards rendered natively, and tap a card into the real stay detail —
 with all web safety rules intact.
 
-- [ ] SSE streaming client for `POST /ai/assistant/stream` (React Native needs an SSE polyfill or fetch-stream reader — validate first, same way Metro was validated in Phase 0).
-- [ ] Conversation history: list/create/rename/pin/delete via existing `/ai/conversations` endpoints.
-- [ ] Verified property cards rendered natively; tap → `stays/[slug]`.
-- [ ] Feedback (👍/👎), retry, and edit-last-message — reuse the exact server contracts; no client-side divergence.
-- [ ] Safety parity: the mobile client adds no prompt surface the web doesn't have; AI never asserts availability/payment truth (skill.md §11).
-- [ ] Signed-out guests can chat; signed-in guests get scoped history.
+**Engineering track — ✅ machine-verified (Phase 4 harness 23/23, 2026-07-15):**
+- [x] SSE streaming client (`src/core/ai-stream.ts`): XMLHttpRequest `onprogress` frame parser (the standard RN approach — RN fetch can't stream bodies), heartbeat-comment tolerant, whole-buffer fallback if a proxy buffers, `aiApi.ask` as the non-streaming fallback. Harness proved the live stream end-to-end: 6 incremental chunks / 953 chars, one `done` event carrying persisted ids.
+- [x] Contract unification: `AssistantStreamEvent` promoted into `staynex-backend/types/api.ts` (it's an API contract); the service re-exports it and mobile `import type`s it — zero mirrored shapes.
+- [x] Assistant tab (`(tabs)/assistant.tsx`): streamed bubbles, verified property cards via the shared `PropertyCard` → tap opens `stays/[slug]`, tri-state 👍/👎 (server-persisted, reverts on failure), Regenerate (retry op — superseded answer drops from history), Edit question (edit op), New chat.
+- [x] History (`assistant/history.tsx`): list/open/pin/rename (modal)/delete via existing `/ai/conversations` endpoints; pinned-first ordering verified.
+- [x] Signed-out guests chat (anonymous session conversation); signed-in history is scoped — harness proved a foreign principal gets 403 on another's conversation.
+- [x] Safety parity: no new prompt surface — the deterministic guardrail verified live (a refund demand refuses with `refused: true` even anonymously); grounded model path live (`unavailable: false`, `recovery: none`).
 
-**Exit gate:** side-by-side demo — same question on web and mobile produces equivalently grounded answers with working cards. *Measured by:* recorded comparison.
+**Device track (⏳ pending hardware):**
+- [ ] Side-by-side demo: same question on web and mobile produces equivalently grounded answers with working cards (recorded).
+- [ ] On-device streaming smoke: XHR incremental rendering verified on Android + iOS.
+
+**Exit gate:** engineering track green (✅) + the recorded side-by-side. *Measured by:* harness output + recording in the PR.
 
 ---
 

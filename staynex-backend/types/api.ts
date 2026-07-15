@@ -494,6 +494,28 @@ export type AssistantRecovery =
   | "partial_response"
   | "transport_interrupted";
 
+/**
+ * Server-sent events emitted by `POST /ai/assistant/stream` (one JSON event
+ * per SSE `data:` line): display-text chunks, then exactly one `done` event
+ * carrying the persisted ids and verified property cards.
+ */
+export type AssistantStreamEvent =
+  | { type: "chunk"; text: string }
+  | {
+      type: "done";
+      conversationId: string;
+      userMessageId: string;
+      messageId: string;
+      refused: boolean;
+      unavailable: boolean;
+      groundedFacts: string[];
+      properties: PropertySummary[];
+      recovery: AssistantRecovery;
+      requestId: string;
+      /** Present (true) only on a transport-level failure frame. */
+      error?: boolean;
+    };
+
 export type AgentMessageRole = "USER" | "AGENT";
 export type AgentMessageFeedback = "UP" | "DOWN";
 

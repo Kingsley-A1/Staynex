@@ -38,6 +38,14 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="assistant"
+        options={{
+          title: "Staynex AI",
+          headerShown: false,
+          tabBarIcon: ({ focused }) => <TabGlyph glyph="✦" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
         name="account"
         options={{
           title: "Account",

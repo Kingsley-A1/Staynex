@@ -123,17 +123,14 @@ async function request<T>(
   }
 }
 
-async function performRequest<T>(
-  method: string,
-  path: string,
-  options: RequestOptions = {},
-): Promise<T> {
+/**
+ * The exact auth headers this client sends: session cookie replay + CSRF
+ * double-submit on mutating methods. Exported so the SSE assistant client can
+ * speak the identical wire protocol without duplicating it.
+ */
+export async function buildAuthHeaders(method: string): Promise<Record<string, string>> {
   const cookie = await readSessionCookie();
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-  };
-
+  const headers: Record<string, string> = {};
   const cookies: string[] = [];
   if (cookie) cookies.push(`${SESSION_COOKIE}=${cookie}`);
   if (!SAFE_METHODS.has(method)) {
@@ -142,6 +139,19 @@ async function performRequest<T>(
     cookies.push(`${CSRF_COOKIE}=${token}`);
   }
   if (cookies.length > 0) headers["Cookie"] = cookies.join("; ");
+  return headers;
+}
+
+async function performRequest<T>(
+  method: string,
+  path: string,
+  options: RequestOptions = {},
+): Promise<T> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    ...(await buildAuthHeaders(method)),
+  };
 
   let res: Response;
   try {
@@ -184,6 +194,8 @@ export const api = {
   get: <T>(path: string, opts?: RequestOptions) => request<T>("GET", path, opts),
   post: <T>(path: string, body?: unknown, opts?: RequestOptions) =>
     request<T>("POST", path, { ...opts, body }),
+  put: <T>(path: string, body?: unknown, opts?: RequestOptions) =>
+    request<T>("PUT", path, { ...opts, body }),
   patch: <T>(path: string, body?: unknown, opts?: RequestOptions) =>
     request<T>("PATCH", path, { ...opts, body }),
   delete: <T>(path: string, opts?: RequestOptions) => request<T>("DELETE", path, opts),

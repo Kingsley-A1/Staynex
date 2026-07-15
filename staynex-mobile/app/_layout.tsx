@@ -72,6 +72,7 @@ export default function RootLayout() {
             <Stack.Screen name="trips/[id]" options={{ title: "Trip" }} />
             <Stack.Screen name="account/profile" options={{ title: "Edit profile" }} />
             <Stack.Screen name="notifications" options={{ title: "Notifications" }} />
+            <Stack.Screen name="assistant/history" options={{ title: "Conversations" }} />
             <Stack.Screen name="booking/quote" options={{ title: "Review dates" }} />
             <Stack.Screen name="booking/checkout" options={{ title: "Checkout" }} />
             <Stack.Screen

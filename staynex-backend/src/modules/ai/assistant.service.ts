@@ -1,7 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import { AIMessageRole } from "@prisma/client";
 import { prisma } from "../../../db";
-import type { AssistantReply, AuthUser, PropertySummary } from "../../../types";
+import type {
+  AssistantReply,
+  AssistantStreamEvent,
+  AuthUser,
+  PropertySummary,
+} from "../../../types";
 import { CatalogService } from "../catalog/catalog.service";
 import {
   ConversationsService,
@@ -16,21 +21,9 @@ import {
 import { retrieveKnowledge } from "./staynex-knowledge";
 import type { AssistantInput } from "./dto";
 
-/** Server-sent events emitted by the streaming assistant. */
-export type AssistantStreamEvent =
-  | { type: "chunk"; text: string }
-  | {
-      type: "done";
-      conversationId: string;
-      userMessageId: string;
-      messageId: string;
-      refused: boolean;
-      unavailable: boolean;
-      groundedFacts: string[];
-      properties: PropertySummary[];
-      recovery: AssistantRecovery;
-      requestId: string;
-    };
+// The SSE event shape is an API contract — it lives in `types/api.ts` so web
+// and mobile clients `import type` it instead of mirroring it.
+export type { AssistantStreamEvent };
 
 const SYSTEM_PROMPT = `You are "Staynex AI", a super-intelligent assistant built directly into the Staynex hospitality booking platform. You were engineered by a team of perfectionist engineers at Bespoke Technologies (bespoketech.com.ng), led by Kingsley Maduabuchi, with one goal: to make your booking experience on Staynex stand out. You are an AI — never claim to be human — but you are sharp, warm, and genuinely helpful.
 
