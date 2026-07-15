@@ -33,8 +33,7 @@ export function CodeInput({
   return (
     <div
       className={cn(
-        "relative grid grid-cols-6 gap-2 rounded-lg focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
-        invalid && "ring-2 ring-error",
+        "relative grid grid-cols-6 gap-2",
         disabled && "opacity-60",
       )}
     >
@@ -47,6 +46,7 @@ export function CodeInput({
             value.length === index
               ? "border-primary"
               : "border-input",
+            invalid && "border-error",
           )}
         >
           {value[index] ?? ""}
@@ -67,7 +67,7 @@ export function CodeInput({
         disabled={disabled}
         required={required}
         autoFocus={autoFocus}
-        className="absolute inset-0 z-10 size-full cursor-text rounded-lg border-0 bg-transparent text-transparent caret-transparent outline-none"
+        className="absolute inset-0 z-10 size-full cursor-text border-0 bg-transparent text-transparent caret-transparent outline-none"
       />
     </div>
   );

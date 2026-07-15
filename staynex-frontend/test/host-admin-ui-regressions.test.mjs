@@ -148,6 +148,7 @@ test("admin MFA uses one accessible OTP field rendered as six cells", async () =
   assert.match(codeInput, /grid-cols-6/);
   assert.match(codeInput, /autoComplete="one-time-code"/);
   assert.match(codeInput, /aria-invalid/);
+  assert.doesNotMatch(codeInput, /focus-within:ring|rounded-lg border-0 bg-transparent/);
 });
 
 test("guest images use bounded high-quality optimization and offline navigation fallback", async () => {

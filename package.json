@@ -12,7 +12,8 @@
     "format": "prettier --write .",
     "db:generate": "pnpm --filter @staynex/backend prisma:generate",
     "db:push": "pnpm --filter @staynex/backend prisma:push",
-    "db:migrate": "pnpm --filter @staynex/backend prisma:migrate"
+    "db:migrate": "pnpm --filter @staynex/backend prisma:migrate",
+    "db:migrate:deploy": "pnpm --filter @staynex/backend prisma:migrate:deploy"
   },
   "devDependencies": {
     "prettier": "^3.6.2",

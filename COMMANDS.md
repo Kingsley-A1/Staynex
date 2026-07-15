@@ -38,7 +38,8 @@ Path: `staynex-backend`
 | `pnpm --filter @staynex/backend dev` | Start the NestJS API locally in watch mode. |
 | `pnpm --filter @staynex/backend check` | Typecheck only the backend. |
 | `pnpm --filter @staynex/backend build` | Build the NestJS API into `staynex-backend/dist`. This is the Railway-equivalent build check. |
-| `pnpm --filter @staynex/backend start` | Start the built backend using `node dist/src/main.js`. Run after `build`. |
+| `pnpm --filter @staynex/backend start` | Production start: apply pending Prisma migrations, then start the built backend. This is the Railway start command. |
+| `pnpm --filter @staynex/backend start:runtime` | Start the built backend without running migrations. Use only for controlled local diagnostics after `build`. |
 
 ## Database And Prisma
 
@@ -49,9 +50,11 @@ Prisma lives in `staynex-backend/prisma`.
 | `pnpm db:generate` | Root shortcut for generating Prisma Client. |
 | `pnpm db:push` | Root shortcut for pushing the current Prisma schema to the configured database without creating a migration. Useful during early POC iteration. |
 | `pnpm db:migrate` | Root shortcut for creating/applying a Prisma development migration. Use when schema changes should be migration-tracked. |
+| `pnpm db:migrate:deploy` | Root shortcut for applying committed migrations in production/staging. |
 | `pnpm --filter @staynex/backend prisma:generate` | Generate Prisma Client from `staynex-backend/prisma/schema.prisma`. |
 | `pnpm --filter @staynex/backend prisma:push` | Push Prisma schema to the database configured by `DATABASE_URL`. |
 | `pnpm --filter @staynex/backend prisma:migrate` | Run `prisma migrate dev` against the backend schema. |
+| `pnpm --filter @staynex/backend prisma:migrate:deploy` | Run `prisma migrate deploy` against the configured database. |
 | `pnpm --filter @staynex/backend prisma:seed` | Seed the database using `staynex-backend/prisma/seed.mjs`. |
 
 ## Recommended Verification Sets
@@ -95,7 +98,7 @@ Railway should target `staynex-backend`.
 | Command | Use |
 | --- | --- |
 | `pnpm --filter @staynex/backend build` | Build command for Railway validation. |
-| `pnpm --filter @staynex/backend start` | Start command for the built Railway API. |
+| `pnpm --filter @staynex/backend start` | Start command for the built Railway API; applies migrations before Nest boots. |
 | `pnpm --filter @staynex/backend prisma:generate` | Generate Prisma Client during backend setup/build if needed. |
 
 ## Git Helpers

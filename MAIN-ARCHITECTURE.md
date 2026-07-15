@@ -627,8 +627,10 @@ curl "http://localhost:4000/vouchers/<reference>/qr.svg"
   `prisma/migrations/<timestamp>_<name>/migration.sql` (STRING/INT4/TIMESTAMP(3)
   types, additive & safe on live data). Apply with `prisma migrate deploy`.
   Keep `schema.prisma` and the SQL in sync, and run `prisma generate`.
-- **Backend (Railway):** `pnpm build` (runs `prisma generate` + `nest build`),
-  `pnpm start` (`node dist/src/main.js`). Set every backend env var + a
+- **Backend (Railway):** `pnpm build` runs `prisma generate` + `nest build`.
+  `pnpm start` runs `prisma migrate deploy --schema prisma/schema.prisma`
+  before `node dist/src/main.js`, so the deployed Prisma client never boots
+  against an unmigrated production database. Set every backend env var + a
   `DATABASE_URL` with `connect_timeout=30`.
 - **Frontend (Vercel):** `next build`; set all `NEXT_PUBLIC_*` env vars.
   Redirects `/owner/*` → `/host/*` are permanent.
