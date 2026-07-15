@@ -12,6 +12,7 @@ export type AssistantRecovery =
   | "provider_timeout"
   | "provider_unconfigured"
   | "provider_error"
+  | "provider_output_limited"
   | "partial_response"
   | "transport_interrupted";
 
@@ -62,7 +63,10 @@ export async function* completeReliably(
       yield {
         type: "result",
         text: full,
-        recovery: "partial_response",
+        recovery:
+          streamFailure === "provider_output_limited"
+            ? "provider_output_limited"
+            : "partial_response",
         usedFallback: false,
         partial: true,
       };
@@ -98,6 +102,18 @@ export async function* completeReliably(
     return;
   }
 
+  if (fallback.partialText) {
+    yield { type: "chunk", text: fallback.partialText };
+    yield {
+      type: "result",
+      text: fallback.partialText,
+      recovery: fallback.reason,
+      usedFallback: true,
+      partial: true,
+    };
+    return;
+  }
+
   yield {
     type: "result",
     text: "",
@@ -126,6 +142,7 @@ function isGeminiFailureReason(value: string): value is GeminiFailureReason {
     "provider_timeout",
     "provider_unconfigured",
     "provider_error",
+    "provider_output_limited",
   ].includes(value);
 }
 
@@ -139,6 +156,8 @@ export function recoveryMessage(recovery: AssistantRecovery): string {
       return "The model took too long to respond. Please try again shortly.";
     case "provider_unconfigured":
       return "Staynex AI is temporarily unavailable. You can still search stays, view rooms, and book directly on the property page.";
+    case "provider_output_limited":
+      return "The model reached its response limit before finishing. The partial answer is shown above; ask me to continue from where it stopped.";
     case "partial_response":
       return "The model connection ended after part of the response. The partial answer is shown above; verify details before acting on it.";
     default:

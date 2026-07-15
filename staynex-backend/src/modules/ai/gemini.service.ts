@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { splitGeminiSseEvents } from "./gemini-sse";
+import { parseGeminiSseEvent, splitGeminiSseEvents } from "./gemini-sse";
 
 export interface GeminiTurn {
   role: "user" | "model";
@@ -20,10 +20,11 @@ const RETRYABLE_STATUS = new Set([429, 503]);
 const MAX_RETRIES = 2;
 const BASE_BACKOFF_MS = 600;
 const MAX_BACKOFF_MS = 4000;
-// Initial + two JSON retries stay under the 60s proxy budget. A streaming turn
-// uses at most one JSON fallback and stays under the browser's 45s deadline.
-const GEMINI_REQUEST_TIMEOUT_MS = 15_000;
-const GENERATION_CONFIG = { temperature: 0.3, maxOutputTokens: 512 } as const;
+// Initial + two JSON retries stay under the 60s proxy budget. Streaming uses an
+// inactivity timeout so a healthy response is not aborted while tokens arrive.
+const GEMINI_JSON_REQUEST_TIMEOUT_MS = 15_000;
+const GEMINI_STREAM_IDLE_TIMEOUT_MS = 25_000;
+const GENERATION_CONFIG = { temperature: 0.3, maxOutputTokens: 1024 } as const;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -32,11 +33,16 @@ export type GeminiFailureReason =
   | "provider_overloaded"
   | "provider_timeout"
   | "provider_unconfigured"
-  | "provider_error";
+  | "provider_error"
+  | "provider_output_limited";
 
 export type GeminiResult =
   | { ok: true; text: string }
-  | { ok: false; reason: GeminiFailureReason };
+  | {
+      ok: false;
+      reason: GeminiFailureReason;
+      partialText?: string;
+    };
 
 export class GeminiStreamError extends Error {
   constructor(
@@ -45,28 +51,6 @@ export class GeminiStreamError extends Error {
   ) {
     super(message);
     this.name = "GeminiStreamError";
-  }
-}
-
-/** Extract concatenated text from one Gemini SSE `data:` event block. */
-function textFromSseEvent(block: string): string {
-  const data = block
-    .split("\n")
-    .filter((line) => line.startsWith("data:"))
-    .map((line) => line.slice(5).trim())
-    .join("");
-  if (!data) return "";
-  try {
-    const json = JSON.parse(data) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
-    };
-    return (
-      json?.candidates?.[0]?.content?.parts
-        ?.map((p) => p.text ?? "")
-        .join("") ?? ""
-    );
-  } catch {
-    return "";
   }
 }
 
@@ -130,13 +114,38 @@ export class GeminiService {
 
         if (res.ok) {
           const json = (await res.json().catch(() => null)) as {
-            candidates?: { content?: { parts?: { text?: string }[] } }[];
+            candidates?: {
+              content?: { parts?: { text?: string }[] };
+              finishReason?: string;
+            }[];
           } | null;
-          const text = json?.candidates?.[0]?.content?.parts
+          const candidate = json?.candidates?.[0];
+          const text = candidate?.content?.parts
             ?.map((p) => p.text ?? "")
             .join("")
             .trim();
-          if (text && text.length > 0) return { ok: true, text };
+          if (candidate?.finishReason === "MAX_TOKENS") {
+            this.logger.warn(
+              "Gemini reached maxOutputTokens before completing the response.",
+            );
+            return {
+              ok: false,
+              reason: "provider_output_limited",
+              ...(text ? { partialText: text } : {}),
+            };
+          }
+          if (
+            text &&
+            text.length > 0 &&
+            (!candidate?.finishReason || candidate.finishReason === "STOP")
+          ) {
+            return { ok: true, text };
+          }
+          if (candidate?.finishReason && candidate.finishReason !== "STOP") {
+            this.logger.warn(
+              `Gemini stopped with finish reason ${candidate.finishReason}.`,
+            );
+          }
           this.logger.warn("Gemini returned an empty completion.");
           return { ok: false, reason: "provider_error" };
         }
@@ -197,10 +206,15 @@ export class GeminiService {
     if (!key) throw new Error("Gemini not configured");
 
     const controller = new AbortController();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      GEMINI_REQUEST_TIMEOUT_MS,
-    );
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const armIdleTimeout = () => {
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(
+        () => controller.abort(),
+        GEMINI_STREAM_IDLE_TIMEOUT_MS,
+      );
+    };
+    armIdleTimeout();
     try {
       const res = await fetch(
         `${this.endpoint("streamGenerateContent")}?alt=sse&key=${encodeURIComponent(key)}`,
@@ -243,19 +257,25 @@ export class GeminiService {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let finishReason: string | null = null;
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
+        armIdleTimeout();
         buffer += decoder.decode(value, { stream: true });
         const split = splitGeminiSseEvents(buffer);
         buffer = split.rest;
         for (const event of split.events) {
-          const text = textFromSseEvent(event);
-          if (text) yield text;
+          const parsed = parseGeminiSseEvent(event);
+          if (!parsed) continue;
+          if (parsed.finishReason) finishReason = parsed.finishReason;
+          if (parsed.text) yield parsed.text;
         }
       }
-      const tail = textFromSseEvent(buffer);
-      if (tail) yield tail;
+      const tail = parseGeminiSseEvent(buffer);
+      if (tail?.finishReason) finishReason = tail.finishReason;
+      if (tail?.text) yield tail.text;
+      assertSuccessfulStreamFinish(finishReason);
     } catch (error) {
       if (error instanceof GeminiStreamError) throw error;
       throw new GeminiStreamError(
@@ -263,7 +283,7 @@ export class GeminiService {
         error instanceof Error ? error.message : "Gemini stream failed",
       );
     } finally {
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
     }
   }
 
@@ -289,11 +309,27 @@ async function fetchWithTimeout(
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
-    GEMINI_REQUEST_TIMEOUT_MS,
+    GEMINI_JSON_REQUEST_TIMEOUT_MS,
   );
   try {
     return await fetch(input, { ...init, signal: controller.signal });
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function assertSuccessfulStreamFinish(finishReason: string | null): void {
+  if (finishReason === "STOP") return;
+  if (finishReason === "MAX_TOKENS") {
+    throw new GeminiStreamError(
+      "provider_output_limited",
+      "Gemini stream reached maxOutputTokens",
+    );
+  }
+  throw new GeminiStreamError(
+    "provider_error",
+    finishReason
+      ? `Gemini stream stopped with finish reason ${finishReason}`
+      : "Gemini stream closed without a terminal finish reason",
+  );
 }

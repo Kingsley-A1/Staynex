@@ -7,6 +7,14 @@ export const assistantSchema = z
     // Optional grounding context — when a property slug is supplied, the assistant
     // answers from that property's verified public facts only.
     propertySlug: z.string().optional(),
+    // Browser pathname only (never a role/authority claim). The server combines
+    // this with the authenticated principal to select safe page context.
+    pagePath: z
+      .string()
+      .trim()
+      .max(240)
+      .regex(/^\/[^\r\n?#]*$/, "Page path must be a pathname")
+      .optional(),
     operation: z
       .discriminatedUnion("type", [
         z.object({

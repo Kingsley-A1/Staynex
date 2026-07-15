@@ -5,10 +5,16 @@ import { AiController } from "./ai.controller";
 import { AssistantService } from "./assistant.service";
 import { ConversationsService } from "./conversations.service";
 import { GeminiService } from "./gemini.service";
+import { HostInsightsService } from "./host-insights.service";
 
 @Module({
   imports: [CatalogModule, AuthModule],
   controllers: [AiController],
-  providers: [GeminiService, AssistantService, ConversationsService],
+  providers: [
+    GeminiService,
+    AssistantService,
+    ConversationsService,
+    HostInsightsService,
+  ],
 })
 export class AiModule {}

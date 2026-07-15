@@ -42,6 +42,25 @@ test("application and provider throttles have truthful, different copy", () => {
   assert.match(provider, /Staynex message limit was not reached/i);
 });
 
+test("output limits are surfaced as partial rather than successful answers", () => {
+  assert.match(recoveryCopy("provider_output_limited"), /response limit/i);
+  assert.match(recoveryCopy("provider_output_limited"), /partial/i);
+});
+
+test("the widget sends route context and uses an activity-based stream timeout", async () => {
+  const [widget, api] = await Promise.all([
+    readFile(
+      new URL("../src/features/ai/assistant-widget.tsx", import.meta.url),
+      "utf8",
+    ),
+    readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(widget, /pagePath: pathname/);
+  assert.match(api, /AI_STREAM_IDLE_TIMEOUT_MS/);
+  assert.match(api, /armIdleTimeout\(\)/);
+  assert.doesNotMatch(api, /AI_STREAM_TIMEOUT_MS/);
+});
+
 test("assistant shell keeps history and close controls visible at narrow viewports", async () => {
   const source = await readFile(
     new URL("../src/features/ai/assistant-widget.tsx", import.meta.url),

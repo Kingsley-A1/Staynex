@@ -13,3 +13,35 @@ export function splitGeminiSseEvents(buffer: string): {
   }
   return { events, rest };
 }
+
+export interface GeminiSseEvent {
+  text: string;
+  finishReason: string | null;
+}
+
+/** Read both text deltas and the provider's terminal reason from one SSE frame. */
+export function parseGeminiSseEvent(block: string): GeminiSseEvent | null {
+  const data = block
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trim())
+    .join("");
+  if (!data) return null;
+  try {
+    const json = JSON.parse(data) as {
+      candidates?: {
+        content?: { parts?: { text?: string }[] };
+        finishReason?: string;
+      }[];
+    };
+    const candidate = json.candidates?.[0];
+    return {
+      text:
+        candidate?.content?.parts?.map((part) => part.text ?? "").join("") ??
+        "",
+      finishReason: candidate?.finishReason ?? null,
+    };
+  } catch {
+    return null;
+  }
+}

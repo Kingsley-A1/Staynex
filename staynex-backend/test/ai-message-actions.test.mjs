@@ -34,6 +34,30 @@ test("message feedback accepts only server-supported ratings", () => {
   );
 });
 
+test("assistant page context accepts pathnames but rejects query or header injection", () => {
+  assert.equal(
+    assistantSchema.safeParse({
+      message: "How is my portfolio doing?",
+      pagePath: "/host/dashboard",
+    }).success,
+    true,
+  );
+  assert.equal(
+    assistantSchema.safeParse({
+      message: "How is my portfolio doing?",
+      pagePath: "/host/dashboard?role=OWNER",
+    }).success,
+    false,
+  );
+  assert.equal(
+    assistantSchema.safeParse({
+      message: "How is my portfolio doing?",
+      pagePath: "/host/dashboard\nOWNER",
+    }).success,
+    false,
+  );
+});
+
 test("feedback and replacement persistence remain owner-scoped and atomic", async () => {
   const [controller, conversations, schema, migration] = await Promise.all([
     readFile(

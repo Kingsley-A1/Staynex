@@ -61,7 +61,7 @@ type RequestOptions = RequestInit;
 const CSRF_COOKIE = "staynex_csrf";
 const CSRF_HEADER = "X-CSRF-Token";
 const BROWSER_API_BASE = "/api/backend";
-const AI_STREAM_TIMEOUT_MS = 45_000;
+const AI_STREAM_IDLE_TIMEOUT_MS = 30_000;
 let csrfTokenCache: string | null = null;
 let csrfTokenRequest: Promise<string | null> | null = null;
 
@@ -686,6 +686,7 @@ export interface AssistantRequest {
   message: string;
   conversationId?: string;
   propertySlug?: string;
+  pagePath?: string;
   operation?: AssistantOperation;
 }
 
@@ -715,10 +716,15 @@ export async function askAgentStream(
   const csrfHeaders = await csrfHeaderFor("POST");
   const requestId = crypto.randomUUID();
   const controller = new AbortController();
-  const timeout = window.setTimeout(
-    () => controller.abort(),
-    AI_STREAM_TIMEOUT_MS,
-  );
+  let timeout = 0;
+  const armIdleTimeout = () => {
+    window.clearTimeout(timeout);
+    timeout = window.setTimeout(
+      () => controller.abort(),
+      AI_STREAM_IDLE_TIMEOUT_MS,
+    );
+  };
+  armIdleTimeout();
   try {
     const res = await fetch(apiUrl("/ai/assistant/stream"), {
       method: "POST",
@@ -781,6 +787,7 @@ export async function askAgentStream(
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
+      armIdleTimeout();
       buffer += decoder.decode(value, { stream: true });
       const split = splitSseBlocks(buffer);
       buffer = split.rest;
@@ -856,9 +863,7 @@ export const notificationsApi = {
       `/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
     ),
   get: (id: string) =>
-    request<NotificationRow>(
-      `/notifications/${encodeURIComponent(id)}`,
-    ),
+    request<NotificationRow>(`/notifications/${encodeURIComponent(id)}`),
   markRead: (ids?: string[]) =>
     request<{ updated: number }>("/notifications/read", {
       method: "POST",

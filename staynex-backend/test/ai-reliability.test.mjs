@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { completeReliably } from "../src/modules/ai/assistant-reliability.ts";
-import { splitGeminiSseEvents } from "../src/modules/ai/gemini-sse.ts";
+import {
+  parseGeminiSseEvent,
+  splitGeminiSseEvents,
+} from "../src/modules/ai/gemini-sse.ts";
 
 async function collect(provider) {
   const events = [];
@@ -85,6 +88,49 @@ test("a post-token failure is partial and never starts a second completion", asy
   assert.equal(events.at(-1).text, "Partial");
 });
 
+test("an output-limit finish stays distinct and never looks complete", async () => {
+  const events = await collect({
+    async *streamText() {
+      yield "The first part";
+      throw failure("provider_output_limited");
+    },
+    async generateResult() {
+      return { ok: true, text: "must not run" };
+    },
+  });
+
+  assert.deepEqual(events.at(-1), {
+    type: "result",
+    text: "The first part",
+    recovery: "provider_output_limited",
+    usedFallback: false,
+    partial: true,
+  });
+});
+
+test("a JSON fallback preserves an explicitly partial provider answer", async () => {
+  const events = await collect({
+    async *streamText() {
+      throw failure("provider_error");
+    },
+    async generateResult() {
+      return {
+        ok: false,
+        reason: "provider_output_limited",
+        partialText: "Useful but unfinished",
+      };
+    },
+  });
+
+  assert.deepEqual(events.at(-1), {
+    type: "result",
+    text: "Useful but unfinished",
+    recovery: "provider_output_limited",
+    usedFallback: true,
+    partial: true,
+  });
+});
+
 test("provider quota remains distinct from application throttling", async () => {
   const events = await collect({
     async *streamText() {
@@ -104,5 +150,15 @@ test("provider SSE framing accepts LF, CRLF, and an incomplete tail", () => {
   assert.deepEqual(splitGeminiSseEvents(framed), {
     events: ['data: {"one":1}', 'data: {"two":2}'],
     rest: 'data: {"partial":',
+  });
+});
+
+test("provider SSE parsing captures the terminal finish reason", () => {
+  const event = parseGeminiSseEvent(
+    'data: {"candidates":[{"content":{"parts":[{"text":"done"}]},"finishReason":"MAX_TOKENS"}]}',
+  );
+  assert.deepEqual(event, {
+    text: "done",
+    finishReason: "MAX_TOKENS",
   });
 });

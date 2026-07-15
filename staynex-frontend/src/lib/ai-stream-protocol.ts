@@ -52,6 +52,8 @@ export function recoveryCopy(recovery: AssistantRecovery): string {
       return "The AI model took too long to respond. Try again shortly.";
     case "provider_unconfigured":
       return "Staynex AI is temporarily offline. Search and booking are still available.";
+    case "provider_output_limited":
+      return "The model reached its response limit. The answer above is partial; ask Staynex AI to continue.";
     case "partial_response":
       return "The model connection ended mid-response. Treat the answer above as partial and verify any details.";
     case "transport_interrupted":

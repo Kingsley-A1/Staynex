@@ -513,6 +513,7 @@ export type AssistantRecovery =
   | "provider_timeout"
   | "provider_unconfigured"
   | "provider_error"
+  | "provider_output_limited"
   | "partial_response"
   | "transport_interrupted";
 

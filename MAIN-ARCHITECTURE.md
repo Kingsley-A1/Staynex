@@ -380,11 +380,22 @@ Assistant requests may carry a `retry` or `edit` operation for the latest
 completed turn. Ownership is resolved from the session cookie when present
 (history is user-scoped); the assistant answers guests too.
 
+The frontend also sends its pathname as non-authoritative page context. The
+backend combines that route with session-derived capabilities: an OWNER-capable
+account is treated as a host (with additive guest booking access) and may receive
+read-only portfolio or current-property insights. Every private insight query is
+scoped by the authenticated owner id; client route data can never grant access.
+
 Assistant replies and final SSE metadata include persisted user/agent message
 ids plus verified `PropertySummary[]` cards. Current names, images, and starting
 nightly prices are retrieved from approved catalog rows for each turn. Property
 cards are display guidance only: exact date availability and booking/payment
 truth remain in their authoritative backend flows.
+
+Streaming completion is finish-reason aware. Gemini `STOP` is success;
+`MAX_TOKENS` is returned as an explicit partial response, and a stream that
+closes without terminal metadata is interrupted. Provider and browser timers
+are inactivity-based so active token streams are not cut off by a fixed timer.
 
 When the most recently submitted message rating is thumbs-down, later answers
 receive a correction instruction so the model re-checks verified facts and

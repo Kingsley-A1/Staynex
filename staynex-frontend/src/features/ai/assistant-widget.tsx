@@ -423,6 +423,7 @@ export function AssistantWidget() {
         {
           message,
           conversationId: activeId ?? undefined,
+          pagePath: pathname,
           ...(slug ? { propertySlug: decodeURIComponent(slug) } : {}),
           ...(operation ? { operation } : {}),
         },

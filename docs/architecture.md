@@ -101,6 +101,13 @@ structured public property summaries through the shared `PropertyCard` UI.
   property/availability flow.
 - A signed-in user's sanitized first name may personalize wording. No private
   user data is added to property cards, feedback logs, or grounding facts.
+- The browser may send its current pathname as navigation context, but the
+  backend-resolved capability set is the only role authority. OWNER-capable
+  users receive read-only, owner-scoped portfolio or current-property facts;
+  guest and anonymous sessions never receive those private queries.
+- Gemini streams are complete only when the provider reports a natural `STOP`.
+  Output limits and interrupted streams remain explicit partial states, while
+  activity-based timeouts avoid aborting a healthy response mid-generation.
 - Safety is a core value proposition: the prompt explains Staynex security in
   depth without claiming perfect security or giving AI booking/payment authority.
 
