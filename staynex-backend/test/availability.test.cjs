@@ -10,10 +10,23 @@ const {
   AvailabilityService,
 } = require("../dist/src/modules/availability/availability.service.js");
 
+function iso(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function addDays(date, days) {
+  const result = new Date(date);
+  result.setUTCDate(result.getUTCDate() + days);
+  return result;
+}
+
+const today = new Date();
+today.setUTCHours(0, 0, 0, 0);
+
 const validInput = {
   roomTypeId: "room-type-1",
-  from: "2026-07-14",
-  to: "2026-08-12",
+  from: iso(today),
+  to: iso(addDays(today, 29)),
   totalUnits: 2,
 };
 
@@ -29,8 +42,16 @@ test("availability input accepts a launch window and rejects unsafe ranges", () 
   assert.equal(
     setCapacitySchema.safeParse({
       ...validInput,
-      from: "2026-01-01",
-      to: "2027-01-02",
+      from: iso(addDays(today, -1)),
+      to: iso(today),
+    }).success,
+    false,
+  );
+  assert.equal(
+    setCapacitySchema.safeParse({
+      ...validInput,
+      from: iso(today),
+      to: iso(addDays(today, 367)),
     }).success,
     false,
   );
