@@ -1,37 +1,26 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Field, Input, LinkButton, Select } from "@/ui";
 import { apiErrorMessage, hostApi } from "@/lib/api";
-import { cn } from "@/lib/cn";
 import type { AvailabilityDay, RoomTypeDetail } from "@/lib/types";
 
 const MAX_RANGE_DAYS = 366;
 const DEFAULT_OPEN_DAYS = 30;
 
-type AvailabilityMode = "30-days" | "90-days" | "custom";
+type AvailabilityDays = "30" | "60" | "90" | "180" | "365" | "custom";
 
-const OPENING_OPTIONS: Array<{
-  mode: AvailabilityMode;
+const AVAILABILITY_DAY_OPTIONS: Array<{
+  value: AvailabilityDays;
   label: string;
-  description: string;
 }> = [
-  {
-    mode: "30-days",
-    label: "Next 30 days",
-    description: "Recommended",
-  },
-  {
-    mode: "90-days",
-    label: "Next 90 days",
-    description: "Plan further ahead",
-  },
-  {
-    mode: "custom",
-    label: "Choose dates",
-    description: "Set your own range",
-  },
+  { value: "30", label: "Next 30 days (recommended to go live)" },
+  { value: "60", label: "Next 60 days" },
+  { value: "90", label: "Next 90 days" },
+  { value: "180", label: "Next 180 days" },
+  { value: "365", label: "Next 365 days" },
+  { value: "custom", label: "Choose a custom date range" },
 ];
 
 export function AvailabilityEditor({
@@ -45,7 +34,8 @@ export function AvailabilityEditor({
 }) {
   const router = useRouter();
   const [roomTypeId, setRoomTypeId] = useState(roomTypes[0]?.id ?? "");
-  const [mode, setMode] = useState<AvailabilityMode>("30-days");
+  const [availabilityDays, setAvailabilityDays] =
+    useState<AvailabilityDays>("30");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [from, setFrom] = useState(initialFrom);
   const [to, setTo] = useState(initialTo);
@@ -56,6 +46,7 @@ export function AvailabilityEditor({
   const [totalUnits, setTotalUnits] = useState(
     String(roomTypes[0]?.unitCount ?? 0),
   );
+  const previousRoom = useRef<{ id: string; unitCount: number } | null>(null);
   const [calendar, setCalendar] = useState<AvailabilityDay[] | null>(null);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
   const [pending, setPending] = useState(false);
@@ -70,6 +61,42 @@ export function AvailabilityEditor({
     Number.isInteger(capacity) &&
     capacity >= 0 &&
     capacity <= selectedRoom.unitCount;
+
+  // `router.refresh()` intentionally preserves client state. Keep the selection
+  // aligned with new room data without replacing a host's valid manual capacity.
+  useEffect(() => {
+    const nextRoom =
+      roomTypes.find((room) => room.id === roomTypeId) ?? roomTypes[0] ?? null;
+    const previous = previousRoom.current;
+
+    if (!nextRoom) {
+      previousRoom.current = null;
+      if (roomTypeId) setRoomTypeId("");
+      setTotalUnits("0");
+      return;
+    }
+
+    if (nextRoom.id !== roomTypeId) setRoomTypeId(nextRoom.id);
+    setTotalUnits((current) => {
+      const currentCapacity = Number(current);
+      const selectedNewRoom = previous?.id !== nextRoom.id;
+      const receivedFirstUnit =
+        previous?.id === nextRoom.id &&
+        previous.unitCount === 0 &&
+        nextRoom.unitCount > 0;
+      if (
+        selectedNewRoom ||
+        receivedFirstUnit ||
+        !Number.isInteger(currentCapacity) ||
+        currentCapacity < 0 ||
+        currentCapacity > nextRoom.unitCount
+      ) {
+        return String(nextRoom.unitCount);
+      }
+      return current;
+    });
+    previousRoom.current = { id: nextRoom.id, unitCount: nextRoom.unitCount };
+  }, [roomTypeId, roomTypes]);
 
   useEffect(() => {
     if (!roomTypeId || requestedDays < 1 || requestedDays > MAX_RANGE_DAYS) {
@@ -107,20 +134,18 @@ export function AvailabilityEditor({
     clearFeedback();
   }
 
-  function chooseMode(nextMode: AvailabilityMode) {
-    setMode(nextMode);
-    setTotalUnits(String(selectedRoom?.unitCount ?? 0));
-    if (nextMode === "30-days") {
+  function chooseAvailabilityDays(nextValue: AvailabilityDays) {
+    setAvailabilityDays(nextValue);
+    if (nextValue !== "custom") {
+      const days = Number(nextValue);
       setFrom(initialFrom);
-      setTo(addDays(initialFrom, DEFAULT_OPEN_DAYS - 1));
-    } else if (nextMode === "90-days") {
-      setFrom(initialFrom);
-      setTo(addDays(initialFrom, 89));
+      setTo(addDays(initialFrom, days - 1));
     }
     clearFeedback();
   }
 
   function chooseStart(nextFrom: string) {
+    setAvailabilityDays("custom");
     setFrom(nextFrom);
     const latestEnd = addDays(nextFrom, MAX_RANGE_DAYS - 1);
     if (to < nextFrom) setTo(addDays(nextFrom, DEFAULT_OPEN_DAYS - 1));
@@ -143,8 +168,8 @@ export function AvailabilityEditor({
       });
       setSavedMessage(
         capacity === 0
-          ? `${selectedRoom.name} is closed for ${result.updatedDays} night${result.updatedDays === 1 ? "" : "s"}.`
-          : `${selectedRoom.name} is open for ${result.updatedDays} night${result.updatedDays === 1 ? "" : "s"}, with up to ${capacity} room${capacity === 1 ? "" : "s"} offered per night.`,
+          ? `${selectedRoom.name} is closed for ${result.updatedDays} day${result.updatedDays === 1 ? "" : "s"}.`
+          : `${selectedRoom.name} is open for ${result.updatedDays} day${result.updatedDays === 1 ? "" : "s"}, with ${capacity} room${capacity === 1 ? "" : "s"} available each night.`,
       );
       hostApi
         .getCalendar(roomTypeId, from, to)
@@ -167,8 +192,8 @@ export function AvailabilityEditor({
     return (
       <div className="surface-card space-y-3 p-5">
         <p className="text-body-sm text-muted-foreground">
-          Add a room type and at least one room unit before opening dates for
-          guests.
+          Add a room type first. You can set its physical room quantity while
+          creating it, then open dates here.
         </p>
         <LinkButton href="#room-types" variant="secondary" size="sm">
           Add room type
@@ -177,75 +202,67 @@ export function AvailabilityEditor({
     );
   }
 
+  const roomCount = selectedRoom?.unitCount ?? 0;
   const openDays =
     calendar?.filter((day) => day.availableUnits > 0).length ?? 0;
-  const roomCount = selectedRoom?.unitCount ?? 0;
-  const datesAreCustom = mode === "custom" || advancedOpen;
+  const notOpenedDays = Math.max(0, requestedDays - (calendar?.length ?? 0));
+  const closedDays =
+    calendar?.filter((day) => day.totalUnits === 0).length ?? 0;
+  const committedDays =
+    calendar?.filter((day) => day.totalUnits > 0 && day.availableUnits === 0)
+      .length ?? 0;
 
   return (
     <form onSubmit={save} className="surface-card space-y-6 p-5 sm:p-6">
       <div className="max-w-2xl">
-        <p className="font-semibold text-ink">Choose when guests can book</p>
+        <p className="font-semibold text-ink">Set guest availability</p>
         <p className="mt-1 text-caption">
-          Open at least 30 future nights so guests can find and book your
-          property. Staynex protects rooms that are already booked or held.
+          Choose the room type and how many upcoming days to open. At least 30
+          open days are required before the listing can go live.
         </p>
       </div>
 
-      <Field label="Room type" htmlFor="availability-room" required>
-        <Select
-          id="availability-room"
-          value={roomTypeId}
-          onChange={(event) => chooseRoom(event.target.value)}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Room type" htmlFor="availability-room" required>
+          <Select
+            id="availability-room"
+            value={roomTypeId}
+            onChange={(event) => chooseRoom(event.target.value)}
+            required
+          >
+            {roomTypes.map((room) => (
+              <option key={room.id} value={room.id}>
+                {room.name} · {room.unitCount} room
+                {room.unitCount === 1 ? "" : "s"}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field
+          label="Availability days"
+          htmlFor="availability-days"
           required
+          hint="This opens consecutive calendar days, starting today."
         >
-          {roomTypes.map((room) => (
-            <option key={room.id} value={room.id}>
-              {room.name} · {room.unitCount} room
-              {room.unitCount === 1 ? "" : "s"}
-            </option>
-          ))}
-        </Select>
-      </Field>
+          <Select
+            id="availability-days"
+            value={availabilityDays}
+            onChange={(event) =>
+              chooseAvailabilityDays(event.target.value as AvailabilityDays)
+            }
+            required
+          >
+            {AVAILABILITY_DAY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
 
-      <fieldset className="space-y-3">
-        <legend className="text-label text-ink">
-          When should guests be able to book?
-        </legend>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {OPENING_OPTIONS.map((option) => {
-            const selected = mode === option.mode;
-            return (
-              <button
-                key={option.mode}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => chooseMode(option.mode)}
-                className={cn(
-                  "min-h-20 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                  selected
-                    ? "border-primary bg-primary-subtle text-primary"
-                    : "border-border bg-surface-raised text-ink hover:border-primary/40 hover:bg-secondary",
-                )}
-              >
-                <span className="block text-sm font-semibold">
-                  {option.label}
-                </span>
-                <span
-                  className={cn(
-                    "mt-1 block text-xs",
-                    selected ? "text-primary" : "text-muted-foreground",
-                  )}
-                >
-                  {option.description}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </fieldset>
-
-      {datesAreCustom && (
+      {availabilityDays === "custom" && (
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="From" htmlFor="availability-from" required>
             <Input
@@ -265,6 +282,7 @@ export function AvailabilityEditor({
               max={maxTo}
               value={to}
               onChange={(event) => {
+                setAvailabilityDays("custom");
                 setTo(event.target.value);
                 clearFeedback();
               }}
@@ -276,13 +294,13 @@ export function AvailabilityEditor({
 
       <div className="rounded-lg border border-border bg-background p-4">
         <p className="text-sm font-semibold text-ink">
-          {selectedRoom?.name} · {requestedDays} night
-          {requestedDays === 1 ? "" : "s"}
+          {selectedRoom?.name} · {requestedDays} day
+          {requestedDays === 1 ? "" : "s"} selected
         </p>
         <p className="mt-1 text-caption">
           {capacity === 0
             ? "These dates will be closed to new bookings."
-            : `${capacity === roomCount ? `All ${roomCount}` : `${capacity} of ${roomCount}`} configured room${roomCount === 1 ? "" : "s"} will be offered per night. Existing bookings and holds are protected automatically.`}
+            : `${capacity === roomCount ? `All ${roomCount}` : `${capacity} of ${roomCount}`} physical room${roomCount === 1 ? "" : "s"} will be available each night. Existing bookings and holds stay protected.`}
         </p>
       </div>
 
@@ -294,7 +312,9 @@ export function AvailabilityEditor({
           aria-controls="advanced-availability"
           onClick={() => setAdvancedOpen((current) => !current)}
         >
-          {advancedOpen ? "Hide advanced availability" : "Advanced availability"}
+          {advancedOpen
+            ? "Hide room availability controls"
+            : "Adjust rooms available each night"}
         </button>
 
         {advancedOpen && (
@@ -303,10 +323,10 @@ export function AvailabilityEditor({
             className="mt-3 rounded-lg border border-border bg-surface-raised p-4"
           >
             <Field
-              label="Rooms offered for booking"
+              label="Rooms available each night"
               htmlFor="availability-units"
               required
-              hint={`You have ${roomCount} active room unit${roomCount === 1 ? "" : "s"}. Enter zero to close the selected dates.`}
+              hint={`You have ${roomCount} active physical room${roomCount === 1 ? "" : "s"}. Enter zero only when you want to close the selected dates.`}
             >
               <Input
                 id="availability-units"
@@ -329,10 +349,15 @@ export function AvailabilityEditor({
       <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-caption" aria-live="polite">
           {loadingCalendar
-            ? "Checking current availability…"
+            ? "Checking the current calendar…"
             : calendar
-              ? `${openDays} of ${requestedDays} selected nights are currently open.`
-              : `${requestedDays} night${requestedDays === 1 ? "" : "s"} selected.`}
+              ? calendarSummary({
+                  openDays,
+                  notOpenedDays,
+                  closedDays,
+                  committedDays,
+                })
+              : `${requestedDays} day${requestedDays === 1 ? "" : "s"} selected.`}
         </p>
         <Button
           type="submit"
@@ -346,21 +371,18 @@ export function AvailabilityEditor({
           }
         >
           {pending
-            ? "Opening dates…"
+            ? "Saving availability…"
             : capacity === 0
-              ? "Close dates"
-              : "Open dates"}
+              ? "Close selected days"
+              : "Open selected days"}
         </Button>
       </div>
 
       {selectedRoom && selectedRoom.unitCount === 0 && (
         <div className="flex flex-col gap-3 rounded-md border border-warning-border bg-warning-surface px-3 py-3 text-sm text-warning sm:flex-row sm:items-center sm:justify-between">
-          <p>
-            This room type has no units yet. Add a room unit before opening
-            dates.
-          </p>
+          <p>This room type has no physical rooms available to sell yet.</p>
           <LinkButton href="#room-types" variant="secondary" size="sm">
-            Add room unit
+            Manage rooms
           </LinkButton>
         </div>
       )}
@@ -379,6 +401,30 @@ export function AvailabilityEditor({
       )}
     </form>
   );
+}
+
+function calendarSummary({
+  openDays,
+  notOpenedDays,
+  closedDays,
+  committedDays,
+}: {
+  openDays: number;
+  notOpenedDays: number;
+  closedDays: number;
+  committedDays: number;
+}): string {
+  const parts = [`${openDays} day${openDays === 1 ? "" : "s"} currently open`];
+  if (notOpenedDays > 0) {
+    parts.push(`${notOpenedDays} not opened yet`);
+  }
+  if (closedDays > 0) {
+    parts.push(`${closedDays} deliberately closed`);
+  }
+  if (committedDays > 0) {
+    parts.push(`${committedDays} fully booked or held`);
+  }
+  return `${parts.join(" · ")}.`;
 }
 
 function addDays(isoDate: string, days: number): string {

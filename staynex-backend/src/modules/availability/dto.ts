@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { utcToday } from "../../common/dates";
 
 export const MAX_AVAILABILITY_RANGE_DAYS = 366;
 
@@ -45,12 +46,17 @@ const availabilityRangeSchema = z
     },
   );
 
-export const setCapacitySchema = availabilityRangeSchema.and(
-  z.object({
-    roomTypeId: z.string().min(1),
-    totalUnits: z.number().int().nonnegative(),
-  }),
-);
+export const setCapacitySchema = availabilityRangeSchema
+  .and(
+    z.object({
+      roomTypeId: z.string().min(1),
+      totalUnits: z.number().int().nonnegative(),
+    }),
+  )
+  .refine((value) => value.from >= utcToday().toISOString().slice(0, 10), {
+    path: ["from"],
+    message: "Availability cannot be set before today",
+  });
 export type SetCapacityInput = z.infer<typeof setCapacitySchema>;
 
 export const calendarQuerySchema = availabilityRangeSchema;
