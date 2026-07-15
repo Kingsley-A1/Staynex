@@ -5,6 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { color, fontSize, fontWeight, spacing } from "@staynex/shared";
 import { authApi } from "@/data/api";
 import { apiErrorMessage } from "@/core/client";
+import { useGoogleSignIn } from "@/core/google-auth";
 import { useSession } from "@/core/session";
 import { Screen } from "@/ui/Screen";
 import { Button } from "@/ui/Button";
@@ -26,15 +27,23 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  function onSignedIn(user: Parameters<typeof setUser>[0]) {
+    setUser(user);
+    if (next) router.replace({ pathname: next, params: { holdId, slug } });
+    else if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)");
+  }
+
   const mutation = useMutation({
     mutationFn: () => authApi.login({ email: email.trim(), password }),
-    onSuccess: (user) => {
-      setUser(user);
-      if (next) router.replace({ pathname: next, params: { holdId, slug } });
-      else if (router.canGoBack()) router.back();
-      else router.replace("/(tabs)");
-    },
+    onSuccess: onSignedIn,
   });
+
+  const googleMutation = useMutation({
+    mutationFn: (idToken: string) => authApi.google(idToken),
+    onSuccess: onSignedIn,
+  });
+  const google = useGoogleSignIn((idToken) => googleMutation.mutate(idToken));
 
   const canSubmit = email.trim().length > 3 && password.length > 0;
 
@@ -79,6 +88,22 @@ export default function LoginScreen() {
             disabled={!canSubmit}
           />
 
+          {googleMutation.isError ? (
+            <Text style={styles.error}>
+              {apiErrorMessage(googleMutation.error, "Google sign-in failed. Try again.")}
+            </Text>
+          ) : null}
+          <Button
+            label="Continue with Google"
+            variant="secondary"
+            loading={googleMutation.isPending}
+            disabled={!google.ready}
+            onPress={() => void google.prompt()}
+          />
+          {!google.ready ? (
+            <Text style={styles.hint}>Google sign-in needs GOOGLE_CLIENT_ID configured.</Text>
+          ) : null}
+
           <Link
             href={{ pathname: "/(auth)/register", params: { next, holdId, slug } }}
             replace
@@ -98,6 +123,7 @@ const styles = StyleSheet.create({
   heading: { fontSize: fontSize.xxl, fontWeight: fontWeight.bold, color: color.ink },
   subheading: { fontSize: fontSize.sm, color: color.muted, marginBottom: spacing.sm },
   error: { fontSize: fontSize.sm, color: color.error },
+  hint: { fontSize: fontSize.xs, color: color.muted, textAlign: "center" },
   link: { marginTop: spacing.md, alignSelf: "center" },
   linkText: { color: color.primary, fontWeight: fontWeight.medium, fontSize: fontSize.sm },
 });

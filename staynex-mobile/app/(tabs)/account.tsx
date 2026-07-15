@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { useMutation } from "@tanstack/react-query";
 import { color, fontSize, fontWeight, radius, spacing } from "@staynex/shared";
+import { authApi } from "@/data/api";
+import { apiErrorMessage, clearSessionCookie } from "@/core/client";
 import { useSession } from "@/core/session";
 import { Screen } from "@/ui/Screen";
 import { Button } from "@/ui/Button";
@@ -9,8 +12,44 @@ import { LoadingState } from "@/ui/states";
 
 export default function AccountScreen() {
   const router = useRouter();
-  const { user, status, signOut } = useSession();
+  const { user, status, signOut, setUser } = useSession();
   const [signingOut, setSigningOut] = useState(false);
+
+  const revokeMutation = useMutation({
+    mutationFn: authApi.revokeOtherSessions,
+    onSuccess: () => Alert.alert("Done", "Every other device has been signed out."),
+    onError: (err) =>
+      Alert.alert("Couldn't sign out other devices", apiErrorMessage(err, "Try again.")),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: authApi.deleteAccount,
+    onSuccess: async () => {
+      await clearSessionCookie();
+      setUser(null);
+      router.replace("/(tabs)");
+    },
+    onError: (err) =>
+      Alert.alert(
+        "Couldn't delete your account",
+        apiErrorMessage(err, "Try again or contact support."),
+      ),
+  });
+
+  function confirmDelete() {
+    Alert.alert(
+      "Delete account?",
+      "This permanently deletes your Staynex account. Confirmed bookings and their receipts remain valid records, but you'll lose access to them here.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete account",
+          style: "destructive",
+          onPress: () => deleteMutation.mutate(),
+        },
+      ],
+    );
+  }
 
   if (status !== "ready") {
     return (
@@ -39,16 +78,34 @@ export default function AccountScreen() {
             <View style={styles.card}>
               <Text style={styles.name}>{user.name ?? "Guest"}</Text>
               {user.email ? <Text style={styles.muted}>{user.email}</Text> : null}
+              {user.phone ? <Text style={styles.muted}>{user.phone}</Text> : null}
             </View>
-            <Text style={styles.hint}>
-              My trips and reviews arrive in Phase 2.{/* Phase 2 — out of scope */}
-            </Text>
-            <Button
-              label="Sign out"
-              variant="secondary"
-              loading={signingOut}
-              onPress={handleSignOut}
-            />
+
+            <View style={styles.actions}>
+              <Button
+                label="Edit profile"
+                variant="secondary"
+                onPress={() => router.push("/account/profile")}
+              />
+              <Button
+                label="Sign out other devices"
+                variant="secondary"
+                loading={revokeMutation.isPending}
+                onPress={() => revokeMutation.mutate()}
+              />
+              <Button
+                label="Sign out"
+                variant="secondary"
+                loading={signingOut}
+                onPress={handleSignOut}
+              />
+              <Button
+                label="Delete account"
+                variant="danger"
+                loading={deleteMutation.isPending}
+                onPress={confirmDelete}
+              />
+            </View>
           </>
         ) : (
           <>
@@ -83,6 +140,5 @@ const styles = StyleSheet.create({
   },
   name: { fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: color.ink },
   muted: { fontSize: fontSize.sm, color: color.muted },
-  hint: { fontSize: fontSize.xs, color: color.muted },
   actions: { gap: spacing.md },
 });

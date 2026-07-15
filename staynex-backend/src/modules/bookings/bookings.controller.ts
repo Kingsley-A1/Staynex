@@ -5,6 +5,7 @@ import {
   Headers,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -76,6 +77,17 @@ export class BookingsController {
       parseBody(checkoutSchema, body),
       user.id,
       requestApiOrigin(req),
+    );
+  }
+
+  /** The signed-in guest's booking history (trips), newest check-in first. */
+  @Get("bookings")
+  @UseGuards(SessionGuard)
+  listBookings(@CurrentUser() user: AuthUser, @Query("limit") limit?: string) {
+    const parsed = Number(limit);
+    return this.bookings.listGuestBookings(
+      user.id,
+      Number.isFinite(parsed) ? parsed : undefined,
     );
   }
 

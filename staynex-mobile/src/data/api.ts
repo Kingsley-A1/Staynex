@@ -78,12 +78,20 @@ export const bookingApi = {
   paymentStatus: (reference: string) =>
     api.get<PaymentStatusView>(`/payments/${encodeURIComponent(reference)}`),
   getBooking: (id: string) => api.get<BookingView>(`/bookings/${encodeURIComponent(id)}`),
+  /** The signed-in guest's trips, newest check-in first (session required). */
+  myBookings: () => api.get<BookingView[]>("/bookings"),
 };
 
 export const authApi = {
   me: () => api.get<AuthUser | null>("/auth/me"),
   login: (body: { email: string; password: string }) =>
     api.post<AuthUser>("/auth/login", body),
+  /** Google ID-token sign-in — works for new and returning users. */
+  google: (idToken: string) => api.post<AuthUser>("/auth/google", { idToken }),
+  updateProfile: (body: { name?: string; email?: string; phone?: string | null }) =>
+    api.patch<AuthUser>("/auth/profile", body),
+  revokeOtherSessions: () => api.post<{ ok: true }>("/auth/sessions/revoke-others"),
+  deleteAccount: () => api.delete<{ ok: true }>("/auth/profile"),
   register: (body: {
     email: string;
     password: string;

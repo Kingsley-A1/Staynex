@@ -313,6 +313,7 @@ zero closes the selected nights to new bookings.
 | POST   | `/bookings/holds`     | public  | Place a 15-min hold (allocates a unit)         |
 | GET    | `/bookings/holds/:id` | public  | Hold summary / expiry                          |
 | POST   | `/checkout`           | session | Hold → PENDING_PAYMENT booking + Paystack init |
+| GET    | `/bookings`           | session | The signed-in guest's trips (history), newest check-in first, `userId`-scoped |
 | GET    | `/bookings/:id`       | public  | Booking view (confirmation page source)        |
 
 Checkout accepts an optional `platform: "web" | "mobile"` (default `"web"`, an

@@ -25,7 +25,7 @@ targets, not fiction — if a gate slips, move every later date, don't skip the 
 | 0     | The app runs against the real platform       | Wed 15 Jul    | 🟡 toolchain green; 2 device checks pending |
 | 1     | A phone can book and pay for a real stay     | Fri 24 Jul    | 🟡 Track A ✅ 25/25 machine-verified; Track B pending hardware |
 | 1.5   | Payment feels native; receipt in hand        | Wed 29 Jul    | 🟡 engineering ✅ 28/28; device auto-return gate pending hardware |
-| 2     | The returning-guest app (trips + identity)   | Fri 7 Aug     | ⬜ |
+| 2     | The returning-guest app (trips + identity)   | Fri 7 Aug     | 🟡 engineering ✅ 19/19; new-device demo pending hardware |
 | 3     | The app taps you on the shoulder (push)      | Wed 12 Aug    | ⬜ |
 | 4     | Concierge in your pocket (Staynex AI)        | Fri 21 Aug    | ⬜ |
 | 5     | Hosts run their business from a phone        | Fri 28 Aug    | ⬜ |
@@ -141,14 +141,24 @@ manage their profile, and sign in with Google in two taps.
 every past/upcoming booking with live status, edit their profile, and a new user
 can complete Google sign-in → booking without ever creating a password.
 
-- [ ] Trips tab: guest booking history (needs a small backend addition — a session-scoped `GET /bookings` list for the current guest; propose, review, add with contract types + web parity in mind).
-- [ ] Trip detail: booking view + voucher/QR access + verification link for any CONFIRMED booking.
-- [ ] Profile management: name/email/phone via existing `PATCH /auth/profile`; sign-out of other sessions (`POST /auth/sessions/revoke-others`).
-- [ ] Google sign-in: native Google ID token → existing `POST /auth/google`; works for new and returning users; hold-preserving auth gate keeps working.
-- [ ] Account deletion path (`DELETE /auth/profile`) with confirm dialog — store review requires it.
-- [ ] All new screens: loading/empty/error states; contract audit stays clean.
+**Engineering track — ✅ machine-verified (Phase 2 harness 19/19, Phase 1 regression 28/28, 2026-07-15):**
+- [x] Trips tab: guest booking history via the new session-scoped `GET /bookings` (backend `BookingsService.listGuestBookings`, `userId`-scoped, excludes HOLD, newest check-in first; reuses the shared `BookingView` mapper). Mobile `Trips` tab groups Upcoming/Past (presentation only — status/payment truth untouched), pull-to-refresh, loading/empty/error/signed-out states.
+- [x] Trip detail (`trips/[id]`): full booking view + occupancy + "View receipt & check-in QR (PDF)" for CONFIRMED bookings + "Book this stay again".
+- [x] Profile management: `account/profile` edits name/email/phone via existing `PATCH /auth/profile`; "Sign out other devices" via `POST /auth/sessions/revoke-others`.
+- [x] Google sign-in: `expo-auth-session` ID-token flow (JS-only, Expo Go compatible) → existing `POST /auth/google`, on both login and register; hold-preserving `next` return preserved; degrades gracefully when `GOOGLE_CLIENT_ID` is unset.
+- [x] Account deletion: `DELETE /auth/profile` behind a destructive confirm dialog (new `danger` Button variant).
+- [x] All new screens ship loading/empty/error states; money audit clean; contract audit clean (zero local API types).
+- [x] Harness: trips list scoping, cross-guest isolation (guest B never sees guest A's trip), `GET /bookings` requires a session (401 anonymous), profile update reflected in `/auth/me`, revoke-others never signs out the caller, and clean account deletion (no-booking + booking-owner) — see below.
 
-**Exit gate:** new-device demo — Google sign-in, book a stay, see it in Trips, open its voucher. *Measured by:* one recorded run.
+**Track A discoveries (recorded for the next engineer):**
+- **Account deletion is store-safe:** a guest who owns a CONFIRMED booking can still delete their account (`Booking.userId` is an optional relation → Prisma `SetNull`), and the immutable booking + voucher survive, detached (`userId → null`, keyed by `guestEmail`). No permanent-account trap. Harness verifies the booking still reads CONFIRMED and the voucher still issues after deletion.
+- **Single active session (confirmed again):** every auth flow uses `revokeExisting: true`, so "Sign out other devices" typically revokes 0 rows. The kept invariant — and what the harness asserts — is that it *never signs out the current device*. Multi-device concurrent sessions would need a backend change to relax `revokeExisting` (out of scope).
+- Harness refactored onto a shared `test/lib/harness.mjs` so the mobile-client protocol mirror lives in exactly one place; Phase 1 re-runs green (28/28) on the shared lib.
+
+**Device track (⏳ pending hardware):**
+- [ ] New-device demo: Google sign-in (needs `GOOGLE_CLIENT_ID` + a dev/preview build — Expo Go redirect differs), book a stay, see it in Trips, open its voucher; edit profile; delete account.
+
+**Exit gate:** engineering track green (✅) + the on-device new-device demo recorded. *Measured by:* harness output + recording in the PR.
 
 ---
 

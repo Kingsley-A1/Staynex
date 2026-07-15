@@ -1,48 +1,41 @@
 // Phase 1 Track A — API conformance harness for the Staynex mobile client.
 //
 // Replays the EXACT wire protocol of `staynex-mobile/src/core/client.ts`
-// against a running backend and drives the full guest booking loop:
+// (mirrored in test/lib/harness.mjs) and drives the full guest booking loop:
 //
 //   health → CSRF mint → register (Set-Cookie capture) → /auth/me → login
 //   → discovery (cities/search/stay/availability) → quote → hold → checkout
-//   → HMAC-signed Paystack `charge.success` webhook → payment SUCCESS +
-//   booking CONFIRMED → verify card + voucher PDF
+//   → mobile-return interstitial (Phase 1.5) → HMAC-signed `charge.success`
+//   → payment SUCCESS + booking CONFIRMED → verify card + voucher PDF
 //   → failed-payment path (`charge.failed` → FAILED/CANCELLED)
 //   → consumed-hold semantics (checkout on a spent hold is rejected).
-//
-// Protocol mirror rules (any divergence from src/core/client.ts is a bug):
-//   - No `Origin` header (native clients send none; backend skips origin check).
-//   - Session: `staynex_session` captured from Set-Cookie, replayed as `Cookie:`.
-//   - CSRF: token minted once from GET /auth/csrf, sent as BOTH the
-//     `staynex_csrf` cookie and the `x-csrf-token` header on every mutation.
-//   - The client never asserts booking/payment state — it reads it back.
 //
 // Usage (backend must be running):
 //   node staynex-mobile/test/phase1-booking-loop.mjs
 //
 // Env:
 //   STAYNEX_API_BASE_URL   default http://localhost:4000
-//   PAYSTACK_SECRET_KEY    default: parsed from staynex-backend/.env (used only
-//                          to sign the simulated webhook; never printed)
+//   PAYSTACK_SECRET_KEY    default: parsed from staynex-backend/.env (webhook
+//                          signing only; never printed)
 //   HARNESS_GUEST_EMAIL    default: a +tagged address so the confirmation
 //                          email/voucher lands somewhere visible
 //
 // Footprint (unavoidable — the money trail is immutable by design):
-//   - one guest user, one CONFIRMED booking (real capacity for its nights,
-//     released only by an admin refund), one CANCELLED booking (self-released),
-//     payments + PaymentEvent audit rows, notification outbox rows.
-//   The script books the FURTHEST-OUT available nights it can find to keep
-//   real near-term inventory untouched, and prints every row it created.
+//   one guest user, one CONFIRMED booking (real capacity for its nights,
+//   released only by an admin refund), one CANCELLED booking (self-released),
+//   payments + PaymentEvent audit rows, notification outbox rows. The script
+//   books the FURTHEST-OUT available nights to keep near-term inventory free.
 
-import { createHmac } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import {
+  API,
+  MobileClient,
+  createGate,
+  furthestWindow,
+  isoPlusDays,
+  pollPayment,
+  sendWebhook,
+} from "./lib/harness.mjs";
 
-const API = (process.env.STAYNEX_API_BASE_URL ?? "http://localhost:4000").replace(/\/+$/, "");
-const SESSION_COOKIE = "staynex_session";
-const CSRF_COOKIE = "staynex_csrf";
-const CSRF_HEADER = "x-csrf-token";
 const NIGHTS = 2;
 const LOOKAHEAD_DAYS = 180;
 
@@ -52,167 +45,11 @@ const GUEST_EMAIL =
 const GUEST_PHONE = "08030000000";
 const GUEST_PASSWORD = `Phase1!${runTag}A`;
 
-// --- webhook signing key (read locally, never printed) ----------------------
-
-function paystackSecret() {
-  if (process.env.PAYSTACK_SECRET_KEY) return process.env.PAYSTACK_SECRET_KEY;
-  const envPath = join(dirname(fileURLToPath(import.meta.url)), "../../staynex-backend/.env");
-  const line = readFileSync(envPath, "utf8")
-    .split(/\r?\n/)
-    .find((l) => l.startsWith("PAYSTACK_SECRET_KEY="));
-  if (!line) throw new Error("PAYSTACK_SECRET_KEY not found (env or staynex-backend/.env)");
-  return line.slice("PAYSTACK_SECRET_KEY=".length).trim().replace(/^"|"$/g, "");
-}
-
-// --- protocol-exact mobile client mirror ------------------------------------
-
-class MobileClient {
-  sessionCookie = null; // value of staynex_session
-  csrfToken = null; // minted once per "launch", like src/core/client.ts
-
-  async mintCsrf() {
-    const res = await fetch(`${API}/auth/csrf`, { headers: { Accept: "application/json" } });
-    if (!res.ok) throw new Error(`CSRF mint failed: ${res.status}`);
-    const data = await res.json();
-    if (typeof data.csrfToken !== "string" || !data.csrfToken) {
-      throw new Error("CSRF mint returned no token");
-    }
-    this.csrfToken = data.csrfToken;
-    return this.csrfToken;
-  }
-
-  captureSession(res) {
-    const cookies =
-      typeof res.headers.getSetCookie === "function"
-        ? res.headers.getSetCookie()
-        : [res.headers.get("set-cookie")].filter(Boolean);
-    for (const c of cookies) {
-      const m = c.match(new RegExp(`${SESSION_COOKIE}=([^;]*)`));
-      if (m) this.sessionCookie = m[1] || null;
-    }
-  }
-
-  async request(method, path, body) {
-    const safe = ["GET", "HEAD", "OPTIONS"].includes(method);
-    const headers = { Accept: "application/json", "Content-Type": "application/json" };
-    const cookies = [];
-    if (this.sessionCookie) cookies.push(`${SESSION_COOKIE}=${this.sessionCookie}`);
-    if (!safe) {
-      if (!this.csrfToken) await this.mintCsrf();
-      headers[CSRF_HEADER] = this.csrfToken;
-      cookies.push(`${CSRF_COOKIE}=${this.csrfToken}`);
-    }
-    if (cookies.length) headers["Cookie"] = cookies.join("; ");
-
-    const res = await fetch(`${API}${path}`, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    this.captureSession(res);
-    const text = await res.text();
-    let json = null;
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      /* non-JSON body (e.g. PDF probe uses raw fetch instead) */
-    }
-    return { status: res.status, ok: res.ok, json, text };
-  }
-
-  get(path) {
-    return this.request("GET", path);
-  }
-  post(path, body) {
-    return this.request("POST", path, body);
-  }
-}
-
-// --- gate bookkeeping --------------------------------------------------------
-
-const results = [];
-const artifacts = [];
-let failed = false;
-
-function pass(name, detail = "") {
-  results.push({ name, ok: true, detail });
-  console.log(`  PASS  ${name}${detail ? ` — ${detail}` : ""}`);
-}
-function fail(name, detail = "") {
-  results.push({ name, ok: false, detail });
-  failed = true;
-  console.error(`  FAIL  ${name}${detail ? ` — ${detail}` : ""}`);
-}
-function must(cond, name, detail = "") {
-  if (cond) pass(name, detail);
-  else fail(name, detail);
-  return Boolean(cond);
-}
-const bail = (msg) => {
-  fail("aborted", msg);
-  report();
-  process.exit(1);
-};
-
-function isoPlusDays(n) {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-
-async function sendWebhook(event, data) {
-  const raw = Buffer.from(JSON.stringify({ event, data }), "utf8");
-  const signature = createHmac("sha512", paystackSecret()).update(raw).digest("hex");
-  const res = await fetch(`${API}/payments/paystack/webhook`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-paystack-signature": signature },
-    body: raw,
-  });
-  return { status: res.status, json: await res.json().catch(() => null) };
-}
-
-async function pollPayment(client, reference, tries = 12, intervalMs = 2500) {
-  let last = null;
-  for (let i = 0; i < tries; i++) {
-    const res = await client.get(`/payments/${reference}`);
-    last = res.json;
-    if (last && ["SUCCESS", "FAILED", "REFUNDED", "REQUIRES_REFUND"].includes(last.paymentStatus)) {
-      return last;
-    }
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
-  return last;
-}
-
-/** Furthest-out run of `nights` consecutive days each with availableUnits >= 1. */
-function furthestWindow(days, nights) {
-  const byDate = new Map(days.map((d) => [d.date, d]));
-  const dates = days.map((d) => d.date).sort();
-  for (let i = dates.length - 1; i >= 0; i--) {
-    const start = dates[i];
-    const run = [];
-    for (let n = 0; n < nights; n++) {
-      const d = new Date(`${start}T00:00:00Z`);
-      d.setUTCDate(d.getUTCDate() + n);
-      const key = d.toISOString().slice(0, 10);
-      const day = byDate.get(key);
-      if (!day || day.availableUnits < 1) break;
-      run.push(key);
-    }
-    if (run.length === nights) {
-      const out = new Date(`${start}T00:00:00Z`);
-      out.setUTCDate(out.getUTCDate() + nights);
-      return { checkIn: start, checkOut: out.toISOString().slice(0, 10) };
-    }
-  }
-  return null;
-}
-
-// --- the run ------------------------------------------------------------------
-
 async function main() {
   console.log(`Phase 1 Track A harness → ${API}`);
   console.log(`Guest identity: ${GUEST_EMAIL}\n`);
+  const gate = createGate("PHASE 1 GATE");
+  const { must, pass, bail, artifacts } = gate;
 
   // 1. Health
   const guest = new MobileClient();
@@ -447,24 +284,11 @@ async function main() {
   const noVoucher = await fetch(`${API}/vouchers/${co2.json.reference}/pdf`);
   must(noVoucher.status === 404, "no voucher for an unpaid booking (404)", `status ${noVoucher.status}`);
 
-  report();
-  process.exit(failed ? 1 : 0);
-}
-
-function report() {
-  const passed = results.filter((r) => r.ok).length;
-  console.log(`\n${"─".repeat(60)}`);
-  console.log(`PHASE 1 GATE: ${failed ? "FAIL" : "PASS"} — ${passed}/${results.length} checks passed`);
-  if (artifacts.length) {
-    console.log("\nRows created this run (money trail is immutable by design):");
-    for (const a of artifacts) console.log(`  • ${a}`);
-    console.log("  The CONFIRMED booking holds real capacity for its nights;");
-    console.log("  release it with the admin refund flow when no longer needed.");
-  }
+  gate.report();
+  process.exit(gate.state.failed ? 1 : 0);
 }
 
 main().catch((err) => {
-  fail("unhandled error", err instanceof Error ? err.message : String(err));
-  report();
+  console.error(`\nUnhandled error: ${err instanceof Error ? err.stack : err}`);
   process.exit(1);
 });

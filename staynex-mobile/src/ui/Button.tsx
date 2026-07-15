@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
 import { color, fontSize, fontWeight, radius, spacing } from "@staynex/shared";
 
-type Variant = "primary" | "secondary";
+type Variant = "primary" | "secondary" | "danger";
 
 export function Button({
   label,
@@ -17,7 +17,9 @@ export function Button({
   loading?: boolean;
 }) {
   const isDisabled = disabled || loading;
-  const secondary = variant === "secondary";
+  // Secondary and danger are both outline styles; only the accent differs.
+  const outline = variant !== "primary";
+  const accent = variant === "danger" ? color.error : color.primary;
   return (
     <Pressable
       onPress={onPress}
@@ -26,15 +28,17 @@ export function Button({
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       style={({ pressed }) => [
         styles.base,
-        secondary ? styles.secondary : styles.primary,
+        outline
+          ? [styles.outline, { borderColor: accent }]
+          : styles.primary,
         pressed && !isDisabled && styles.pressed,
         isDisabled && styles.disabled,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={secondary ? color.primary : color.onPrimary} />
+        <ActivityIndicator color={outline ? accent : color.onPrimary} />
       ) : (
-        <Text style={[styles.label, secondary ? styles.labelSecondary : styles.labelPrimary]}>
+        <Text style={[styles.label, outline ? { color: accent } : styles.labelPrimary]}>
           {label}
         </Text>
       )}
@@ -51,10 +55,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   primary: { backgroundColor: color.primary },
-  secondary: { backgroundColor: color.surface, borderWidth: 1, borderColor: color.primary },
+  outline: { backgroundColor: color.surface, borderWidth: 1 },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.5 },
   label: { fontSize: fontSize.md, fontWeight: fontWeight.semibold },
   labelPrimary: { color: color.onPrimary },
-  labelSecondary: { color: color.primary },
 });

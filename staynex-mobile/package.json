@@ -12,11 +12,13 @@
     "doctor": "expo-doctor"
   },
   "dependencies": {
+    "@react-native-community/datetimepicker": "8.2.0",
     "@staynex/shared": "workspace:*",
     "@tanstack/react-query": "^5.62.0",
-    "@react-native-community/datetimepicker": "8.2.0",
     "expo": "~52.0.0",
+    "expo-auth-session": "~6.0.3",
     "expo-constants": "~17.0.0",
+    "expo-crypto": "~14.0.2",
     "expo-font": "~13.0.0",
     "expo-linking": "~7.0.0",
     "expo-router": "~4.0.0",

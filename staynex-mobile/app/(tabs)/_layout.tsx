@@ -31,6 +31,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="trips"
+        options={{
+          title: "Trips",
+          tabBarIcon: ({ focused }) => <TabGlyph glyph="⌂" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
         name="account"
         options={{
           title: "Account",

@@ -479,36 +479,27 @@ export class BookingsService {
   async getBooking(bookingId: string): Promise<BookingView> {
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      include: {
-        roomUnit: {
-          include: { roomType: { include: { property: { include: { city: { select: { name: true } } } } } } },
-        },
-        payment: true,
-      },
+      include: bookingViewInclude,
     });
     if (!booking) throw new NotFoundException("Booking not found");
+    return toBookingView(booking);
+  }
 
-    const roomType = booking.roomUnit.roomType;
-    const nights = nightsOf(iso(booking.checkIn), iso(booking.checkOut)).length;
-    return {
-      id: booking.id,
-      status: booking.status as BookingStatus,
-      checkIn: iso(booking.checkIn),
-      checkOut: iso(booking.checkOut),
-      nights,
-      adults: booking.adults,
-      children: booking.children,
-      infants: booking.infants,
-      amountKobo: booking.payment?.amount ?? roomType.basePriceKobo * nights,
-      currency: booking.payment?.currency ?? CURRENCY,
-      propertyName: roomType.property.name,
-      propertySlug: roomType.property.slug,
-      cityName: roomType.property.city.name,
-      roomName: roomType.name,
-      unitCode: booking.roomUnit.code ?? null,
-      paymentStatus: (booking.payment?.status ?? "PENDING") as PaymentState,
-      paymentReference: booking.payment?.reference ?? null,
-    };
+  /**
+   * The signed-in guest's booking history (trips), newest check-in first.
+   * Scoped strictly by `userId` — checkout always stamps the session user, so
+   * ownership never falls back to email matching (which could leak bookings
+   * made by someone else with the same address).
+   */
+  async listGuestBookings(userId: string, limit?: number): Promise<BookingView[]> {
+    const take = Math.min(Math.max(Math.trunc(limit ?? 50) || 50, 1), 100);
+    const bookings = await prisma.booking.findMany({
+      where: { userId, status: { not: "HOLD" } },
+      include: bookingViewInclude,
+      orderBy: [{ checkIn: "desc" }, { createdAt: "desc" }],
+      take,
+    });
+    return bookings.map(toBookingView);
   }
 
   // --- internals ---------------------------------------------------------
@@ -806,4 +797,43 @@ export class BookingsService {
       expired,
     };
   }
+}
+
+// --- BookingView mapping (shared by detail + guest trips list) --------------
+
+const bookingViewInclude = {
+  roomUnit: {
+    include: {
+      roomType: {
+        include: { property: { include: { city: { select: { name: true } } } } },
+      },
+    },
+  },
+  payment: true,
+} satisfies Prisma.BookingInclude;
+
+type BookingForView = Prisma.BookingGetPayload<{ include: typeof bookingViewInclude }>;
+
+function toBookingView(booking: BookingForView): BookingView {
+  const roomType = booking.roomUnit.roomType;
+  const nights = nightsOf(iso(booking.checkIn), iso(booking.checkOut)).length;
+  return {
+    id: booking.id,
+    status: booking.status as BookingStatus,
+    checkIn: iso(booking.checkIn),
+    checkOut: iso(booking.checkOut),
+    nights,
+    adults: booking.adults,
+    children: booking.children,
+    infants: booking.infants,
+    amountKobo: booking.payment?.amount ?? roomType.basePriceKobo * nights,
+    currency: booking.payment?.currency ?? CURRENCY,
+    propertyName: roomType.property.name,
+    propertySlug: roomType.property.slug,
+    cityName: roomType.property.city.name,
+    roomName: roomType.name,
+    unitCode: booking.roomUnit.code ?? null,
+    paymentStatus: (booking.payment?.status ?? "PENDING") as PaymentState,
+    paymentReference: booking.payment?.reference ?? null,
+  };
 }

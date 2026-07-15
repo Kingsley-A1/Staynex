@@ -5,6 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { color, fontSize, fontWeight, spacing } from "@staynex/shared";
 import { authApi } from "@/data/api";
 import { apiErrorMessage } from "@/core/client";
+import { useGoogleSignIn } from "@/core/google-auth";
 import { useSession } from "@/core/session";
 import { Screen } from "@/ui/Screen";
 import { Button } from "@/ui/Button";
@@ -28,6 +29,13 @@ export default function RegisterScreen() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
 
+  function onSignedIn(user: Parameters<typeof setUser>[0]) {
+    setUser(user);
+    if (next) router.replace({ pathname: next, params: { holdId, slug } });
+    else if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)");
+  }
+
   const mutation = useMutation({
     mutationFn: () =>
       authApi.register({
@@ -37,13 +45,14 @@ export default function RegisterScreen() {
         name: name.trim() || undefined,
         role: "GUEST",
       }),
-    onSuccess: (user) => {
-      setUser(user);
-      if (next) router.replace({ pathname: next, params: { holdId, slug } });
-      else if (router.canGoBack()) router.back();
-      else router.replace("/(tabs)");
-    },
+    onSuccess: onSignedIn,
   });
+
+  const googleMutation = useMutation({
+    mutationFn: (idToken: string) => authApi.google(idToken),
+    onSuccess: onSignedIn,
+  });
+  const google = useGoogleSignIn((idToken) => googleMutation.mutate(idToken));
 
   // Mirrors the backend registerSchema: valid email, >= 7 phone digits, 8+ char password.
   const phoneDigits = phone.replace(/\D/g, "").length;
@@ -108,6 +117,19 @@ export default function RegisterScreen() {
             onPress={() => mutation.mutate()}
             loading={mutation.isPending}
             disabled={!canSubmit}
+          />
+
+          {googleMutation.isError ? (
+            <Text style={styles.error}>
+              {apiErrorMessage(googleMutation.error, "Google sign-in failed. Try again.")}
+            </Text>
+          ) : null}
+          <Button
+            label="Continue with Google"
+            variant="secondary"
+            loading={googleMutation.isPending}
+            disabled={!google.ready}
+            onPress={() => void google.prompt()}
           />
 
           <Link

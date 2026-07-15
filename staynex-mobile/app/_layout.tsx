@@ -41,6 +41,8 @@ export default function RootLayout() {
           >
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="stays/[slug]" options={{ title: "Stay" }} />
+            <Stack.Screen name="trips/[id]" options={{ title: "Trip" }} />
+            <Stack.Screen name="account/profile" options={{ title: "Edit profile" }} />
             <Stack.Screen name="booking/quote" options={{ title: "Review dates" }} />
             <Stack.Screen name="booking/checkout" options={{ title: "Checkout" }} />
             <Stack.Screen
