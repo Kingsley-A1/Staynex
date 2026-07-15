@@ -11,13 +11,13 @@ export interface PropertyPublishedEmailInput extends StaynexEmailInput {
 
 export function renderPropertyPublishedEmail(input: PropertyPublishedEmailInput): RenderedEmail {
   return renderEmailLayout({
-    subject: "Your Staynex property is live",
-    preheader: `${input.propertyName} is now live on Staynex.`,
+    subject: "Your Staynex Bookings property is live",
+    preheader: `${input.propertyName} is now live on Staynex Bookings.`,
     heading: "Your property is live",
-    intro: `${greeting(input.ownerName)} Your persisted property status is approved and the listing is now public on Staynex.`,
+    intro: `${greeting(input.ownerName)} Your persisted property status is approved and the listing is now public on Staynex Bookings.`,
     status: { label: "Live", tone: "success" },
     details: [{ label: "Property", value: input.propertyName }],
     cta: { label: "View property", url: buildStaynexUrl(input.appOrigin, `/host/properties/${encodeURIComponent(input.propertyId)}`) },
-    reason: "You received this email because your Staynex property was published.",
+    reason: "You received this email because your Staynex Bookings property was published.",
   });
 }

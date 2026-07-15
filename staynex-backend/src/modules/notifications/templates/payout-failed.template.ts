@@ -13,10 +13,10 @@ export interface PayoutFailedEmailInput extends StaynexEmailInput {
 
 export function renderPayoutFailedEmail(input: PayoutFailedEmailInput): RenderedEmail {
   return renderEmailLayout({
-    subject: "Your Staynex payout needs attention",
+    subject: "Your Staynex Bookings payout needs attention",
     preheader: `The payout for ${input.propertyName} could not be completed.`,
     heading: "Your payout needs attention",
-    intro: `${greeting(input.ownerName)} Staynex could not complete this payout. Your property and booking records are unchanged.`,
+    intro: `${greeting(input.ownerName)} Staynex Bookings could not complete this payout. Your property and booking records are unchanged.`,
     status: { label: "Action required", tone: "error" },
     bodyHtml: callout("Next step", "Review your payout details in Host settings. If they are correct or updating them does not resolve the issue, contact support.", "warning"),
     textBody: ["Review your payout details in Host settings. If they are correct or updating them does not resolve the issue, contact support."],
@@ -27,6 +27,6 @@ export function renderPayoutFailedEmail(input: PayoutFailedEmailInput): Rendered
     ],
     cta: { label: "Review payout settings", url: buildStaynexUrl(input.appOrigin, "/host/settings") },
     support: "If updating your payout details does not resolve the issue, contact",
-    reason: "You received this email because a payout for your Staynex property reached the failed state.",
+    reason: "You received this email because a payout for your Staynex Bookings property reached the failed state.",
   });
 }

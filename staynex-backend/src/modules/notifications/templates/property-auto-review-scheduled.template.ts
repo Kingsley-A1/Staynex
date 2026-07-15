@@ -12,10 +12,10 @@ export interface PropertyAutoReviewScheduledEmailInput extends StaynexEmailInput
 
 export function renderPropertyAutoReviewScheduledEmail(input: PropertyAutoReviewScheduledEmailInput): RenderedEmail {
   return renderEmailLayout({
-    subject: "Your Staynex property is scheduled for publication",
+    subject: "Your Staynex Bookings property is scheduled for publication",
     preheader: `${input.propertyName} passed automated review and is scheduled for publication.`,
     heading: "Publication is scheduled",
-    intro: `${greeting(input.ownerName)} Your property passed Staynex's automated review checks.`,
+    intro: `${greeting(input.ownerName)} Your property passed Staynex Bookings' automated review checks.`,
     status: { label: "Scheduled", tone: "success" },
     bodyHtml: callout("No action required", "The listing remains scheduled while its reviewed content stays unchanged.", "info"),
     textBody: ["No action is required. The listing remains scheduled while its reviewed content stays unchanged."],

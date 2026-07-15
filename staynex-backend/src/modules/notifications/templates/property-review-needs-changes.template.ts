@@ -13,7 +13,7 @@ export interface PropertyReviewNeedsChangesEmailInput extends StaynexEmailInput 
 export function renderPropertyReviewNeedsChangesEmail(input: PropertyReviewNeedsChangesEmailInput): RenderedEmail {
   const issues = (input.failedLabels ?? []).map(sanitizeSingleLine).filter((item): item is string => Boolean(item));
   return renderEmailLayout({
-    subject: "Your Staynex property needs changes",
+    subject: "Your Staynex Bookings property needs changes",
     preheader: `${input.propertyName} needs updates before publication.`,
     heading: "Your property needs changes",
     intro: `${greeting(input.ownerName)} Update the listing and submit it again for review.`,

@@ -56,10 +56,10 @@ export function validateStaynexAppOrigin(origin: string): string {
 export function buildStaynexUrl(appOrigin: string, internalPath: string): string {
   const origin = validateStaynexAppOrigin(appOrigin);
   if (!internalPath.startsWith("/") || internalPath.startsWith("//")) {
-    throw new Error("Staynex email links must use a known internal path");
+    throw new Error("Staynex Bookings email links must use a known internal path");
   }
   const url = new URL(internalPath, `${origin}/`);
-  if (url.origin !== origin) throw new Error("Staynex email link changed origin");
+  if (url.origin !== origin) throw new Error("Staynex Bookings email link changed origin");
   return url.toString();
 }
 

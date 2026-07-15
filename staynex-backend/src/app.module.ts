@@ -17,6 +17,7 @@ import { PaymentsModule } from "./modules/payments/payments.module";
 import { PropertiesModule } from "./modules/properties/properties.module";
 import { ReviewsModule } from "./modules/reviews/reviews.module";
 import { RoomsModule } from "./modules/rooms/rooms.module";
+import { SupportModule } from "./modules/support/support.module";
 import { UsersModule } from "./modules/users/users.module";
 import { VouchersModule } from "./modules/vouchers/voucher.module";
 
@@ -41,6 +42,7 @@ import { VouchersModule } from "./modules/vouchers/voucher.module";
     AdminModule,
     AiModule,
     AuditModule,
+    SupportModule,
     VouchersModule,
   ],
 })

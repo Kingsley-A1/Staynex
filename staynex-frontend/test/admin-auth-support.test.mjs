@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { getSupportContact } from "../src/lib/support-contact.ts";
+import { getSupportContactFromEnv } from "../src/lib/support-contact.ts";
 
 async function source(path) {
   return readFile(new URL(path, import.meta.url), "utf8");
@@ -45,7 +45,7 @@ test("support contact values come from environment and phone links are normalize
     delete process.env.NEXT_PUBLIC_SUPPORT_EMAIL;
     delete process.env.NEXT_PUBLIC_SUPPORT_PHONE;
 
-    const contact = getSupportContact();
+    const contact = getSupportContactFromEnv();
     assert.equal(contact.email, "help@example.com");
     assert.match(contact.emailHref ?? "", /^mailto:help@example\.com\?/);
     assert.equal(contact.phone, "+234 (0) 800 123 4567");
@@ -72,6 +72,25 @@ test("support is wired into public and admin navigation", async () => {
   assert.match(nav, /href: "\/admin\/support"/);
   assert.match(publicPage, /<SupportPanel/);
   assert.match(adminPage, /<SupportPanel compact/);
+});
+
+test("support panel resolves direct contact through the backend runtime endpoint", async () => {
+  const [supportContact, panel, backendController] = await Promise.all([
+    source("../src/lib/support-contact.ts"),
+    source("../src/features/support/support-panel.tsx"),
+    readFile(
+      new URL(
+        "../../staynex-backend/src/modules/support/support.controller.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(supportContact, /\/support\/contact/);
+  assert.match(supportContact, /cache: "no-store"/);
+  assert.match(panel, /await getSupportContact\(\)/);
+  assert.match(backendController, /getSupportContactFromEnv/);
 });
 
 function restoreEnv(name, value) {

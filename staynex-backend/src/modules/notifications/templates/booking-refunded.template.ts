@@ -14,10 +14,10 @@ export interface BookingRefundedEmailInput extends StaynexEmailInput {
 export function renderBookingRefundedEmail(input: BookingRefundedEmailInput): RenderedEmail {
   const cta = input.reference ? { label: "View payment status", url: buildStaynexUrl(input.appOrigin, `/payment/status?reference=${encodeURIComponent(input.reference)}`) } : undefined;
   return renderEmailLayout({
-    subject: "Your Staynex booking payment was refunded",
+    subject: "Your Staynex Bookings booking payment was refunded",
     preheader: `A refund for ${input.propertyName} has been recorded.`,
     heading: "Your payment was refunded",
-    intro: `${greeting(input.guestName)} Staynex has recorded this booking payment as refunded.`,
+    intro: `${greeting(input.guestName)} Staynex Bookings has recorded this booking payment as refunded.`,
     status: { label: "Refunded", tone: "success" },
     bodyHtml: callout("What happens next", "The refund was returned through the original payment process. When it appears in your account depends on your payment provider.", "info"),
     textBody: ["The refund was returned through the original payment process. When it appears depends on your payment provider."],
@@ -28,6 +28,6 @@ export function renderBookingRefundedEmail(input: BookingRefundedEmailInput): Re
     ],
     cta,
     support: "If you have questions about this refund, keep the payment reference ready and contact",
-    reason: "You received this email because Staynex recorded the booking payment as refunded.",
+    reason: "You received this email because Staynex Bookings recorded the booking payment as refunded.",
   });
 }

@@ -7,8 +7,8 @@ import {
 } from "react-icons/md";
 import { getSupportContact } from "@/lib/support-contact";
 
-export function SupportPanel({ compact = false }: { compact?: boolean }) {
-  const contact = getSupportContact();
+export async function SupportPanel({ compact = false }: { compact?: boolean }) {
+  const contact = await getSupportContact();
   const hasDirectContact = Boolean(contact.emailHref || contact.phoneHref);
 
   return (

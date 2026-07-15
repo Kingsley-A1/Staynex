@@ -13,6 +13,9 @@ const COLORS: Record<EmailStatusTone, { foreground: string; background: string }
   info: { foreground: "#27187D", background: "#F0EEFF" },
 };
 
+const BRAND_NAME = "Staynex Bookings";
+const BRAND_TAGLINE = `${BRAND_NAME} — Book trusted stays, confidently.`;
+
 export interface EmailLayoutInput {
   subject: string;
   preheader: string;
@@ -46,7 +49,7 @@ export function securityCode(code: string): string {
 }
 
 export function renderEmailLayout(input: EmailLayoutInput): RenderedEmail {
-  const subject = (sanitizeSingleLine(input.subject) ?? "Staynex update")
+  const subject = (sanitizeSingleLine(input.subject) ?? `${BRAND_NAME} update`)
     .replace(/</g, "‹")
     .replace(/>/g, "›");
   const details = presentDetails(input.details ?? []);
@@ -72,12 +75,12 @@ export function renderEmailLayout(input: EmailLayoutInput): RenderedEmail {
     ...(input.support ? ["", `${input.support} support@staynexbookings.ng`] : []),
     ...(input.reason ? ["", input.reason] : []),
     "",
-    "Staynex — Book trusted stays, Confidently.",
+    BRAND_TAGLINE,
   ].join("\n").replace(/</g, "‹").replace(/>/g, "›").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
 
   return {
     subject,
-    html: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"><title>${escapeHtml(subject)}</title></head><body style="margin:0;padding:0;background:#F7F7FF;font-family:Arial,Helvetica,sans-serif;color:#101014;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">${preheader}&#847;&zwnj;&nbsp;&#8199;&shy;&nbsp;&#847;</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#F7F7FF;"><tr><td align="center" style="padding:20px 12px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;"><tr><td style="padding:8px 4px 20px;"><span style="color:#27187D;font-size:24px;font-weight:800;letter-spacing:-0.5px;">Staynex</span></td></tr><tr><td style="background:#FFFFFF;border:1px solid #E7E5F2;border-radius:12px;padding:32px 28px;">${status}<h1 style="margin:0 0 14px;color:#101014;font-size:28px;line-height:1.2;letter-spacing:-0.4px;">${escapeHtml(input.heading)}</h1><p style="margin:0 0 18px;color:#101014;font-size:16px;line-height:1.6;">${escapeHtml(input.intro)}</p>${input.bodyHtml ?? ""}${detailTable}${cta}${support}${reason}</td></tr><tr><td style="padding:20px 4px 8px;text-align:center;"><p style="margin:0;color:#6E6A83;font-size:12px;line-height:1.5;">Staynex — Book trusted stays, Confidently.</p></td></tr></table></td></tr></table></body></html>`,
+    html: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"><title>${escapeHtml(subject)}</title></head><body style="margin:0;padding:0;background:#F7F7FF;font-family:Arial,Helvetica,sans-serif;color:#101014;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">${preheader}&#847;&zwnj;&nbsp;&#8199;&shy;&nbsp;&#847;</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#F7F7FF;"><tr><td align="center" style="padding:16px 8px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:680px;"><tr><td style="padding:6px 2px 16px;"><span style="color:#27187D;font-size:24px;font-weight:800;letter-spacing:-0.5px;">${BRAND_NAME}</span></td></tr><tr><td style="background:#FFFFFF;border:1px solid #E7E5F2;border-radius:6px;padding:30px 26px;">${status}<h1 style="margin:0 0 14px;color:#101014;font-size:28px;line-height:1.2;letter-spacing:-0.4px;">${escapeHtml(input.heading)}</h1><p style="margin:0 0 18px;color:#101014;font-size:16px;line-height:1.6;">${escapeHtml(input.intro)}</p>${input.bodyHtml ?? ""}${detailTable}${cta}${support}${reason}</td></tr><tr><td style="padding:18px 2px 6px;text-align:center;"><p style="margin:0;color:#6E6A83;font-size:12px;line-height:1.5;">${BRAND_TAGLINE}</p></td></tr></table></td></tr></table></body></html>`,
     text,
   };
 }

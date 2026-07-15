@@ -24,11 +24,11 @@ import {
   getSiteOrigin,
   getSiteUrl,
 } from "@/lib/seo";
-import { getSupportContact } from "@/lib/support-contact";
+import { getSupportContactFromEnv } from "@/lib/support-contact";
 
 const appUrl = getSiteUrl();
 const appOrigin = getSiteOrigin();
-const supportContact = getSupportContact();
+const supportContact = getSupportContactFromEnv();
 
 const organizationJsonLd = {
   "@context": "https://schema.org",

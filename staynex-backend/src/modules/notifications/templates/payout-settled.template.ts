@@ -18,13 +18,13 @@ export function renderPayoutSettledEmail(input: PayoutSettledEmailInput): Render
   const destination = bankName && last4 ? `${bankName} account ending ${last4}` : undefined;
   const note = sanitizeSingleLine(input.settlementNote);
   return renderEmailLayout({
-    subject: "Your Staynex payout was settled",
+    subject: "Your Staynex Bookings payout was settled",
     preheader: `The payout for ${input.propertyName} is settled.`,
     heading: "Your payout is settled",
-    intro: `${greeting(input.ownerName)} Staynex has recorded this payout as completed.`,
+    intro: `${greeting(input.ownerName)} Staynex Bookings has recorded this payout as completed.`,
     status: { label: "Settled", tone: "success" },
-    bodyHtml: callout("Completed payout", "This message reflects a completed payout state in Staynex.", "success"),
-    textBody: ["This message reflects a completed payout state in Staynex."],
+    bodyHtml: callout("Completed payout", "This message reflects a completed payout state in Staynex Bookings.", "success"),
+    textBody: ["This message reflects a completed payout state in Staynex Bookings."],
     details: [
       { label: "Property", value: input.propertyName },
       { label: "Amount", value: formatAmount(input.amountMinor, input.currency) },
@@ -33,6 +33,6 @@ export function renderPayoutSettledEmail(input: PayoutSettledEmailInput): Render
     ],
     cta: { label: "View host bookings", url: buildStaynexUrl(input.appOrigin, "/host/bookings") },
     support: "If this payout does not match your records, contact",
-    reason: "You received this email because a payout for your Staynex property reached the paid state.",
+    reason: "You received this email because a payout for your Staynex Bookings property reached the paid state.",
   });
 }

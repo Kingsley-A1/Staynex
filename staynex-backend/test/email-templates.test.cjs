@@ -22,9 +22,14 @@ for (const preview of cases) {
     assert.match(output.html, /^<!doctype html>/i);
     assert.match(output.html, /<div style="display:none;/);
     assert.match(output.html, /<h1\b/);
-    assert.match(output.html, /Book trusted stays, Confidently\./);
+    assert.match(output.html, /Staynex Bookings/);
+    assert.match(output.html, /max-width:680px/);
+    assert.match(output.html, /border-radius:6px/);
+    assert.doesNotMatch(output.html, /max-width:600px|border-radius:12px/);
+    assert.match(output.html, /Book trusted stays, confidently\./);
     assert.ok(output.text.trim());
-    assert.match(output.text, /Book trusted stays, Confidently\./);
+    assert.match(output.text, /Staynex Bookings/);
+    assert.match(output.text, /Book trusted stays, confidently\./);
     assert.doesNotMatch(`${output.subject}${output.html}${output.text}`, /\b(?:undefined|null)\b/);
     assert.doesNotMatch(output.text, /<\/?[a-z][^>]*>/i);
     assert.doesNotMatch(output.html, /<script|onerror\s*=/i);

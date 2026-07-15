@@ -32,6 +32,6 @@ export function renderCheckInReminderEmail(input: CheckInReminderEmailInput): Re
     ],
     cta: { label: input.hasVoucher ? "View booking and voucher" : "View booking", url },
     support: "If you need help with your booking details, contact",
-    reason: "You received this reminder because this confirmed Staynex booking checks in tomorrow.",
+    reason: "You received this reminder because this confirmed Staynex Bookings booking checks in tomorrow.",
   });
 }
