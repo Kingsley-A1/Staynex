@@ -146,15 +146,23 @@ export function isoPlusDays(n) {
   return d.toISOString().slice(0, 10);
 }
 
-export async function sendWebhook(event, data) {
+export async function sendWebhook(event, data, { retries = 0 } = {}) {
   const raw = Buffer.from(JSON.stringify({ event, data }), "utf8");
   const signature = createHmac("sha512", paystackSecret()).update(raw).digest("hex");
-  const res = await fetch(`${API}/payments/paystack/webhook`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-paystack-signature": signature },
-    body: raw,
-  });
-  return { status: res.status, json: await res.json().catch(() => null) };
+  // A 5xx from the webhook is the backend telling the provider "retry me"
+  // (serializable-transaction conflicts surface this way by design). When
+  // retries are requested, mirror Paystack's redelivery behaviour.
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${API}/payments/paystack/webhook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-paystack-signature": signature },
+      body: raw,
+    });
+    if (res.status < 500 || attempt >= retries) {
+      return { status: res.status, json: await res.json().catch(() => null) };
+    }
+    await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+  }
 }
 
 export async function pollPayment(client, reference, tries = 12, intervalMs = 2500) {
@@ -222,12 +230,16 @@ export async function createConfirmedBooking(client, { email, nights = 2 }) {
     platform: "mobile",
   });
   if (!checkout.ok) throw new Error(`checkout failed: ${checkout.status}`);
-  const hook = await sendWebhook("charge.success", {
-    reference: checkout.json.reference,
-    amount: quote.json.totalKobo,
-    currency: "NGN",
-    status: "success",
-  });
+  const hook = await sendWebhook(
+    "charge.success",
+    {
+      reference: checkout.json.reference,
+      amount: quote.json.totalKobo,
+      currency: "NGN",
+      status: "success",
+    },
+    { retries: 3 }, // fixture mirrors provider redelivery on transient 5xx
+  );
   if (hook.status !== 200) throw new Error(`webhook rejected: ${hook.status}`);
   const paid = await pollPayment(client, checkout.json.reference);
   if (paid?.paymentStatus !== "SUCCESS" || paid?.bookingStatus !== "CONFIRMED") {

@@ -5,6 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { color, fontSize, fontWeight, radius, spacing } from "@staynex/shared";
 import { authApi } from "@/data/api";
 import { apiErrorMessage, clearSessionCookie } from "@/core/client";
+import { unregisterPush } from "@/core/push";
 import { useSession } from "@/core/session";
 import { Screen } from "@/ui/Screen";
 import { Button } from "@/ui/Button";
@@ -62,6 +63,8 @@ export default function AccountScreen() {
   async function handleSignOut() {
     setSigningOut(true);
     try {
+      // Deregister the push token first — it needs the session to still exist.
+      await unregisterPush();
       await signOut();
     } finally {
       setSigningOut(false);
@@ -82,6 +85,11 @@ export default function AccountScreen() {
             </View>
 
             <View style={styles.actions}>
+              <Button
+                label="Notifications"
+                variant="secondary"
+                onPress={() => router.push("/notifications")}
+              />
               <Button
                 label="Edit profile"
                 variant="secondary"

@@ -26,7 +26,7 @@ targets, not fiction — if a gate slips, move every later date, don't skip the 
 | 1     | A phone can book and pay for a real stay     | Fri 24 Jul    | 🟡 Track A ✅ 25/25 machine-verified; Track B pending hardware |
 | 1.5   | Payment feels native; receipt in hand        | Wed 29 Jul    | 🟡 engineering ✅ 28/28; device auto-return gate pending hardware |
 | 2     | The returning-guest app (trips + identity)   | Fri 7 Aug     | 🟡 engineering ✅ 19/19; new-device demo pending hardware |
-| 3     | The app taps you on the shoulder (push)      | Wed 12 Aug    | ⬜ |
+| 3     | The app taps you on the shoulder (push)      | Wed 12 Aug    | 🟡 engineering ✅ 17/17; lock-screen delivery pending hardware |
 | 4     | Concierge in your pocket (Staynex AI)        | Fri 21 Aug    | ⬜ |
 | 5     | Hosts run their business from a phone        | Fri 28 Aug    | ⬜ |
 | 6     | Staynex installed from the store             | Fri 11 Sep    | ⬜ |
@@ -171,13 +171,22 @@ check-in reminders arrive on the lock screen even when the app is closed.
 booking-confirmed push to a locked physical device within 60 seconds of webhook
 receipt, and tapping it opens the booking.
 
-- [ ] FCM device registration: capture the native token on grant, register via existing `POST /notifications/devices`, deregister on sign-out (`DELETE /notifications/devices/:token`).
-- [ ] Notification permission prompt at the right moment (after first booking, not at first launch).
-- [ ] Booking-confirmed and check-in-reminder (T-1) pushes received on a locked device; tap deep-links to the booking/trip detail.
-- [ ] In-app inbox: reuse `GET /notifications` + `POST /notifications/read` for a simple notification list with unread badge.
-- [ ] Dead-token pruning verified (uninstall → send → backend prunes on FCM 404/UNREGISTERED).
+**Engineering track — ✅ machine-verified (Phase 3 harness 17/17, 2026-07-15):**
+- [x] Device registration lifecycle (`src/core/push.ts`): native FCM token on grant → `POST /notifications/devices` (ANDROID/IOS label), silent re-register on app start while permission is granted (token rotation), deregister on sign-out. Harness: session-gated (401 anon), register 201, idempotent re-register, malformed token 400, deregister 200.
+- [x] Right-moment prompt: "Turn on trip updates" on the booking confirmation screen — never at first launch; graceful `denied` / `unsupported` outcomes (Expo Go / missing `google-services.json` can't mint FCM tokens).
+- [x] In-app inbox (`app/notifications.tsx`): unread count + mark-one/mark-all read, keyset "Load older", entry from Account. Harness: empty page shape, **a confirmed booking lands a `BOOKING_CONFIRMED` row carrying `linkUrl`**, `GET /notifications/:id`, readAt set + unreadCount 1→0.
+- [x] Tap navigation: pushes carry `data.link`; `routeForPushLink` maps `/booking/confirmed?booking=<id>` → trip detail and `/stays/<slug>` → stay, inbox as the never-dead fallback; wired for tapped pushes (root layout listener) and inbox rows alike.
+- [x] Config plumbing: `expo-notifications` plugin + optional `GOOGLE_SERVICES_JSON` → `android.googleServicesFile` in `app.config.ts`.
 
-**Exit gate:** lock-screen push screenshot + deep-link open + inbox reflecting read state. *Measured by:* device screenshots in the PR.
+**Track discoveries (recorded for the next engineer):**
+- **The backend loads no `.env` itself** (`config/env.ts` reads `process.env` only — correct for Railway). Local boots need `scripts/dev-env-shim.cjs` (pair it with the DNS shim): `NODE_OPTIONS="--require ./staynex-backend/scripts/dev-env-shim.cjs --require ./staynex-backend/scripts/dev-dns-shim.cjs" pnpm dev:backend`.
+- **A webhook 5xx is designed behaviour** under serializable-transaction conflicts (CockroachDB P2034/P2028) — it tells Paystack to redeliver. The harness fixture now mirrors provider redelivery (up to 3 retries) instead of failing on first 500.
+
+**Device track (⏳ pending hardware + Firebase Android config):**
+- [ ] Booking-confirmed and check-in-reminder (T-1) pushes on a locked physical device (needs a dev/preview build with `google-services.json`); tap opens the trip.
+- [ ] Dead-token pruning observed end-to-end (uninstall → send → backend prunes on FCM 404/UNREGISTERED).
+
+**Exit gate:** engineering track green (✅) + lock-screen push screenshot + deep-link open. *Measured by:* harness output + device screenshots in the PR.
 
 ---
 

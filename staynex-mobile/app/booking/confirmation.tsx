@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import * as WebBrowser from "expo-web-browser";
@@ -8,6 +9,8 @@ import { bookingApi } from "@/data/api";
 import { apiErrorMessage } from "@/core/client";
 import { API_BASE_URL } from "@/core/env";
 import { formatDateLabel } from "@/core/format";
+import { optInToPush } from "@/core/push";
+import { useSession } from "@/core/session";
 import { Screen } from "@/ui/Screen";
 import { Button } from "@/ui/Button";
 import { StatusPill } from "@/ui/StatusPill";
@@ -22,6 +25,20 @@ export default function ConfirmationScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const bookingId = param(params.bookingId);
+  const user = useSession((s) => s.user);
+  const [pushDone, setPushDone] = useState(false);
+
+  async function enableTripUpdates() {
+    const result = await optInToPush();
+    if (result.status === "registered") {
+      setPushDone(true);
+      Alert.alert("You're set", "We'll notify you about this trip — including a check-in reminder.");
+    } else if (result.status === "denied") {
+      Alert.alert("Notifications are off", "You can enable them any time in your device settings.");
+    } else {
+      Alert.alert("Not available here", result.reason);
+    }
+  }
 
   const bookingQuery = useQuery({
     queryKey: ["booking", bookingId],
@@ -86,6 +103,11 @@ export default function ConfirmationScreen() {
         </View>
 
         <View style={styles.actions}>
+          {user && !pushDone ? (
+            // The "right moment" for the permission prompt: immediately after
+            // a successful booking, never on first launch (Phase 3).
+            <Button label="Turn on trip updates" onPress={() => void enableTripUpdates()} />
+          ) : null}
           {booking.status === "CONFIRMED" && booking.paymentReference ? (
             <Button
               label="View receipt & check-in QR (PDF)"

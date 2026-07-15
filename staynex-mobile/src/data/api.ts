@@ -10,6 +10,8 @@ import type {
   CheckoutResult,
   CityOption,
   HoldSummary,
+  NotificationRow,
+  NotificationsPage,
   PaymentStatusView,
   PropertyDetail,
   PropertySummary,
@@ -80,6 +82,24 @@ export const bookingApi = {
   getBooking: (id: string) => api.get<BookingView>(`/bookings/${encodeURIComponent(id)}`),
   /** The signed-in guest's trips, newest check-in first (session required). */
   myBookings: () => api.get<BookingView[]>("/bookings"),
+};
+
+export const notificationsApi = {
+  /** Inbox page (keyset). Omit cursor for the newest page. */
+  list: (cursor?: string, take = 20) => {
+    const qs = new URLSearchParams({ take: String(take) });
+    if (cursor) qs.set("cursor", cursor);
+    return api.get<NotificationsPage>(`/notifications?${qs.toString()}`);
+  },
+  getOne: (id: string) =>
+    api.get<NotificationRow>(`/notifications/${encodeURIComponent(id)}`),
+  /** Omit ids (or send []) to mark every unread notification read. */
+  markRead: (ids?: string[]) =>
+    api.post<{ updated: number }>("/notifications/read", ids ? { ids } : {}),
+  registerDevice: (token: string, platform: "ANDROID" | "IOS") =>
+    api.post<{ ok: true }>("/notifications/devices", { token, platform }),
+  removeDevice: (token: string) =>
+    api.delete<{ ok: true }>(`/notifications/devices/${encodeURIComponent(token)}`),
 };
 
 export const authApi = {

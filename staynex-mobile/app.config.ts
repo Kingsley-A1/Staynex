@@ -14,6 +14,10 @@ import type { ExpoConfig } from "expo/config";
 const apiBaseUrl = process.env.STAYNEX_API_BASE_URL ?? "";
 const googleClientId = process.env.GOOGLE_CLIENT_ID ?? null;
 const easProjectId = process.env.EAS_PROJECT_ID ?? null;
+// Native FCM config for push (Phase 3). Point GOOGLE_SERVICES_JSON at the
+// Firebase Android config file; without it the app still runs — push
+// registration degrades gracefully (see src/core/push.ts).
+const googleServicesFile = process.env.GOOGLE_SERVICES_JSON ?? null;
 
 const config: ExpoConfig = {
   name: "Staynex",
@@ -33,6 +37,7 @@ const config: ExpoConfig = {
     adaptiveIcon: {
       backgroundColor: "#27187D",
     },
+    ...(googleServicesFile ? { googleServicesFile } : {}),
   },
   plugins: [
     // expo-web-browser is runtime-only in SDK 52 (no app.plugin.js) — listing it
@@ -40,6 +45,7 @@ const config: ExpoConfig = {
     "expo-router",
     "expo-secure-store",
     "expo-font",
+    "expo-notifications",
   ],
   extra: {
     apiBaseUrl,
