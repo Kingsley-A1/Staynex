@@ -1,6 +1,8 @@
 import { Tabs } from "expo-router";
 import { Text } from "react-native";
 import { color, fontWeight } from "@staynex/shared";
+import { isOwner } from "@/core/capabilities";
+import { useSession } from "@/core/session";
 
 // Simple text glyphs avoid pulling an icon font into the Phase 0/1 scaffold.
 function TabGlyph({ glyph, focused }: { glyph: string; focused: boolean }) {
@@ -10,6 +12,12 @@ function TabGlyph({ glyph, focused }: { glyph: string; focused: boolean }) {
 }
 
 export default function TabsLayout() {
+  // Capability-gated navigation: the Host tab exists only when the server-issued
+  // session says OWNER (`href: null` unregisters the tab). The backend enforces
+  // the same capability on every /host request, so the tab is presentation only.
+  const user = useSession((s) => s.user);
+  const showHost = isOwner(user);
+
   return (
     <Tabs
       screenOptions={{
@@ -35,6 +43,14 @@ export default function TabsLayout() {
         options={{
           title: "Trips",
           tabBarIcon: ({ focused }) => <TabGlyph glyph="⌂" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="host"
+        options={{
+          title: "Host",
+          href: showHost ? undefined : null,
+          tabBarIcon: ({ focused }) => <TabGlyph glyph="⌘" focused={focused} />,
         }}
       />
       <Tabs.Screen

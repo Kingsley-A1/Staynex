@@ -28,7 +28,7 @@ targets, not fiction — if a gate slips, move every later date, don't skip the 
 | 2     | The returning-guest app (trips + identity)   | Fri 7 Aug     | 🟡 engineering ✅ 19/19; new-device demo pending hardware |
 | 3     | The app taps you on the shoulder (push)      | Wed 12 Aug    | 🟡 engineering ✅ 17/17; lock-screen delivery pending hardware |
 | 4     | Concierge in your pocket (Staynex AI)        | Fri 21 Aug    | 🟡 engineering ✅ 23/23; on-device demo pending hardware |
-| 5     | Hosts run their business from a phone        | Fri 28 Aug    | ⬜ |
+| 5     | Hosts run their business from a phone        | Fri 28 Aug    | 🟡 engineering ✅ 33/33; on-device scan demo pending hardware |
 | 6     | Staynex installed from the store             | Fri 11 Sep    | ⬜ |
 
 ---
@@ -227,13 +227,20 @@ today's bookings (`GET /host/bookings`), scan a guest's QR to the live verify
 card, and adjust a room's availability for a date range — all against existing
 endpoints.
 
-- [ ] Capability-aware navigation: `OWNER` capability unlocks a Host tab (capabilities from `AuthUser`, never client-derived).
-- [ ] Host bookings list + detail (existing `GET /host/bookings`, `GET /host/bookings/:id`).
-- [ ] QR scan → open the verify card (`{APP_URL}/verify/<ref>` in-app) for reception-style check-in.
-- [ ] Availability quick actions: open/close a date range via existing `PUT /availability/capacity` (mirror the web's 30/90-day quick actions; backend still guards booked/held inventory).
-- [ ] Push for hosts: new-booking notification routes to host booking detail.
+**Engineering track — ✅ machine-verified (Phase 5 harness 33/33, 2026-07-15):**
+- [x] Capability-aware navigation: the Host tab and the `app/host/` stack render only when the server-issued `AuthUser.capabilities` contains `OWNER` (`src/core/capabilities.ts`; tab hidden via `href: null`). Harness proved both truths: registration with owner intent returns `["GUEST","OWNER"]`, and a plain GUEST session gets 403 from `/host/bookings` regardless of UI.
+- [x] Host tab (`(tabs)/host.tsx`) — the mobile copy of web `/host/bookings`: same KPI strip (confirmed / pending payments / net earnings / pending payout), same booking rows (payout + gross, status pills), same empty states; plus the two on-the-go actions (Scan to check in, Availability). `hostApi` in `src/data/api.ts` — all shapes `import type`d (`OwnerBookingsView`, `BookingRow`).
+- [x] Host booking detail (`app/host/bookings/[id].tsx`) — mirror of the web detail page: pills + Verified badge, the "Verified booking → Open verification" check-in card, detail rows, and the settlement card. Harness: gross = platform fee + owner payout = guest charge, exactly; foreign owner reads 404.
+- [x] QR scan → verify (`app/host/scan.tsx` via expo-camera, `app/host/verify/[reference].tsx`): scans the voucher QR (`…/verify/<ref>`), extracts the reference, renders the SAME live card the web serves (identical tones/copy: Valid/Pending/Not valid/No booking found) from public `GET /verify/:reference`. Manual reference entry is the no-camera fallback. Harness: CONFIRMED card with live details + masked guest email; unknown ref → NOT_FOUND; the QR SVG itself is served.
+- [x] Availability quick actions (`app/host/availability.tsx`): property → room type → open/close the next 30/60/90/180/365 days (the web editor's own quick options) with a units stepper, calendar summary, and web-parity copy. Harness: open 45 days → `{updatedDays:45}`; close/reopen 3 days reflected on the public calendar; past range → 400; over-capacity → 400; **a range containing booked nights → 409** (committed inventory is untouchable); the confirmed booking held its unit on both nights.
+- [x] Push for hosts: `routeForPushLink` now routes `/host/bookings/<id>` → host booking detail and `/host/bookings` → Host tab (inbox rows reuse the same mapper). Harness: the owner's inbox carries `BOOKING_CONFIRMED` linking to `/host/bookings/<id>` the moment the guest's payment lands.
+- [x] Full go-live pipeline proven from the wire (harness fixture = the real owner journey): payout method activates via Paystack test resolve → property draft → priced room type → 4 photos through R2 signed uploads → 45 days opened → auto-review passes all 9 checks → auto-publishes to APPROVED → appears in public search → a real guest books & pays on it → retired afterwards (owner edit unpublishes to DRAFT, delisted, unbooked days closed).
 
-**Exit gate:** end-to-end host demo — booking arrives (push), host opens it, scans the guest QR at "check-in", closes a date. *Measured by:* recorded run.
+**Device track (⏳ pending hardware):**
+- [ ] End-to-end host demo on-device: booking arrives (push), host opens it, scans the guest's QR at "check-in" with the camera, closes a date range (recorded).
+- [ ] Camera permission flow verified on Android + iOS (grant, deny → manual entry fallback).
+
+**Exit gate:** engineering track green (✅) + the recorded on-device host demo. *Measured by:* harness output + recording.
 
 ---
 

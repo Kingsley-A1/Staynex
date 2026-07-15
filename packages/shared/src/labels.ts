@@ -53,3 +53,10 @@ export const PAYMENT_STATE_TONE: Record<PaymentState, StatusTone> = {
   REQUIRES_REFUND: "error",
   REFUNDED: "neutral",
 };
+
+export const PAYOUT_STATUS_TONE: Record<PayoutStatusValue, StatusTone> = {
+  PENDING: "warning",
+  PROCESSING: "warning",
+  PAID: "success",
+  FAILED: "error",
+};

@@ -8,6 +8,7 @@ export {
   PAYOUT_STATUS_LABELS,
   BOOKING_STATUS_TONE,
   PAYMENT_STATE_TONE,
+  PAYOUT_STATUS_TONE,
   type StatusTone,
 } from "./labels";
 export {

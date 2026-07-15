@@ -6,15 +6,18 @@ import type {
   AuthUser,
   AvailabilityDay,
   AvailabilityQuote,
+  BookingRow,
   BookingView,
   CheckoutResult,
   CityOption,
   HoldSummary,
   NotificationRow,
   NotificationsPage,
+  OwnerBookingsView,
   PaymentStatusView,
   PropertyDetail,
   PropertySummary,
+  VoucherVerification,
 } from "@staynex/backend/types";
 import { api } from "@/core/client";
 
@@ -100,6 +103,31 @@ export const notificationsApi = {
     api.post<{ ok: true }>("/notifications/devices", { token, platform }),
   removeDevice: (token: string) =>
     api.delete<{ ok: true }>(`/notifications/devices/${encodeURIComponent(token)}`),
+};
+
+/**
+ * Host workspace (OWNER capability; every read is owner-scoped on the server).
+ * The same endpoints that power the web `/host/*` dashboard — mobile renders
+ * the identical truth, never a parallel one.
+ */
+export const hostApi = {
+  /** KPI strip + booking rows — the mobile mirror of web `/host/bookings`. */
+  bookings: () => api.get<OwnerBookingsView>("/host/bookings"),
+  booking: (id: string) => api.get<BookingRow>(`/host/bookings/${encodeURIComponent(id)}`),
+  properties: () => api.get<PropertySummary[]>("/host/properties"),
+  property: (id: string) => api.get<PropertyDetail>(`/host/properties/${encodeURIComponent(id)}`),
+  /**
+   * Open/close a date range (YYYY-MM-DD, inclusive). `totalUnits: 0` closes the
+   * days; the backend stays the authority and keeps booked/held nights intact.
+   */
+  setCapacity: (body: { roomTypeId: string; from: string; to: string; totalUnits: number }) =>
+    api.put<{ updatedDays: number }>("/availability/capacity", body),
+};
+
+export const voucherApi = {
+  /** Live check-in verification card — the target of every booking QR. Public. */
+  verify: (reference: string) =>
+    api.get<VoucherVerification>(`/verify/${encodeURIComponent(reference)}`),
 };
 
 export const authApi = {

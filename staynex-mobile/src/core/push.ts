@@ -100,12 +100,18 @@ export function routeForPushLink(link: string | undefined): {
     const path = link.replace(/^https?:\/\/[^/]+/, "");
     // Guest booking links: `/booking/confirmed?booking=<id>` (see
     // notifications.service.ts) — the trip detail screen is the mobile home
-    // for a booking. Host links (`/host/...`) fall through to the inbox until
-    // Owner Lite (Phase 5).
+    // for a booking.
     const booking = path.match(/^\/booking\/confirmed\/?\?.*booking=([\w-]+)/);
     if (booking) return { pathname: "/trips/[id]", params: { id: booking[1] } };
     const stay = path.match(/^\/stays\/([\w-]+)/);
     if (stay) return { pathname: "/stays/[slug]", params: { slug: stay[1] } };
+    // Host links: new/refunded bookings and check-in reminders deep-link to the
+    // host booking detail; payout notices land on the Host tab. The backend
+    // only sends these to owner accounts, and the host stack re-checks the
+    // capability before rendering.
+    const hostBooking = path.match(/^\/host\/bookings\/([\w-]+)/);
+    if (hostBooking) return { pathname: "/host/bookings/[id]", params: { id: hostBooking[1] } };
+    if (/^\/host\/bookings\/?$/.test(path)) return { pathname: "/(tabs)/host" };
   }
   return { pathname: "/notifications" };
 }

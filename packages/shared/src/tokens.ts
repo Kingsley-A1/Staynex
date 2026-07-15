@@ -23,6 +23,14 @@ export const color = {
   success: "#15803D",
   warning: "#B7791F",
   error: "#B42318",
+  // Tone tints — the same values as the web theme's `--<tone>-surface/border`
+  // custom properties, so status cards read identically on both clients.
+  successSurface: "#E7F4EC",
+  successBorder: "#BCE2C8",
+  warningSurface: "#FBF2E2",
+  warningBorder: "#F0DBB2",
+  errorSurface: "#FBE9E7",
+  errorBorder: "#F2C7C2",
 } as const;
 
 export const spacing = {

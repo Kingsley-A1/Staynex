@@ -124,11 +124,20 @@ staynex-frontend/
   src/styles/              theme.css (design tokens), motion.css
 
 staynex-mobile/            Expo app (staged): guest booking loop, Phase 0/1
-  app/                     Expo Router screens: (tabs) search/account, (auth),
-                           stays/[slug], booking/{quote,checkout,confirmation},
-                           payment/[reference]
-  src/core/                client.ts (cookie-replay fetch), session.ts, env.ts
-  src/data/api.ts          Typed API services (contracts from backend types)
+  app/                     Expo Router screens: (tabs) search/trips/host*/AI/account,
+                           (auth), stays/[slug], booking/{quote,checkout,confirmation},
+                           payment/[reference], trips/[id], notifications,
+                           assistant/history
+  app/host/                Owner Lite workspace (*capability-gated: the Host tab
+                           and this stack render only when AuthUser.capabilities
+                           has OWNER): bookings/[id], scan (QR → verify),
+                           verify/[reference] (native /verify card), availability
+  src/core/                client.ts (cookie-replay fetch), session.ts, env.ts,
+                           push.ts (FCM + deep-link routing), capabilities.ts,
+                           ai-stream.ts (XHR SSE)
+  src/data/api.ts          Typed API services (contracts from backend types),
+                           incl. hostApi (/host/*, PUT /availability/capacity)
+                           and voucherApi (GET /verify/:reference)
   src/ui/                  Native primitives (Button, PropertyCard, form, states)
 
 packages/shared/           @staynex/shared — kobo→NGN formatter, status labels,

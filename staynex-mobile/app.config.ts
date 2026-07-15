@@ -46,6 +46,16 @@ const config: ExpoConfig = {
     "expo-secure-store",
     "expo-font",
     "expo-notifications",
+    [
+      "expo-camera",
+      {
+        // Store-compliance rationale (Phase 6 sweep): the camera is used only
+        // for scanning booking QR codes at host check-in (app/host/scan.tsx).
+        cameraPermission: "Staynex uses the camera only to scan booking QR codes at check-in.",
+        microphonePermission: false,
+        recordAudioAndroid: false,
+      },
+    ],
   ],
   extra: {
     apiBaseUrl,
