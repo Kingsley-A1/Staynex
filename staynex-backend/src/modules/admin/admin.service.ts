@@ -6,6 +6,7 @@ import type {
   AdminPaymentExceptionRow,
   AdminPaymentRow,
   AdminPaymentsPage,
+  AdminPerformanceView,
   AdminPayoutRow,
   AdminPayoutsView,
   AuthUser,
@@ -18,6 +19,7 @@ import type {
   PropertyDetail,
   PropertyStatus,
   PropertySummary,
+  WebVitalName,
 } from "../../../types";
 import {
   bookingRowInclude,
@@ -79,6 +81,15 @@ const PAYMENT_STATUSES: PaymentState[] = [
   "REFUNDED",
 ];
 
+const PERFORMANCE_WINDOW_HOURS = 24;
+const PERFORMANCE_SAMPLE_LIMIT = 2_000;
+const WEB_VITAL_NAMES: WebVitalName[] = ["LCP", "INP", "CLS", "FCP", "TTFB"];
+const CORE_TARGETS: Partial<Record<WebVitalName, number>> = {
+  LCP: 2500,
+  INP: 200,
+  CLS: 0.1,
+};
+
 /** Opaque list cursor: createdAt ISO + row id, newest-first pagination. */
 function encodeCursor(createdAt: Date, id: string): string {
   return `${createdAt.toISOString()}_${id}`;
@@ -103,6 +114,123 @@ function afterCursor(cursor: { createdAt: Date; id: string } | null) {
       { createdAt: cursor.createdAt, id: { lt: cursor.id } },
     ],
   };
+}
+
+type WebVitalRow = {
+  name: string;
+  value: number;
+  rating: string | null;
+  route: string;
+  target: number | null;
+  targetMet: boolean | null;
+  createdAt: Date;
+};
+
+function summarizeMetric(name: WebVitalName, rows: WebVitalRow[]) {
+  const group = rows.filter((row) => row.name === name);
+  const latest = group[0];
+  const target = CORE_TARGETS[name] ?? latest?.target ?? null;
+  const values = group.map((row) => row.value);
+  const goodCount = group.filter((row) => normalizedRating(row) === "good").length;
+  const needsImprovementCount = group.filter(
+    (row) => normalizedRating(row) === "needs-improvement",
+  ).length;
+  const poorCount = group.filter((row) => normalizedRating(row) === "poor").length;
+  const targetMetRows = group.filter((row) => row.targetMet !== null);
+
+  return {
+    name,
+    sampleCount: group.length,
+    p75: percentile(values, 0.75),
+    average: values.length ? round(values.reduce((sum, value) => sum + value, 0) / values.length) : null,
+    goodCount,
+    needsImprovementCount,
+    poorCount,
+    target,
+    targetMetRate: targetMetRows.length
+      ? round(
+          (targetMetRows.filter((row) => row.targetMet === true).length / targetMetRows.length) *
+            100,
+        )
+      : null,
+    latestValue: latest ? round(latest.value) : null,
+    latestRating: latest?.rating ?? null,
+    latestRoute: latest?.route ?? null,
+    updatedAt: latest?.createdAt.toISOString() ?? null,
+  };
+}
+
+function summarizeRoutes(rows: WebVitalRow[]) {
+  const byRoute = new Map<string, WebVitalRow[]>();
+  for (const row of rows) {
+    const list = byRoute.get(row.route) ?? [];
+    list.push(row);
+    byRoute.set(row.route, list);
+  }
+  return [...byRoute.entries()]
+    .map(([route, group]) => ({
+      route,
+      sampleCount: group.length,
+      lcpP75: percentile(valuesFor(group, "LCP"), 0.75),
+      inpP75: percentile(valuesFor(group, "INP"), 0.75),
+      clsP75: percentile(valuesFor(group, "CLS"), 0.75),
+      poorCount: group.filter((row) => normalizedRating(row) === "poor").length,
+      updatedAt: group[0]?.createdAt.toISOString() ?? new Date(0).toISOString(),
+    }))
+    .sort((a, b) => b.poorCount - a.poorCount || b.sampleCount - a.sampleCount);
+}
+
+function performanceRecommendations(
+  metrics: ReturnType<typeof summarizeMetric>[],
+  routes: ReturnType<typeof summarizeRoutes>,
+  sampleCount: number,
+): string[] {
+  if (sampleCount === 0) {
+    return ["No browser samples yet. Open the public and host journeys once after deploy."];
+  }
+  const recommendations: string[] = [];
+  const lcp = metrics.find((metric) => metric.name === "LCP");
+  const inp = metrics.find((metric) => metric.name === "INP");
+  const cls = metrics.find((metric) => metric.name === "CLS");
+  if ((lcp?.p75 ?? 0) > 2500) {
+    recommendations.push("LCP is above 2.5s. Check hero image priority, CDN caching, and API waterfalls.");
+  }
+  if ((inp?.p75 ?? 0) > 200) {
+    recommendations.push("INP is above 200ms. Audit heavy client bundles and interactive handlers.");
+  }
+  if ((cls?.p75 ?? 0) > 0.1) {
+    recommendations.push("CLS is above 0.1. Reserve media/header space and avoid late layout shifts.");
+  }
+  const poorRoute = routes.find((route) => route.poorCount > 0);
+  if (poorRoute) {
+    recommendations.push(`Prioritize ${poorRoute.route}; it has the highest poor-sample count.`);
+  }
+  if (recommendations.length === 0) {
+    recommendations.push("Core Web Vitals are within the current Staynex targets for this sample window.");
+  }
+  return recommendations;
+}
+
+function valuesFor(rows: WebVitalRow[], name: WebVitalName): number[] {
+  return rows.filter((row) => row.name === name).map((row) => row.value);
+}
+
+function normalizedRating(row: WebVitalRow): string | null {
+  if (row.rating) return row.rating;
+  const target = CORE_TARGETS[row.name as WebVitalName];
+  if (!target) return null;
+  return row.value <= target ? "good" : "poor";
+}
+
+function percentile(values: number[], point: number): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * point) - 1);
+  return round(sorted[index]);
+}
+
+function round(value: number): number {
+  return Number(value.toFixed(value < 10 ? 3 : 0));
 }
 
 /** Admin authority: property approval + payment/payout operations. Every money
@@ -409,6 +537,27 @@ export class AdminService {
     return this.maintenance.reconcileAvailability();
   }
 
+  /** Core Web Vitals and route health from first-party browser beacons. */
+  async performance(): Promise<AdminPerformanceView> {
+    const since = new Date(Date.now() - PERFORMANCE_WINDOW_HOURS * 60 * 60 * 1000);
+    const rows = await prisma.webVitalMetric.findMany({
+      where: { createdAt: { gte: since } },
+      orderBy: { createdAt: "desc" },
+      take: PERFORMANCE_SAMPLE_LIMIT,
+    });
+
+    const metrics = WEB_VITAL_NAMES.map((name) => summarizeMetric(name, rows));
+    const routes = summarizeRoutes(rows).slice(0, 20);
+    return {
+      generatedAt: new Date().toISOString(),
+      windowHours: PERFORMANCE_WINDOW_HOURS,
+      totalSamples: rows.length,
+      metrics,
+      routes,
+      recommendations: performanceRecommendations(metrics, routes, rows.length),
+    };
+  }
+
   // --- Phase A: owner payout settlement (manual) ---------------------------
 
   /** Payout queue + platform accounting totals. Read-only view. */
@@ -550,14 +699,25 @@ export class AdminService {
 
   /** Audit trail (admin overrides). */
   async auditLogs(): Promise<AuditLogRow[]> {
-    const rows = await prisma.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 });
+    const rows = await prisma.auditLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: {
+        actor: { select: { name: true, email: true } },
+        property: { select: { name: true, slug: true } },
+      },
+    });
     return rows.map((r) => ({
       id: r.id,
       action: r.action,
       entityType: r.entityType,
       entityId: r.entityId,
       actorUserId: r.actorUserId,
+      actorName: r.actor?.name ?? null,
+      actorEmail: r.actor?.email ?? null,
       propertyId: r.propertyId,
+      propertyName: r.property?.name ?? null,
+      propertySlug: r.property?.slug ?? null,
       createdAt: r.createdAt.toISOString(),
     }));
   }

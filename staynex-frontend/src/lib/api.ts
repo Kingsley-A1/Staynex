@@ -9,6 +9,7 @@ import type {
   AdminPaymentExceptionRow,
   AdminPaymentRow,
   AdminPaymentsPage,
+  AdminPerformanceView,
   AdminPayoutRow,
   AdminPayoutsView,
   AdminTestimonialRow,
@@ -403,6 +404,7 @@ export const adminApi = {
       body: JSON.stringify({ reason }),
     }),
   auditLogs: () => request<AuditLogRow[]>("/admin/audit-logs"),
+  performance: () => request<AdminPerformanceView>("/admin/performance"),
   aiLogs: () => request<AiLogRow[]>("/admin/ai-logs"),
   testimonials: (status?: string) =>
     request<AdminTestimonialRow[]>(

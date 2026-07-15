@@ -182,6 +182,7 @@ export class CatalogService {
             take: 6,
             select: {
               media: {
+                where: { mediaType: "IMAGE" },
                 orderBy: { sortOrder: "asc" },
                 take: 1,
                 select: { url: true },

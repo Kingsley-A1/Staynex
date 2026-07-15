@@ -11,6 +11,7 @@ import { CatalogModule } from "./modules/catalog/catalog.module";
 import { HealthModule } from "./modules/health/health.module";
 import { MediaModule } from "./modules/media/media.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
+import { ObservabilityModule } from "./modules/observability/observability.module";
 import { OwnerModule } from "./modules/owner/owner.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { PropertiesModule } from "./modules/properties/properties.module";
@@ -33,6 +34,7 @@ import { VouchersModule } from "./modules/vouchers/voucher.module";
     AreasModule,
     ReviewsModule,
     OwnerModule,
+    ObservabilityModule,
     PaymentsModule,
     NotificationsModule,
     MediaModule,

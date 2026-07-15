@@ -42,7 +42,7 @@ export function SiteFooter() {
             <Link
               href="/"
               className="inline-flex items-center"
-              aria-label="Staynex Bookings home"
+              aria-label="Staynex Bookings"
             >
               <Brandmark />
             </Link>

@@ -11,6 +11,7 @@ import type {
   AdminBookingsPage,
   AdminPaymentExceptionRow,
   AdminPaymentsPage,
+  AdminPerformanceView,
   AdminPayoutsView,
   AdminTestimonialRow,
   AiLogRow,
@@ -68,6 +69,8 @@ export const getAdminPaymentExceptions = () =>
 export const getAdminPayouts = () => load<AdminPayoutsView>("/admin/payouts");
 
 export const getAuditLogs = () => load<AuditLogRow[]>("/admin/audit-logs");
+
+export const getAdminPerformance = () => load<AdminPerformanceView>("/admin/performance");
 
 export const getAiLogs = () => load<AiLogRow[]>("/admin/ai-logs");
 

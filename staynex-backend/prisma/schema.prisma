@@ -56,6 +56,11 @@ enum PropertyStatus {
   ARCHIVED
 }
 
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
 enum PropertyReviewStatus {
   NOT_SUBMITTED
   PENDING
@@ -484,6 +489,7 @@ model PropertyMedia {
   id         String   @id @default(cuid())
   propertyId String
   url        String
+  mediaType  MediaType @default(IMAGE)
   altText    String?
   sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
@@ -531,6 +537,7 @@ model RoomMedia {
   id         String   @id @default(cuid())
   roomTypeId String
   url        String
+  mediaType  MediaType @default(IMAGE)
   altText    String?
   sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
@@ -814,6 +821,24 @@ model AuditLog {
   @@index([actorUserId])
   @@index([propertyId])
   @@index([entityType, entityId])
+}
+
+model WebVitalMetric {
+  id             String   @id @default(cuid())
+  metricId       String
+  name           String
+  value          Float
+  rating         String?
+  navigationType String?
+  route          String
+  target         Float?
+  targetMet      Boolean?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([name, createdAt])
+  @@index([route, createdAt])
 }
 
 // ---------------------------------------------------------------------------

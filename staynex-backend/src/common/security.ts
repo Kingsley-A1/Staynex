@@ -20,7 +20,10 @@ interface SecurityResponse {
 type Next = () => void;
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-const CSRF_EXEMPT_PATHS = new Set(["/payments/paystack/webhook"]);
+const CSRF_EXEMPT_PATHS = new Set([
+  "/payments/paystack/webhook",
+  "/observability/web-vitals",
+]);
 
 export function createCsrfToken(): string {
   return randomBytes(32).toString("hex");

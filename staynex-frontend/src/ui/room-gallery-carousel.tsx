@@ -7,6 +7,7 @@ import { OptimizedFillImage } from "./optimized-fill-image";
 export interface GallerySlide {
   id: string;
   url?: string | null;
+  mediaType?: "IMAGE" | "VIDEO";
   altText?: string | null;
 }
 
@@ -44,7 +45,15 @@ export function RoomGalleryCarousel({
               i === index ? "opacity-100" : "opacity-0",
             )}
           >
-            {slide.url ? (
+            {slide.url && slide.mediaType === "VIDEO" ? (
+              <video
+                src={slide.url}
+                controls
+                preload="metadata"
+                className="absolute inset-0 h-full w-full object-cover"
+                aria-label={slide.altText ?? "Property video"}
+              />
+            ) : slide.url ? (
               <OptimizedFillImage
                 src={slide.url}
                 alt={slide.altText ?? ""}
@@ -55,7 +64,7 @@ export function RoomGalleryCarousel({
               />
             ) : (
               <div className="grid h-full w-full place-items-center text-sm text-white/80">
-                No image yet
+                No media yet
               </div>
             )}
           </div>
@@ -67,7 +76,7 @@ export function RoomGalleryCarousel({
           <button
             type="button"
             onClick={() => go(index - 1)}
-            aria-label="Previous image"
+            aria-label="Previous media"
             className="absolute left-2 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-full bg-surface-raised/90 text-lg text-ink shadow-md"
           >
             ‹
@@ -75,7 +84,7 @@ export function RoomGalleryCarousel({
           <button
             type="button"
             onClick={() => go(index + 1)}
-            aria-label="Next image"
+            aria-label="Next media"
             className="absolute right-2 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-full bg-surface-raised/90 text-lg text-ink shadow-md"
           >
             ›
@@ -86,7 +95,7 @@ export function RoomGalleryCarousel({
                 key={slide.id}
                 type="button"
                 onClick={() => go(i)}
-                aria-label={`Go to image ${i + 1}`}
+                aria-label={`Go to media ${i + 1}`}
                 aria-current={i === index}
                 className={cn(
                   "h-1.5 rounded-full transition-all",
@@ -99,7 +108,7 @@ export function RoomGalleryCarousel({
       )}
 
       <p className="sr-only" aria-live="polite">
-        Image {index + 1} of {total}
+        Media {index + 1} of {total}
       </p>
     </div>
   );

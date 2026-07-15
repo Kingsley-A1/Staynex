@@ -42,7 +42,8 @@ export function DestinationImageCycle({
       key={current}
       src={current}
       alt={isLiveProperty ? `Stay in ${city}` : `${city}, Nigeria`}
-      sizes="(min-width: 1024px) 20vw, (min-width: 640px) 33vw, 50vw"
+      sizes="(min-width: 1024px) 18vw, (min-width: 640px) 30vw, 45vw"
+      quality={75}
       className="absolute inset-0 h-full w-full object-cover transition-opacity duration-700"
       onError={(event) => {
         if (event.currentTarget.dataset.fallback !== "true") {

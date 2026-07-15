@@ -167,6 +167,49 @@ test("guest images use bounded high-quality optimization and offline navigation 
   assert.match(reporter, /CLS: 0\.1/);
 });
 
+test("admin performance monitoring is backed by persisted web vitals", async () => {
+  const [nav, page, apiRoute, serverReports] = await Promise.all([
+    source("../src/components/nav-config.ts"),
+    source("../src/app/(admin)/admin/performance/page.tsx"),
+    source("../src/app/api/web-vitals/route.ts"),
+    source("../src/lib/server-reports.ts"),
+  ]);
+  assert.match(nav, /href: "\/admin\/performance"/);
+  assert.match(nav, /icon: "chart"/);
+  assert.match(page, /Core Web Vitals/);
+  assert.match(page, /LCP under 2\.5s/);
+  assert.match(apiRoute, /\/observability\/web-vitals/);
+  assert.match(serverReports, /getAdminPerformance/);
+});
+
+test("admin audit rows expand into complete source details", async () => {
+  const [page, detail] = await Promise.all([
+    source("../src/app/(admin)/admin/audit/page.tsx"),
+    source("../src/features/admin/audit-log-view.tsx"),
+  ]);
+  assert.match(page, /<AuditLogView/);
+  assert.match(detail, /<details/);
+  assert.match(detail, /Audit ID/);
+  assert.match(detail, /Actor email/);
+  assert.match(detail, /Property slug/);
+});
+
+test("host media manager accepts images and videos with automatic video trimming", async () => {
+  const [manager, trimmer, gallery] = await Promise.all([
+    source("../src/features/media/media-manager.tsx"),
+    source("../src/lib/video-trim.ts"),
+    source("../src/ui/room-gallery-carousel.tsx"),
+  ]);
+  assert.match(manager, /accept="image\/\*,video\/\*"/);
+  assert.match(manager, /prepareVideoForUpload/);
+  assert.match(manager, /mediaType === "VIDEO"/);
+  assert.match(trimmer, /MAX_VIDEO_UPLOAD_BYTES = 100 \* 1024 \* 1024/);
+  assert.match(trimmer, /MediaRecorder/);
+  assert.match(trimmer, /trimVideoToLimit/);
+  assert.match(gallery, /mediaType === "VIDEO"/);
+  assert.match(gallery, /Previous media/);
+});
+
 test("approved property cards use the accessible Staynex verified mark", async () => {
   const [card, badge, icons] = await Promise.all([
     source("../src/ui/property-card.tsx"),

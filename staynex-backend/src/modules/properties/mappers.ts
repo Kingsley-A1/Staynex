@@ -18,7 +18,12 @@ import type {
 export const propertySummaryInclude =
   Prisma.validator<Prisma.PropertyInclude>()({
     city: { select: { name: true } },
-    media: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } },
+    media: {
+      where: { mediaType: "IMAGE" },
+      orderBy: { sortOrder: "asc" },
+      take: 1,
+      select: { url: true },
+    },
     roomTypes: { select: { basePriceKobo: true } },
   });
 export type PropertySummaryRow = Prisma.PropertyGetPayload<{
@@ -52,10 +57,17 @@ export type PropertyDetailRow = Prisma.PropertyGetPayload<{
 function toMedia(m: {
   id: string;
   url: string;
+  mediaType: "IMAGE" | "VIDEO";
   altText: string | null;
   sortOrder: number;
 }): MediaItem {
-  return { id: m.id, url: m.url, altText: m.altText, sortOrder: m.sortOrder };
+  return {
+    id: m.id,
+    url: m.url,
+    mediaType: m.mediaType,
+    altText: m.altText,
+    sortOrder: m.sortOrder,
+  };
 }
 
 export function toPropertySummary(p: PropertySummaryRow): PropertySummary {
@@ -101,7 +113,7 @@ export function toPropertyDetail(p: PropertyDetailRow): PropertyDetail {
     description: p.description,
     fromPriceKobo: prices.length ? Math.min(...prices) : null,
     roomTypeCount: roomTypes.length,
-    coverImageUrl: p.media[0]?.url ?? null,
+    coverImageUrl: p.media.find((m) => m.mediaType === "IMAGE")?.url ?? null,
     updatedAt: p.updatedAt.toISOString(),
     media: p.media.map(toMedia),
     roomTypes,

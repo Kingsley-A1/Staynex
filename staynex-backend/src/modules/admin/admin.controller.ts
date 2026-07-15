@@ -105,6 +105,11 @@ export class AdminController {
     return this.admin.availabilityDrift();
   }
 
+  @Get("performance")
+  async performance() {
+    return this.admin.performance();
+  }
+
   // --- Phase A: owner payout settlement (manual) ---------------------------
 
   @Get("payouts")

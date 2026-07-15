@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { API_BASE } from "@/lib/api-base";
 
 const METRIC_NAMES = new Set(["FCP", "LCP", "CLS", "INP", "TTFB"]);
 
@@ -14,7 +15,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid metric" }, { status: 400 });
   }
 
-  console.info("web-vital", payload);
+  try {
+    await fetch(`${API_BASE}/observability/web-vitals`, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": request.headers.get("user-agent") ?? "staynex-web",
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    console.warn(
+      "web-vital-forward-failed",
+      error instanceof Error ? error.message : "unknown",
+    );
+  }
   return new NextResponse(null, { status: 204 });
 }
 

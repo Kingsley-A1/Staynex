@@ -27,7 +27,12 @@ export default async function StayPage({
 
   const reviews = await getApprovedTestimonials(slug, 4);
 
-  const slides = property.media.map((m) => ({ id: m.id, url: m.url, altText: m.altText }));
+  const slides = property.media.map((m) => ({
+    id: m.id,
+    url: m.url,
+    mediaType: m.mediaType,
+    altText: m.altText,
+  }));
   const rooms = property.roomTypes.map((rt) => ({
     id: rt.id,
     name: rt.name,

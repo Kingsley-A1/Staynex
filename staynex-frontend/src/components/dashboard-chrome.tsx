@@ -143,7 +143,7 @@ export function DashboardChrome({
         >
           <Link
             href="/"
-            aria-label="Staynex Bookings home"
+            aria-label="Staynex Bookings"
             className="inline-flex items-center"
           >
             {collapsed ? (
@@ -199,7 +199,7 @@ export function DashboardChrome({
         <header className="flex h-16 items-center justify-between gap-3 border-b border-border bg-surface-raised px-4 sm:px-6">
           <Link
             href="/"
-            aria-label="Staynex Bookings home"
+            aria-label="Staynex Bookings"
             className="inline-flex items-center lg:hidden"
           >
             <Brandmark

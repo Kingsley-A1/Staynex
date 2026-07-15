@@ -9,7 +9,7 @@ import { ClientHeaderAuthControls } from "@/features/auth/client-header-auth-con
 import { DestinationImageCycle } from "@/features/landing/destination-image-cycle";
 import { formatNairaFromKobo } from "@/lib/format";
 import { getHomeCatalog } from "@/lib/server-catalog";
-import { OptimizedFillImage } from "@/ui";
+import { OptimizedFillImage, VerifiedBadge } from "@/ui";
 import { SkipLink } from "@/components/skip-link";
 import type { DestinationShowcase, PropertySummary } from "@/lib/types";
 
@@ -20,6 +20,7 @@ export const metadata: Metadata = {
 };
 
 export const revalidate = 300;
+export const dynamic = "force-static";
 
 const DESTINATIONS = [
   {
@@ -110,7 +111,7 @@ function SiteHeader() {
         <Link
           href="/"
           className="flex items-center"
-          aria-label="Staynex Bookings home"
+          aria-label="Staynex Bookings"
         >
           <Brandmark priority hideSuffixOnMobile />
         </Link>
@@ -346,14 +347,14 @@ function StayCard({
           <OptimizedFillImage
             src={property.coverImageUrl}
             alt={property.name}
-            sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+            sizes="(min-width: 1024px) 23vw, (min-width: 640px) 45vw, 100vw"
+            quality={75}
             className="absolute inset-0 h-full w-full object-cover"
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-        <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-success-border bg-success-surface px-2.5 py-1 text-2xs font-semibold text-success">
-          <span className="size-1.5 rounded-full bg-success" />
-          Verified
+        <span className="absolute left-3 top-3">
+          <VerifiedBadge />
         </span>
         <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-2xs font-medium text-ink">
           {tag}

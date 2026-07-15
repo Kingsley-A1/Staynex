@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { OptimizedFillImage } from "@/ui";
 import { apiErrorMessage, hostApi, uploadToTarget } from "@/lib/api";
 import { prepareImageForUpload } from "@/lib/image-downscale";
+import { prepareVideoForUpload } from "@/lib/video-trim";
 import type { MediaItem } from "@/lib/types";
 
 export type MediaTarget =
@@ -14,7 +15,7 @@ export type MediaTarget =
 interface UploadJob {
   id: number;
   name: string;
-  phase: "preparing" | "uploading" | "attaching" | "error";
+  phase: "preparing" | "trimming" | "uploading" | "attaching" | "error";
   /** 0..1 while uploading. */
   progress: number;
   error?: string;
@@ -24,15 +25,15 @@ let nextJobId = 1;
 
 /**
  * Full gallery management for a property or room type: multi-file upload with
- * client-side downscaling and real progress, plus delete, reorder, cover
- * selection, and alt text. The first photo is the cover everywhere the listing
+ * client-side image downscaling, video trimming, and real progress, plus delete,
+ * reorder, cover selection, and alt text. The first image is the cover everywhere the listing
  * renders. Server state is the source of truth — every mutation ends in
  * router.refresh(); local order is only an optimistic mirror.
  */
 export function MediaManager({
   target,
   media,
-  heading = "Photos",
+  heading = "Photos and videos",
   description,
 }: {
   target: MediaTarget;
@@ -88,7 +89,10 @@ export function MediaManager({
       const job: UploadJob = { id: nextJobId++, name: file.name, phase: "preparing", progress: 0 };
       setJobs((all) => [...all, job]);
       try {
-        const prepared = await prepareImageForUpload(file);
+        if (file.type.startsWith("video/") && file.size > 100 * 1024 * 1024) {
+          updateJob(job.id, { phase: "trimming" });
+        }
+        const prepared = await prepareMediaForUpload(file);
         const uploadTarget = await hostApi.requestUpload({
           scope: api.scope,
           filename: prepared.filename,
@@ -121,7 +125,7 @@ export function MediaManager({
       router.refresh();
     } catch (err) {
       setItems(previous);
-      setActionError(apiErrorMessage(err, "Couldn't save the new photo order."));
+      setActionError(apiErrorMessage(err, "Couldn't save the new media order."));
     } finally {
       setPending(false);
     }
@@ -150,7 +154,7 @@ export function MediaManager({
       setItems((all) => all.filter((m) => m.id !== mediaId));
       router.refresh();
     } catch (err) {
-      setActionError(apiErrorMessage(err, "Couldn't delete this photo."));
+      setActionError(apiErrorMessage(err, "Couldn't delete this media."));
     } finally {
       setPending(false);
     }
@@ -168,7 +172,7 @@ export function MediaManager({
       );
       router.refresh();
     } catch (err) {
-      setActionError(apiErrorMessage(err, "Couldn't save the photo description."));
+      setActionError(apiErrorMessage(err, "Couldn't save the media description."));
     } finally {
       setPending(false);
     }
@@ -183,23 +187,23 @@ export function MediaManager({
           onClick={() => inputRef.current?.click()}
           className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
         >
-          Add photos
+          Add media
         </button>
       </div>
       {description && <p className="text-caption">{description}</p>}
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,video/*"
         multiple
         onChange={onFilesPicked}
         className="sr-only"
-        aria-label="Choose photos to upload"
+        aria-label="Choose photos or videos to upload"
       />
 
       {items.length === 0 && jobs.length === 0 && (
         <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-caption">
-          No photos yet. Large photos are resized automatically — add your best shots.
+          No media yet. Large photos are resized and videos over 100 MB are trimmed automatically.
         </p>
       )}
 
@@ -208,28 +212,43 @@ export function MediaManager({
           {items.map((m, index) => (
             <li key={m.id} className="space-y-1.5">
               <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-secondary">
-                <OptimizedFillImage
-                  src={m.url}
-                  alt={m.altText ?? `Photo ${index + 1}`}
-                  sizes="(min-width: 640px) 200px, 45vw"
-                  quality={75}
-                  className="absolute inset-0 size-full object-cover"
-                />
-                {index === 0 && (
+                {m.mediaType === "VIDEO" ? (
+                  <video
+                    src={m.url}
+                    controls
+                    preload="metadata"
+                    className="absolute inset-0 size-full object-cover"
+                    aria-label={m.altText ?? `Video ${index + 1}`}
+                  />
+                ) : (
+                  <OptimizedFillImage
+                    src={m.url}
+                    alt={m.altText ?? `Photo ${index + 1}`}
+                    sizes="(min-width: 640px) 200px, 45vw"
+                    quality={75}
+                    className="absolute inset-0 size-full object-cover"
+                  />
+                )}
+                {index === 0 && m.mediaType === "IMAGE" && (
                   <span className="absolute left-1.5 top-1.5 rounded-md bg-ink/75 px-1.5 py-0.5 text-[11px] font-semibold text-white">
                     Cover
+                  </span>
+                )}
+                {m.mediaType === "VIDEO" && (
+                  <span className="absolute left-1.5 top-1.5 rounded-md bg-ink/75 px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                    Video
                   </span>
                 )}
               </div>
 
               {confirmDeleteId === m.id ? (
                 <div className="flex items-center justify-between gap-1">
-                  <span className="text-caption font-medium text-error">Delete photo?</span>
+                  <span className="text-caption font-medium text-error">Delete media?</span>
                   <span className="flex gap-1">
                     <TileButton label="Confirm delete" onClick={() => void remove(m.id)}>
                       Yes
                     </TileButton>
-                    <TileButton label="Keep photo" onClick={() => setConfirmDeleteId(null)}>
+                    <TileButton label="Keep media" onClick={() => setConfirmDeleteId(null)}>
                       No
                     </TileButton>
                   </span>
@@ -252,7 +271,7 @@ export function MediaManager({
                   </TileButton>
                   {index > 0 && (
                     <TileButton
-                      label="Make cover photo"
+                      label="Make cover media"
                       onClick={() => makeCover(index)}
                       disabled={pending}
                     >
@@ -260,7 +279,7 @@ export function MediaManager({
                     </TileButton>
                   )}
                   <TileButton
-                    label="Edit photo description"
+                    label="Edit media description"
                     onClick={() => {
                       setAltEditingId(m.id);
                       setAltDraft(m.altText ?? "");
@@ -270,7 +289,7 @@ export function MediaManager({
                     Alt
                   </TileButton>
                   <TileButton
-                    label="Delete photo"
+                    label="Delete media"
                     onClick={() => setConfirmDeleteId(m.id)}
                     disabled={pending}
                     tone="danger"
@@ -293,8 +312,8 @@ export function MediaManager({
                     value={altDraft}
                     onChange={(e) => setAltDraft(e.target.value)}
                     maxLength={200}
-                    placeholder="Describe this photo"
-                    aria-label="Photo description"
+                    placeholder="Describe this media"
+                    aria-label="Media description"
                     className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm"
                   />
                   <TileButton label="Save description" type="submit">
@@ -324,6 +343,7 @@ export function MediaManager({
                 ) : (
                   <span className="shrink-0 text-caption text-muted-foreground">
                     {job.phase === "preparing" && "Preparing…"}
+                    {job.phase === "trimming" && "Trimming video…"}
                     {job.phase === "uploading" && `${Math.round(job.progress * 100)}%`}
                     {job.phase === "attaching" && "Saving…"}
                   </span>
@@ -355,6 +375,12 @@ export function MediaManager({
       )}
     </div>
   );
+}
+
+async function prepareMediaForUpload(file: File) {
+  if (file.type.startsWith("video/")) return prepareVideoForUpload(file);
+  if (file.type.startsWith("image/")) return prepareImageForUpload(file);
+  throw new Error("Upload a supported image or video file.");
 }
 
 function TileButton({

@@ -270,7 +270,7 @@ export class PropertyReviewService {
           },
         },
         city: { select: { id: true } },
-        media: { select: { id: true } },
+        media: { where: { mediaType: "IMAGE" }, select: { id: true } },
         roomTypes: {
           select: {
             name: true,

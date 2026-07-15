@@ -740,7 +740,7 @@ export function AssistantWidget() {
           onClick={() => setOpen(true)}
           aria-expanded={false}
           aria-controls="staynex-ai-panel"
-          aria-label="Open Staynex AI"
+          aria-label="Ask Staynex AI, open chat"
           className="fixed bottom-4 right-4 z-[var(--z-drawer)] inline-flex min-h-12 animate-scale-in items-center rounded-full border border-primary/10 bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-lg transition-all hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <span>Ask Staynex AI</span>

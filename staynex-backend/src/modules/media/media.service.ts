@@ -5,8 +5,9 @@ import { MIN_PROPERTY_IMAGES } from "../property-review/property-review-policy";
 import { PropertyReviewService } from "../property-review/property-review.service";
 import { STORAGE_PROVIDER, type StorageProvider } from "./storage";
 import {
-  IMAGE_CONTENT_TYPES,
-  MAX_IMAGE_BYTES,
+  MEDIA_CONTENT_TYPES,
+  maxBytesForContentType,
+  mediaKindForContentType,
   type AttachMediaInput,
   type RequestUploadInput,
 } from "./dto";
@@ -14,9 +15,9 @@ import {
 /**
  * Host media authoring. Uploads go directly to storage via a presigned target;
  * attach/detach/reorder run here, and every attached object is verified against
- * storage (exists, allowed image type, within size) before a row is written.
+ * storage (exists, allowed media type, within size) before a row is written.
  *
- * Media changes never unpublish an APPROVED listing: photos only feed the
+ * Media changes never unpublish an APPROVED listing: images only feed the
  * `media_ready` count check, so the review pipeline re-runs without pulling a
  * live property off the market. The one guard in the other direction: a live
  * listing may not drop below the review photo minimum via deletion.
@@ -33,7 +34,7 @@ export class MediaService {
   /** Step 1: issue a direct-upload target for the client. */
   requestUpload(input: RequestUploadInput): Promise<MediaUploadTarget> {
     const safe = input.filename.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^[._-]+/, "");
-    const key = `${input.scope}/${Date.now().toString(36)}-${safe || "image"}`;
+    const key = `${input.scope}/${Date.now().toString(36)}-${safe || "media"}`;
     return this.storage.createUploadTarget({ key, contentType: input.contentType });
   }
 
@@ -44,12 +45,12 @@ export class MediaService {
     input: AttachMediaInput,
   ): Promise<MediaItem> {
     await this.assertOwnedProperty(ownerId, propertyId);
-    const url = await this.verifyUploadedObject(input.key, "property");
+    const verified = await this.verifyUploadedObject(input.key, "property");
 
     const media = await prisma.$transaction(async (tx) => {
       const existing = await tx.propertyMedia.findFirst({
-        where: { propertyId, url },
-        select: { id: true, url: true, altText: true, sortOrder: true },
+        where: { propertyId, url: verified.url },
+        select: { id: true, url: true, mediaType: true, altText: true, sortOrder: true },
       });
       if (existing) return existing; // idempotent re-attach (double submit)
 
@@ -60,7 +61,8 @@ export class MediaService {
       return tx.propertyMedia.create({
         data: {
           propertyId,
-          url,
+          url: verified.url,
+          mediaType: verified.mediaType,
           altText: input.altText?.trim() || null,
           sortOrder: (last._max.sortOrder ?? -1) + 1,
         },
@@ -81,12 +83,12 @@ export class MediaService {
     input: AttachMediaInput,
   ): Promise<MediaItem> {
     const roomType = await this.assertOwnedRoomType(ownerId, roomTypeId);
-    const url = await this.verifyUploadedObject(input.key, "room");
+    const verified = await this.verifyUploadedObject(input.key, "room");
 
     const media = await prisma.$transaction(async (tx) => {
       const existing = await tx.roomMedia.findFirst({
-        where: { roomTypeId, url },
-        select: { id: true, url: true, altText: true, sortOrder: true },
+        where: { roomTypeId, url: verified.url },
+        select: { id: true, url: true, mediaType: true, altText: true, sortOrder: true },
       });
       if (existing) return existing;
 
@@ -97,7 +99,8 @@ export class MediaService {
       return tx.roomMedia.create({
         data: {
           roomTypeId,
-          url,
+          url: verified.url,
+          mediaType: verified.mediaType,
           altText: input.altText?.trim() || null,
           sortOrder: (last._max.sortOrder ?? -1) + 1,
         },
@@ -114,12 +117,20 @@ export class MediaService {
   async deletePropertyMedia(ownerId: string, mediaId: string): Promise<{ ok: true }> {
     const media = await prisma.propertyMedia.findFirst({
       where: { id: mediaId, property: { ownerId } },
-      select: { id: true, url: true, propertyId: true, property: { select: { status: true } } },
+      select: {
+        id: true,
+        url: true,
+        mediaType: true,
+        propertyId: true,
+        property: { select: { status: true } },
+      },
     });
-    if (!media) throw new NotFoundException("Photo not found");
+    if (!media) throw new NotFoundException("Media not found");
 
-    if (media.property.status === "APPROVED") {
-      const count = await prisma.propertyMedia.count({ where: { propertyId: media.propertyId } });
+    if (media.property.status === "APPROVED" && media.mediaType === "IMAGE") {
+      const count = await prisma.propertyMedia.count({
+        where: { propertyId: media.propertyId, mediaType: "IMAGE" },
+      });
       if (count <= MIN_PROPERTY_IMAGES) {
         throw new BadRequestException(
           `Live listings must keep at least ${MIN_PROPERTY_IMAGES} photos. Add a replacement first.`,
@@ -141,7 +152,7 @@ export class MediaService {
       where: { id: mediaId, roomType: { property: { ownerId } } },
       select: { id: true, url: true, roomType: { select: { propertyId: true } } },
     });
-    if (!media) throw new NotFoundException("Photo not found");
+    if (!media) throw new NotFoundException("Media not found");
 
     await prisma.roomMedia.delete({ where: { id: media.id } });
     await this.propertyReview.recordContentChange(media.roomType.propertyId, {
@@ -161,7 +172,7 @@ export class MediaService {
       where: { id: mediaId, property: { ownerId } },
       select: { id: true },
     });
-    if (!media) throw new NotFoundException("Photo not found");
+    if (!media) throw new NotFoundException("Media not found");
     const updated = await prisma.propertyMedia.update({
       where: { id: media.id },
       data: { altText: altText?.trim() || null },
@@ -178,7 +189,7 @@ export class MediaService {
       where: { id: mediaId, roomType: { property: { ownerId } } },
       select: { id: true },
     });
-    if (!media) throw new NotFoundException("Photo not found");
+    if (!media) throw new NotFoundException("Media not found");
     const updated = await prisma.roomMedia.update({
       where: { id: media.id },
       data: { altText: altText?.trim() || null },
@@ -244,33 +255,43 @@ export class MediaService {
 
   /**
    * The trust boundary of the upload flow: the client hands us a key, and we
-   * confirm with storage that the object exists, is an allowed image type, and
+   * confirm with storage that the object exists, is an allowed media type, and
    * is within the size ceiling — then derive the public URL ourselves.
    */
-  private async verifyUploadedObject(key: string, scope: "property" | "room"): Promise<string> {
+  private async verifyUploadedObject(
+    key: string,
+    scope: "property" | "room",
+  ): Promise<{ url: string; mediaType: "IMAGE" | "VIDEO" }> {
     if (!key.startsWith(`${scope}/`)) {
       throw new BadRequestException("This upload belongs to a different media scope.");
     }
     const info = await this.storage.headObject(key);
     if (!info) {
       throw new BadRequestException(
-        "Uploaded file not found in storage. Upload the photo first, then attach it.",
+        "Uploaded file not found in storage. Upload the media first, then attach it.",
       );
     }
+    const mediaType = mediaKindForContentType(info.contentType);
     if (
       !info.contentType ||
-      !(IMAGE_CONTENT_TYPES as readonly string[]).includes(info.contentType)
+      !mediaType ||
+      !(MEDIA_CONTENT_TYPES as readonly string[]).includes(info.contentType)
     ) {
       await this.storage.deleteObject(key).catch(() => {});
-      throw new BadRequestException("Only JPEG, PNG, WebP, or AVIF images can be attached.");
-    }
-    if (info.sizeBytes <= 0 || info.sizeBytes > MAX_IMAGE_BYTES) {
-      await this.storage.deleteObject(key).catch(() => {});
       throw new BadRequestException(
-        `Images must be between 1 byte and ${Math.round(MAX_IMAGE_BYTES / (1024 * 1024))} MB.`,
+        "Only JPEG, PNG, WebP, AVIF, MP4, MOV, or WebM media can be attached.",
       );
     }
-    return this.storage.publicUrl(key);
+    const maxBytes = maxBytesForContentType(info.contentType);
+    if (info.sizeBytes <= 0 || info.sizeBytes > maxBytes) {
+      await this.storage.deleteObject(key).catch(() => {});
+      throw new BadRequestException(
+        `${
+          mediaType === "VIDEO" ? "Videos" : "Images"
+        } must be between 1 byte and ${Math.round(maxBytes / (1024 * 1024))} MB.`,
+      );
+    }
+    return { url: this.storage.publicUrl(key), mediaType };
   }
 
   /**
@@ -317,10 +338,17 @@ export class MediaService {
 function toMediaItem(m: {
   id: string;
   url: string;
+  mediaType: "IMAGE" | "VIDEO";
   altText: string | null;
   sortOrder: number;
 }): MediaItem {
-  return { id: m.id, url: m.url, altText: m.altText, sortOrder: m.sortOrder };
+  return {
+    id: m.id,
+    url: m.url,
+    mediaType: m.mediaType,
+    altText: m.altText,
+    sortOrder: m.sortOrder,
+  };
 }
 
 /** Reorder payloads must be a permutation of the gallery — no more, no less. */

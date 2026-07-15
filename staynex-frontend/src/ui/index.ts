@@ -4,7 +4,7 @@ export {
   type ButtonProps,
   type LinkButtonProps,
 } from "./button";
-export { Badge, ReviewStatusBadge, StatusBadge } from "./badge";
+export { Badge, ReviewStatusBadge, StatusBadge, VerifiedBadge } from "./badge";
 export { Field, Input, Textarea, Select } from "./field";
 export { CurrencyInput } from "./currency-input";
 export { CodeInput } from "./code-input";

@@ -23,7 +23,12 @@ export default async function ReviewPropertyPage({
     notFound();
   }
 
-  const slides = property.media.map((m) => ({ id: m.id, url: m.url, altText: m.altText }));
+  const slides = property.media.map((m) => ({
+    id: m.id,
+    url: m.url,
+    mediaType: m.mediaType,
+    altText: m.altText,
+  }));
 
   return (
     <div className="space-y-6">

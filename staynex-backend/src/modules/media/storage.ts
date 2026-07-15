@@ -21,7 +21,7 @@ export interface StoredObjectSummary {
 /**
  * Storage abstraction for media uploads. The host UI requests an upload target,
  * uploads the file directly to the target, then attaches the object BY KEY. The
- * backend verifies the object (exists, is an allowed image, within size) before
+ * backend verifies the object (exists, is an allowed media type, within size) before
  * persisting anything — the client never supplies a URL. This keeps large media
  * off the API without trusting client input.
  */
@@ -43,18 +43,20 @@ export const STORAGE_PROVIDER = "STORAGE_PROVIDER";
  * Credential-free dev/local fallback. Used only when R2 credentials are not
  * configured (never in production — see `MediaModule`), so local development
  * without cloud storage still exercises the request/attach flow shape. The
- * `uploadUrl` does not resolve to a real host, and `headObject` reports a
- * plausible image so the attach step can be exercised too.
+ * `uploadUrl` does not resolve to a real host, and `headObject` reports the
+ * requested media type so the attach step can be exercised too.
  */
 @Injectable()
 export class StubStorageProvider implements StorageProvider {
   private readonly logger = new Logger(StubStorageProvider.name);
+  private readonly objects = new Map<string, StoredObjectInfo>();
   private readonly publicBase = (
     process.env.CLOUDFLARE_R2_PUBLIC_BASE_URL ?? "https://media.staynex.local"
   ).replace(/\/+$/, "");
 
   async createUploadTarget(input: CreateUploadInput): Promise<MediaUploadTarget> {
     this.logger.debug(`stub upload target for ${input.key} (${input.contentType})`);
+    this.objects.set(input.key, { contentType: input.contentType, sizeBytes: 1024 });
     return {
       key: input.key,
       uploadUrl: `${this.publicBase}/__stub-upload/${encodeURIComponent(input.key)}`,
@@ -75,8 +77,8 @@ export class StubStorageProvider implements StorageProvider {
   }
 
   async headObject(key: string): Promise<StoredObjectInfo | null> {
-    this.logger.debug(`stub head for ${key} — reporting a small JPEG`);
-    return { contentType: "image/jpeg", sizeBytes: 1024 };
+    this.logger.debug(`stub head for ${key}`);
+    return this.objects.get(key) ?? null;
   }
 
   async deleteObject(key: string): Promise<void> {

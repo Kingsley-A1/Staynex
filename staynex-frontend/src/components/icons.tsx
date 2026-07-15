@@ -267,6 +267,7 @@ export type IconName =
   | "testimonials"
   | "audit"
   | "ai"
+  | "chart"
   | "settings"
   | "properties"
   | "onboarding"
@@ -282,6 +283,7 @@ export const NAV_ICONS: Record<IconName, ComponentType<IconProps>> = {
   testimonials: IconTestimonials,
   audit: IconAudit,
   ai: IconAi,
+  chart: IconChart,
   settings: IconSettings,
   properties: IconProperties,
   onboarding: IconOnboarding,

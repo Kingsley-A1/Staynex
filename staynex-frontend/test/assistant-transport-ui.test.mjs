@@ -124,7 +124,7 @@ test("message actions are server-backed and the universal launcher stays compact
   ]);
 
   const launcher = widget.match(
-    /<button[\s\S]*?aria-label="Open Staynex AI"[\s\S]*?<\/button>/,
+    /<button[\s\S]*?aria-label="Ask Staynex AI, open chat"[\s\S]*?<\/button>/,
   )?.[0];
   assert.ok(launcher);
   assert.doesNotMatch(launcher, /<IconAi/);

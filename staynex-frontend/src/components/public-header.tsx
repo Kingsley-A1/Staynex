@@ -8,7 +8,7 @@ export function PublicHeader() {
       <div className="layout-container flex h-16 items-center justify-between gap-4">
         <Link
           href="/"
-          aria-label="Staynex Bookings home"
+          aria-label="Staynex Bookings"
           className="inline-flex items-center"
         >
           <Brandmark priority hideSuffixOnMobile />

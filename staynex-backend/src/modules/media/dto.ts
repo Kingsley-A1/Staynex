@@ -12,8 +12,22 @@ export const IMAGE_CONTENT_TYPES = [
   "image/avif",
 ] as const;
 
+export const VIDEO_CONTENT_TYPES = [
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/x-m4v",
+] as const;
+
+export const MEDIA_CONTENT_TYPES = [
+  ...IMAGE_CONTENT_TYPES,
+  ...VIDEO_CONTENT_TYPES,
+] as const;
+
 /** Server-side ceiling per image. The client downscales well below this. */
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+export type MediaKind = "IMAGE" | "VIDEO";
 
 export const MEDIA_SCOPES = ["property", "room"] as const;
 export type MediaScope = (typeof MEDIA_SCOPES)[number];
@@ -26,7 +40,7 @@ export const mediaKeyPattern = /^(property|room)\/[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 export const requestUploadSchema = z.object({
   scope: z.enum(MEDIA_SCOPES),
   filename: z.string().min(1).max(200),
-  contentType: z.enum(IMAGE_CONTENT_TYPES),
+  contentType: z.enum(MEDIA_CONTENT_TYPES),
 });
 export type RequestUploadInput = z.infer<typeof requestUploadSchema>;
 
@@ -47,3 +61,14 @@ export const reorderMediaSchema = z.object({
   mediaIds: z.array(z.string().min(1).max(64)).min(1).max(100),
 });
 export type ReorderMediaInput = z.infer<typeof reorderMediaSchema>;
+
+export function mediaKindForContentType(contentType: string | null | undefined): MediaKind | null {
+  if (!contentType) return null;
+  if ((IMAGE_CONTENT_TYPES as readonly string[]).includes(contentType)) return "IMAGE";
+  if ((VIDEO_CONTENT_TYPES as readonly string[]).includes(contentType)) return "VIDEO";
+  return null;
+}
+
+export function maxBytesForContentType(contentType: string): number {
+  return mediaKindForContentType(contentType) === "VIDEO" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+}

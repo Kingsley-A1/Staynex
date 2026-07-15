@@ -56,9 +56,12 @@ export interface PropertyReviewRunView {
   checks: PropertyReviewCheckView[];
 }
 
+export type MediaTypeValue = "IMAGE" | "VIDEO";
+
 export interface MediaItem {
   id: string;
   url: string;
+  mediaType: MediaTypeValue;
   altText: string | null;
   sortOrder: number;
 }
@@ -478,7 +481,11 @@ export interface AuditLogRow {
   entityType: string;
   entityId: string;
   actorUserId: string | null;
+  actorName: string | null;
+  actorEmail: string | null;
   propertyId: string | null;
+  propertyName: string | null;
+  propertySlug: string | null;
   createdAt: string;
 }
 
@@ -488,6 +495,43 @@ export interface AiLogRow {
   actionType: string;
   summary: string | null;
   createdAt: string;
+}
+
+export type WebVitalName = "FCP" | "LCP" | "CLS" | "INP" | "TTFB";
+
+export interface PerformanceMetricSummary {
+  name: WebVitalName;
+  sampleCount: number;
+  p75: number | null;
+  average: number | null;
+  goodCount: number;
+  needsImprovementCount: number;
+  poorCount: number;
+  target: number | null;
+  targetMetRate: number | null;
+  latestValue: number | null;
+  latestRating: string | null;
+  latestRoute: string | null;
+  updatedAt: string | null;
+}
+
+export interface PerformanceRouteSummary {
+  route: string;
+  sampleCount: number;
+  lcpP75: number | null;
+  inpP75: number | null;
+  clsP75: number | null;
+  poorCount: number;
+  updatedAt: string;
+}
+
+export interface AdminPerformanceView {
+  generatedAt: string;
+  windowHours: number;
+  totalSamples: number;
+  metrics: PerformanceMetricSummary[];
+  routes: PerformanceRouteSummary[];
+  recommendations: string[];
 }
 
 // ---  AI assistant ---

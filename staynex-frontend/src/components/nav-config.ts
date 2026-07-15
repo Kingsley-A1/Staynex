@@ -106,6 +106,12 @@ export const ADMIN_NAV: WorkspaceNavItem[] = [
   { href: "/admin/audit", label: "Audit log", icon: "audit", section: "Trust" },
   { href: "/admin/ai-logs", label: "AI logs", icon: "ai", section: "Trust" },
   {
+    href: "/admin/performance",
+    label: "Performance",
+    icon: "chart",
+    section: "System",
+  },
+  {
     href: "/admin/settings",
     label: "Settings",
     icon: "settings",
