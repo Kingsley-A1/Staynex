@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { formatNairaFromKobo } from "@/lib/format";
 import type { PropertySummary } from "@/lib/types";
-import { StatusBadge } from "./badge";
+import { StatusBadge, VerifiedBadge } from "./badge";
 import { OptimizedFillImage } from "./optimized-fill-image";
 
 export function PropertyCard({
@@ -40,9 +40,13 @@ export function PropertyCard({
           />
         ) : null}
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-        {!assistant && (
+        {(property.status === "APPROVED" || !assistant) && (
           <div className="absolute left-3 top-3">
-            <StatusBadge status={property.status} />
+            {property.status === "APPROVED" ? (
+              <VerifiedBadge />
+            ) : (
+              <StatusBadge status={property.status} />
+            )}
           </div>
         )}
       </div>

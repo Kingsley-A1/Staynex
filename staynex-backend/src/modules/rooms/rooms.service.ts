@@ -10,6 +10,7 @@ import type {
   CreateRoomUnitInput,
   UpdateRoomTypeInput,
 } from "./dto";
+import { DEFAULT_ROOM_UNIT_COUNT } from "./dto";
 import { PropertyReviewService } from "../property-review/property-review.service";
 
 /** Owner room-type and room-unit setup for a property. */
@@ -32,20 +33,35 @@ export class RoomsService {
 
   async createRoomType(ownerId: string, input: CreateRoomTypeInput) {
     await this.assertOwnedProperty(ownerId, input.propertyId);
-    const roomType = await prisma.roomType.create({
-      data: {
-        propertyId: input.propertyId,
-        name: input.name,
-        description: input.description ?? null,
-        basePriceKobo: input.basePriceKobo,
-        maxGuests: input.maxGuests,
-      },
+    const unitCount = input.unitCount ?? DEFAULT_ROOM_UNIT_COUNT;
+    const roomType = await prisma.$transaction(async (tx) => {
+      const created = await tx.roomType.create({
+        data: {
+          propertyId: input.propertyId,
+          name: input.name,
+          description: input.description ?? null,
+          basePriceKobo: input.basePriceKobo,
+          maxGuests: input.maxGuests,
+        },
+      });
+      await tx.roomUnit.createMany({
+        data: Array.from({ length: unitCount }, () => ({
+          roomTypeId: created.id,
+        })),
+      });
+      return created;
     });
-    await this.propertyReview.recordContentChange(input.propertyId, { actorUserId: ownerId });
+    await this.propertyReview.recordContentChange(input.propertyId, {
+      actorUserId: ownerId,
+    });
     return roomType;
   }
 
-  async updateRoomType(ownerId: string, id: string, input: UpdateRoomTypeInput) {
+  async updateRoomType(
+    ownerId: string,
+    id: string,
+    input: UpdateRoomTypeInput,
+  ) {
     const roomType = await this.assertOwnedRoomType(ownerId, id);
     if (!hasDefinedValue(input)) {
       return prisma.roomType.findUniqueOrThrow({ where: { id } });
@@ -59,7 +75,9 @@ export class RoomsService {
         maxGuests: input.maxGuests,
       },
     });
-    await this.propertyReview.recordContentChange(roomType.propertyId, { actorUserId: ownerId });
+    await this.propertyReview.recordContentChange(roomType.propertyId, {
+      actorUserId: ownerId,
+    });
     return updated;
   }
 
@@ -76,7 +94,9 @@ export class RoomsService {
     const roomUnit = await prisma.roomUnit.create({
       data: { roomTypeId: input.roomTypeId, code: input.code ?? null },
     });
-    await this.propertyReview.recordContentChange(roomType.propertyId, { actorUserId: ownerId });
+    await this.propertyReview.recordContentChange(roomType.propertyId, {
+      actorUserId: ownerId,
+    });
     return roomUnit;
   }
 
@@ -102,7 +122,9 @@ export class RoomsService {
             where: { roomTypeId, isActive: true },
           });
           if (activeCount === 0) {
-            throw new ConflictException("This room type has no active units to remove.");
+            throw new ConflictException(
+              "This room type has no active units to remove.",
+            );
           }
 
           const removable = await tx.roomUnit.findFirst({
@@ -178,7 +200,10 @@ export class RoomsService {
     }
   }
 
-  private async assertOwnedProperty(ownerId: string, propertyId: string): Promise<void> {
+  private async assertOwnedProperty(
+    ownerId: string,
+    propertyId: string,
+  ): Promise<void> {
     const property = await prisma.property.findFirst({
       where: { id: propertyId, ownerId },
       select: { id: true },

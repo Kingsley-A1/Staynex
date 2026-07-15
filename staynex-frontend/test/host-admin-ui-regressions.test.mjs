@@ -69,7 +69,10 @@ test("property editor exposes availability and places photos before review statu
   assert.match(availability, /Next 90 days/);
   assert.match(availability, /Choose dates/);
   assert.match(availability, /Rooms offered for booking/);
-  assert.match(availability, /Existing bookings and holds are protected automatically/);
+  assert.match(
+    availability,
+    /Existing bookings and holds are protected automatically/,
+  );
   assert.match(availability, /aria-pressed={selected}/);
   assert.match(availability, /aria-expanded={advancedOpen}/);
 });
@@ -162,4 +165,28 @@ test("guest images use bounded high-quality optimization and offline navigation 
   assert.match(reporter, /LCP: 2_500/);
   assert.match(reporter, /INP: 200/);
   assert.match(reporter, /CLS: 0\.1/);
+});
+
+test("approved property cards use the accessible Staynex verified mark", async () => {
+  const [card, badge, icons] = await Promise.all([
+    source("../src/ui/property-card.tsx"),
+    source("../src/ui/badge.tsx"),
+    source("../src/components/icons.tsx"),
+  ]);
+  assert.match(card, /property\.status === "APPROVED"/);
+  assert.match(card, /<VerifiedBadge \/>/);
+  assert.match(badge, /<span>Verified<\/span>/);
+  assert.match(badge, /text-primary/);
+  assert.match(icons, /export function IconVerified/);
+});
+
+test("new room types visibly and server-contractually default to one room", async () => {
+  const [rooms, api] = await Promise.all([
+    source("../src/features/properties/room-manager.tsx"),
+    source("../src/lib/api.ts"),
+  ]);
+  assert.match(rooms, /const DEFAULT_ROOM_QUANTITY = 1/);
+  assert.match(rooms, /label="Room quantity"/);
+  assert.match(rooms, /unitCount: Number\(roomQuantity\)/);
+  assert.match(api, /unitCount\?: number/);
 });

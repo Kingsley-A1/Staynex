@@ -235,6 +235,7 @@ export const hostApi = {
     name: string;
     basePriceKobo: number;
     maxGuests: number;
+    unitCount?: number;
     description?: string;
   }) =>
     request<unknown>("/host/room-types", {

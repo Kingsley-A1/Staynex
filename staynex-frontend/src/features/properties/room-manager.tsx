@@ -8,6 +8,9 @@ import { formatNairaFromKobo } from "@/lib/format";
 import { MediaManager } from "@/features/media/media-manager";
 import type { RoomTypeDetail } from "@/lib/types";
 
+const DEFAULT_ROOM_QUANTITY = 1;
+const MAX_ROOM_QUANTITY = 500;
+
 export function RoomManager({
   propertyId,
   roomTypes,
@@ -19,6 +22,9 @@ export function RoomManager({
   const [name, setName] = useState("");
   const [priceNaira, setPriceNaira] = useState("");
   const [maxGuests, setMaxGuests] = useState("2");
+  const [roomQuantity, setRoomQuantity] = useState(
+    String(DEFAULT_ROOM_QUANTITY),
+  );
   const [adding, setAdding] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,10 +59,12 @@ export function RoomManager({
         name,
         basePriceKobo: Number(priceNaira) * 100,
         maxGuests: Number(maxGuests),
+        unitCount: Number(roomQuantity) || DEFAULT_ROOM_QUANTITY,
       });
       setName("");
       setPriceNaira("");
       setMaxGuests("2");
+      setRoomQuantity(String(DEFAULT_ROOM_QUANTITY));
       setAdding(false);
       router.refresh();
     } catch (err) {
@@ -152,7 +160,8 @@ export function RoomManager({
                   </div>
                   <p className="text-caption">
                     {formatNairaFromKobo(rt.basePriceKobo)} / night · up to{" "}
-                    {rt.maxGuests} guests · {unitCounts[rt.id] ?? rt.unitCount} unit
+                    {rt.maxGuests} guests · {unitCounts[rt.id] ?? rt.unitCount}{" "}
+                    unit
                     {(unitCounts[rt.id] ?? rt.unitCount) === 1 ? "" : "s"}
                   </p>
                 </div>
@@ -243,7 +252,7 @@ export function RoomManager({
       {adding && (
         <form
           onSubmit={addRoomType}
-          className="surface-card grid gap-3 p-4 sm:grid-cols-[1.5fr_1fr_0.8fr_auto] sm:items-end"
+          className="surface-card grid gap-3 p-4 sm:grid-cols-[1.4fr_1fr_0.75fr_0.75fr] sm:items-end"
         >
           <Field label="Room type" htmlFor="rt-name" required>
             <Input
@@ -272,6 +281,17 @@ export function RoomManager({
               max={20}
               value={maxGuests}
               onChange={(e) => setMaxGuests(e.target.value)}
+              required
+            />
+          </Field>
+          <Field label="Room quantity" htmlFor="rt-quantity" required>
+            <Input
+              id="rt-quantity"
+              type="number"
+              min={1}
+              max={MAX_ROOM_QUANTITY}
+              value={roomQuantity}
+              onChange={(e) => setRoomQuantity(e.target.value)}
               required
             />
           </Field>

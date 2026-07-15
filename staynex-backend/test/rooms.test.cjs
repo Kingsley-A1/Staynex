@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { ConflictException } = require("@nestjs/common");
 const { prisma } = require("../dist/db/client.js");
+const { createRoomTypeSchema } = require("../dist/src/modules/rooms/dto.js");
 const { RoomsService } = require("../dist/src/modules/rooms/rooms.service.js");
 
 function mockRoomsDatabase({
@@ -56,7 +57,10 @@ test("decreasing room units deactivates one unit and caps future availability", 
   const database = mockRoomsDatabase();
   const service = new RoomsService(database.review);
   try {
-    const result = await service.deactivateOneRoomUnit("owner-1", "room-type-1");
+    const result = await service.deactivateOneRoomUnit(
+      "owner-1",
+      "room-type-1",
+    );
     assert.deepEqual(result, { unitCount: 2 });
     assert.equal(database.calls.deactivated, 1);
     assert.equal(database.calls.capacityUpdates, 1);
@@ -100,5 +104,67 @@ test("decreasing room units preserves units attached to current stays", async ()
     assert.equal(database.calls.deactivated, 0);
   } finally {
     database.restore();
+  }
+});
+
+test("new room types default to one unit when quantity is omitted", () => {
+  const parsed = createRoomTypeSchema.parse({
+    propertyId: "property-1",
+    name: "Deluxe Suite",
+    basePriceKobo: 6000000,
+    maxGuests: 2,
+  });
+  assert.equal(parsed.unitCount, 1);
+});
+
+test("creating a room type provisions the requested room units atomically", async () => {
+  const originals = {
+    findProperty: prisma.property.findFirst,
+    transaction: prisma.$transaction,
+  };
+  const calls = { roomTypeCreate: 0, createManyRows: null, reviews: 0 };
+  prisma.property.findFirst = async () => ({ id: "property-1" });
+  prisma.$transaction = async (callback) =>
+    callback({
+      roomType: {
+        create: async ({ data }) => {
+          calls.roomTypeCreate += 1;
+          return { id: "room-type-1", ...data };
+        },
+      },
+      roomUnit: {
+        createMany: async ({ data }) => {
+          calls.createManyRows = data;
+          return { count: data.length };
+        },
+      },
+    });
+  const review = {
+    async recordContentChange() {
+      calls.reviews += 1;
+    },
+  };
+  const service = new RoomsService(review);
+
+  try {
+    const result = await service.createRoomType("owner-1", {
+      propertyId: "property-1",
+      name: "Executive Suite",
+      basePriceKobo: 8500000,
+      maxGuests: 3,
+      unitCount: 3,
+    });
+    assert.equal(result.id, "room-type-1");
+    assert.equal(calls.roomTypeCreate, 1);
+    assert.equal(calls.reviews, 1);
+    assert.equal(calls.createManyRows.length, 3);
+    assert.deepEqual(calls.createManyRows, [
+      { roomTypeId: "room-type-1" },
+      { roomTypeId: "room-type-1" },
+      { roomTypeId: "room-type-1" },
+    ]);
+  } finally {
+    prisma.property.findFirst = originals.findProperty;
+    prisma.$transaction = originals.transaction;
   }
 });
