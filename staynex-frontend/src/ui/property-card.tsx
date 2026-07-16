@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { formatNairaFromKobo } from "@/lib/format";
 import type { PropertySummary } from "@/lib/types";
-import { StatusBadge } from "./badge";
+import { StatusBadge, VerifiedBadge } from "./badge";
 import { OptimizedFillImage } from "./optimized-fill-image";
 
 export function PropertyCard({
@@ -18,6 +18,11 @@ export function PropertyCard({
   const assistant = variant === "assistant";
   const resolvedActionLabel =
     actionLabel ?? (assistant ? "View stay" : "Manage");
+  const availabilityEnded =
+    property.status === "APPROVED" &&
+    (!property.availabilityEndsAt ||
+      property.availabilityEndsAt.slice(0, 10) <
+        new Date().toISOString().slice(0, 10));
 
   return (
     <Link
@@ -40,10 +45,20 @@ export function PropertyCard({
           />
         ) : null}
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-        {!assistant && (
+        {(property.status === "APPROVED" || !assistant) && (
           <div className="absolute left-3 top-3">
-            <StatusBadge status={property.status} />
+            {property.status === "APPROVED" ? (
+              <VerifiedBadge />
+            ) : (
+              <StatusBadge status={property.status} />
+            )}
           </div>
+        )}
+        {availabilityEnded && !assistant && (
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-error-border bg-error-surface px-2.5 py-1 text-xs font-semibold text-error shadow-sm">
+            <span className="size-1.5 rounded-full bg-error" aria-hidden />
+            Availability ended
+          </span>
         )}
       </div>
       <div className={`flex flex-1 flex-col ${assistant ? "p-3" : "p-4"}`}>

@@ -28,6 +28,7 @@ const cases = [
   { name: "property-review-needs-changes", render: () => templates.renderPropertyReviewNeedsChangesEmail({ ...commonProperty, needsChanges: true, failedLabels: [`Description <script>`, `Images & pricing`] }) },
   { name: "property-review-needs-changes-minimal", render: () => templates.renderPropertyReviewNeedsChangesEmail({ ...commonProperty, needsChanges: true }) },
   { name: "property-published", render: () => templates.renderPropertyPublishedEmail({ ...commonProperty, published: true }) },
+  { name: "property-availability-expiring", render: () => templates.renderPropertyAvailabilityExpiringEmail({ ...commonProperty, availabilityEndsAt: "2026-08-20T00:00:00.000Z", imageUrl: "https://media.staynexbookings.ng/property/preview.jpg" }) },
   { name: "property-approved", render: () => templates.renderPropertyApprovedEmail({ ...commonProperty, approved: true, reviewerNote: `Approved <script> & "note"` }) },
   { name: "property-approved-no-note", render: () => templates.renderPropertyApprovedEmail({ ...commonProperty, approved: true }) },
   { name: "property-changes-requested", render: () => templates.renderPropertyChangesRequestedEmail({ ...commonProperty, changesRequested: true, reviewerNote: `Fix <details> & "copy"` }) },

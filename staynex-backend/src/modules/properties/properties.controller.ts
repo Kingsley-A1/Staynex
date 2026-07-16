@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -77,5 +78,16 @@ export class PropertiesController {
   })
   async submit(@CurrentUser() owner: AuthUser, @Param("id") id: string) {
     return this.properties.submitForReview(owner.id, id);
+  }
+
+  @Delete(":id")
+  @RateLimit({
+    bucket: "owner:property-delete",
+    limit: 6,
+    windowMs: 60_000,
+    keyBy: ["user"],
+  })
+  async archive(@CurrentUser() owner: AuthUser, @Param("id") id: string) {
+    return this.properties.archiveOwned(owner.id, id);
   }
 }

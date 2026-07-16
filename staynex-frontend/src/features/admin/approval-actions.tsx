@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Textarea } from "@/ui";
-import { adminApi } from "@/lib/api";
+import { adminApi, apiErrorMessage } from "@/lib/api";
 import type { ApprovalDecision } from "@/lib/types";
 
 export function ApprovalActions({ propertyId }: { propertyId: string }) {
@@ -24,7 +24,12 @@ export function ApprovalActions({ propertyId }: { propertyId: string }) {
       setDone(result.status);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Action failed");
+      setError(
+        apiErrorMessage(
+          err,
+          "The review decision could not be recorded. Check the property state and try again.",
+        ),
+      );
     } finally {
       setPending(null);
     }
@@ -63,11 +68,17 @@ export function ApprovalActions({ propertyId }: { propertyId: string }) {
         >
           {pending === "REQUEST_CHANGES" ? "Sending…" : "Request changes"}
         </Button>
-        <Button variant="danger" onClick={() => decide("REJECT")} disabled={pending !== null}>
+        <Button
+          variant="danger"
+          onClick={() => decide("REJECT")}
+          disabled={pending !== null}
+        >
           {pending === "REJECT" ? "Rejecting…" : "Reject"}
         </Button>
       </div>
-      <p className="text-caption">Every decision writes an audit log entry on the backend.</p>
+      <p className="text-caption">
+        Every decision writes an audit log entry on the backend.
+      </p>
     </div>
   );
 }

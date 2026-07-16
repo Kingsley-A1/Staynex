@@ -212,6 +212,7 @@ export function MediaManager({
                   src={m.url}
                   alt={m.altText ?? `Photo ${index + 1}`}
                   sizes="(min-width: 640px) 200px, 45vw"
+                  quality={75}
                   className="absolute inset-0 size-full object-cover"
                 />
                 {index === 0 && (

@@ -7,7 +7,7 @@ const expectedPrimaryTemplates = [
   "booking-refunded", "check-in-reminder", "payout-settled", "payout-failed",
   "property-auto-review-scheduled", "property-review-needs-changes",
   "property-published", "property-approved", "property-changes-requested",
-  "property-rejected",
+  "property-rejected", "property-availability-expiring",
 ];
 
 test("preview inventory includes every transactional template", () => {

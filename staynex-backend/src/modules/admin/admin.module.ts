@@ -4,13 +4,21 @@ import { AuthModule } from "../auth/auth.module";
 import { BookingsModule } from "../bookings/bookings.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { PaymentsModule } from "../payments/payments.module";
+import { PropertiesModule } from "../properties/properties.module";
 import { AdminController } from "./admin.controller";
 import { AdminService } from "./admin.service";
 import { AdminUsersController } from "./admin-users.controller";
 import { AdminUsersService } from "./admin-users.service";
 
 @Module({
-  imports: [AuditModule, AuthModule, NotificationsModule, BookingsModule, PaymentsModule],
+  imports: [
+    AuditModule,
+    AuthModule,
+    NotificationsModule,
+    BookingsModule,
+    PaymentsModule,
+    PropertiesModule,
+  ],
   controllers: [AdminController, AdminUsersController],
   providers: [AdminService, AdminUsersService],
 })

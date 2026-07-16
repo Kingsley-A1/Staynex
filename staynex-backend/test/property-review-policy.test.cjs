@@ -20,6 +20,8 @@ function cleanFacts(overrides = {}) {
     activeUnitCount: 2,
     availableFutureDays: 30,
     duplicateCandidateCount: 0,
+    duplicateCandidateNames: [],
+    cityName: "Calabar",
     hasBannedContent: false,
     ...overrides,
   };
@@ -39,11 +41,19 @@ test("fails listings without the minimum property photos", () => {
 
 test("fails duplicate and off-platform contact attempts", () => {
   const result = evaluatePropertyReview(
-    cleanFacts({ duplicateCandidateCount: 1, hasBannedContent: true }),
+    cleanFacts({
+      duplicateCandidateCount: 1,
+      duplicateCandidateNames: ["Marina Crest Hotel"],
+      hasBannedContent: true,
+    }),
   );
   assert.equal(result.passed, false);
   assert.equal(result.checks.find((check) => check.key === "duplicate_listing").status, "FAIL");
   assert.equal(result.checks.find((check) => check.key === "content_safety").status, "FAIL");
+  assert.match(
+    result.checks.find((check) => check.key === "duplicate_listing").details,
+    /Marina Crest Hotel.*Calabar.*Archive the duplicate/,
+  );
 });
 
 test("detects off-platform listing content", () => {

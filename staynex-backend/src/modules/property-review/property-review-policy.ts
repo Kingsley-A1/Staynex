@@ -16,6 +16,8 @@ export interface PropertyReviewFacts {
   activeUnitCount: number;
   availableFutureDays: number;
   duplicateCandidateCount: number;
+  duplicateCandidateNames: string[];
+  cityName: string;
   hasBannedContent: boolean;
 }
 
@@ -201,7 +203,7 @@ function duplicateListingCheck(
     facts.duplicateCandidateCount === 0,
     facts.duplicateCandidateCount === 0
       ? "No duplicate listing was detected for this owner and city."
-      : "A similar listing already exists for this owner and city.",
+      : `This host already has ${facts.duplicateCandidateCount} active listing${facts.duplicateCandidateCount === 1 ? "" : "s"} named ${facts.duplicateCandidateNames.map((name) => `“${name}”`).join(", ")} in ${facts.cityName}. Archive the duplicate or correct this listing's name or city before resubmitting.`,
   );
 }
 

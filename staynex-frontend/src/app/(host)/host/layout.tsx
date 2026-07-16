@@ -12,7 +12,7 @@ export default async function HostLayout({
 
   return (
     <DashboardShell
-      workspace="Host workspace"
+      workspace="Host Workspace"
       nav={HOST_NAV}
       accountHref="/host/settings"
     >

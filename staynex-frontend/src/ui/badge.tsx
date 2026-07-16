@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { IconVerified } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import {
   PROPERTY_REVIEW_STATUS_LABELS,
@@ -7,7 +8,13 @@ import {
   type PropertyStatus,
 } from "@/lib/types";
 
-export function Badge({ children, className }: { children: ReactNode; className?: string }) {
+export function Badge({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <span
       className={cn(
@@ -29,7 +36,21 @@ const STATUS_STYLES: Record<PropertyStatus, string> = {
 };
 
 export function StatusBadge({ status }: { status: PropertyStatus }) {
-  return <Badge className={STATUS_STYLES[status]}>{PROPERTY_STATUS_LABELS[status]}</Badge>;
+  return (
+    <Badge className={STATUS_STYLES[status]}>
+      {PROPERTY_STATUS_LABELS[status]}
+    </Badge>
+  );
+}
+
+/** Guest-facing trust mark for a property approved by Staynex. */
+export function VerifiedBadge() {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/15 bg-surface/95 px-2.5 py-1 text-xs font-semibold text-primary shadow-sm backdrop-blur-sm">
+      <IconVerified className="size-4 shrink-0" />
+      <span>Verified</span>
+    </span>
+  );
 }
 
 const REVIEW_STATUS_STYLES: Record<PropertyReviewStatus, string> = {
@@ -42,7 +63,11 @@ const REVIEW_STATUS_STYLES: Record<PropertyReviewStatus, string> = {
   MANUAL_REVIEW: "border-primary/20 bg-primary/10 text-primary",
 };
 
-export function ReviewStatusBadge({ status }: { status: PropertyReviewStatus }) {
+export function ReviewStatusBadge({
+  status,
+}: {
+  status: PropertyReviewStatus;
+}) {
   return (
     <Badge className={REVIEW_STATUS_STYLES[status]}>
       {PROPERTY_REVIEW_STATUS_LABELS[status]}

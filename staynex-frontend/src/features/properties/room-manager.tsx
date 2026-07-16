@@ -8,6 +8,9 @@ import { formatNairaFromKobo } from "@/lib/format";
 import { MediaManager } from "@/features/media/media-manager";
 import type { RoomTypeDetail } from "@/lib/types";
 
+const DEFAULT_ROOM_QUANTITY = 1;
+const MAX_ROOM_QUANTITY = 500;
+
 export function RoomManager({
   propertyId,
   roomTypes,
@@ -19,12 +22,25 @@ export function RoomManager({
   const [name, setName] = useState("");
   const [priceNaira, setPriceNaira] = useState("");
   const [maxGuests, setMaxGuests] = useState("2");
+  const [roomQuantity, setRoomQuantity] = useState(
+    String(DEFAULT_ROOM_QUANTITY),
+  );
   const [adding, setAdding] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [justSavedId, setJustSavedId] = useState<string | null>(null);
   const [photosOpenId, setPhotosOpenId] = useState<string | null>(null);
+  const [updatingUnitsId, setUpdatingUnitsId] = useState<string | null>(null);
+  const [unitCounts, setUnitCounts] = useState<Record<string, number>>(() =>
+    Object.fromEntries(roomTypes.map((room) => [room.id, room.unitCount])),
+  );
+
+  useEffect(() => {
+    setUnitCounts(
+      Object.fromEntries(roomTypes.map((room) => [room.id, room.unitCount])),
+    );
+  }, [roomTypes]);
 
   // Clear the "Saved" flash a couple seconds after it appears.
   useEffect(() => {
@@ -43,10 +59,12 @@ export function RoomManager({
         name,
         basePriceKobo: Number(priceNaira) * 100,
         maxGuests: Number(maxGuests),
+        unitCount: Number(roomQuantity) || DEFAULT_ROOM_QUANTITY,
       });
       setName("");
       setPriceNaira("");
       setMaxGuests("2");
+      setRoomQuantity(String(DEFAULT_ROOM_QUANTITY));
       setAdding(false);
       router.refresh();
     } catch (err) {
@@ -56,13 +74,36 @@ export function RoomManager({
     }
   }
 
-  async function addUnit(roomTypeId: string) {
+  async function changeUnitCount(
+    roomTypeId: string,
+    direction: "increase" | "decrease",
+  ) {
     setError(null);
+    setUpdatingUnitsId(roomTypeId);
     try {
-      await hostApi.addRoomUnit({ roomTypeId });
+      if (direction === "increase") {
+        await hostApi.addRoomUnit({ roomTypeId });
+        setUnitCounts((current) => ({
+          ...current,
+          [roomTypeId]:
+            (current[roomTypeId] ??
+              roomTypes.find((room) => room.id === roomTypeId)?.unitCount ??
+              0) + 1,
+        }));
+      } else {
+        const result = await hostApi.removeRoomUnit(roomTypeId);
+        setUnitCounts((current) => ({
+          ...current,
+          [roomTypeId]: result.unitCount,
+        }));
+      }
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add unit");
+      setError(
+        err instanceof Error ? err.message : "Failed to update room units",
+      );
+    } finally {
+      setUpdatingUnitsId(null);
     }
   }
 
@@ -119,11 +160,12 @@ export function RoomManager({
                   </div>
                   <p className="text-caption">
                     {formatNairaFromKobo(rt.basePriceKobo)} / night · up to{" "}
-                    {rt.maxGuests} guests · {rt.unitCount} unit
-                    {rt.unitCount === 1 ? "" : "s"}
+                    {rt.maxGuests} guests · {unitCounts[rt.id] ?? rt.unitCount}{" "}
+                    unit
+                    {(unitCounts[rt.id] ?? rt.unitCount) === 1 ? "" : "s"}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-2">
                   <Button
                     type="button"
                     variant="ghost"
@@ -146,14 +188,52 @@ export function RoomManager({
                   >
                     Edit
                   </Button>
-                  <Button
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-ink">
+                    Physical rooms
+                  </p>
+                  <p className="text-caption">
+                    Set how many separate rooms of this type your property has.
+                  </p>
+                </div>
+                <div
+                  className="inline-flex min-h-11 w-fit items-center overflow-hidden rounded-md border border-input bg-surface-raised"
+                  role="group"
+                  aria-label={`${rt.name} physical room count`}
+                >
+                  <button
                     type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => addUnit(rt.id)}
+                    className="grid size-11 place-items-center text-xl font-medium text-ink transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label={`Remove one ${rt.name} room`}
+                    onClick={() => void changeUnitCount(rt.id, "decrease")}
+                    disabled={
+                      updatingUnitsId === rt.id ||
+                      (unitCounts[rt.id] ?? rt.unitCount) === 0
+                    }
                   >
-                    Add unit
-                  </Button>
+                    <span aria-hidden>−</span>
+                  </button>
+                  <output
+                    className="grid min-w-14 place-items-center self-stretch border-x border-input px-3 text-base font-semibold text-ink"
+                    aria-live="polite"
+                    aria-label={`${unitCounts[rt.id] ?? rt.unitCount} rooms configured`}
+                  >
+                    {updatingUnitsId === rt.id
+                      ? "…"
+                      : (unitCounts[rt.id] ?? rt.unitCount)}
+                  </output>
+                  <button
+                    type="button"
+                    className="grid size-11 place-items-center text-xl font-medium text-ink transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label={`Add one ${rt.name} room`}
+                    onClick={() => void changeUnitCount(rt.id, "increase")}
+                    disabled={updatingUnitsId === rt.id}
+                  >
+                    <span aria-hidden>+</span>
+                  </button>
                 </div>
               </div>
               {photosOpenId === rt.id && (
@@ -161,7 +241,7 @@ export function RoomManager({
                   target={{ kind: "room", id: rt.id }}
                   media={rt.media}
                   heading={`${rt.name} photos`}
-                  description="Shown in the room gallery on your listing page."
+                  description="Shown in the guest room gallery. Use sharp landscape photos at least 1600px wide."
                 />
               )}
             </li>
@@ -172,7 +252,7 @@ export function RoomManager({
       {adding && (
         <form
           onSubmit={addRoomType}
-          className="surface-card grid gap-3 p-4 sm:grid-cols-[1.5fr_1fr_0.8fr_auto] sm:items-end"
+          className="surface-card grid gap-3 p-4 sm:grid-cols-[1.4fr_1fr_0.75fr_0.75fr] sm:items-end"
         >
           <Field label="Room type" htmlFor="rt-name" required>
             <Input
@@ -201,6 +281,17 @@ export function RoomManager({
               max={20}
               value={maxGuests}
               onChange={(e) => setMaxGuests(e.target.value)}
+              required
+            />
+          </Field>
+          <Field label="Room quantity" htmlFor="rt-quantity" required>
+            <Input
+              id="rt-quantity"
+              type="number"
+              min={1}
+              max={MAX_ROOM_QUANTITY}
+              value={roomQuantity}
+              onChange={(event) => setRoomQuantity(event.target.value)}
               required
             />
           </Field>

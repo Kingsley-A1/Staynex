@@ -36,6 +36,7 @@ import type {
   HoldSummary,
   MediaItem,
   MediaUploadTarget,
+  NotificationRow,
   NotificationsPage,
   OwnerBookingsView,
   OwnerLocationView,
@@ -229,11 +230,17 @@ export const hostApi = {
     request<PropertyDetail>(`/host/properties/${id}/submit`, {
       method: "POST",
     }),
+  deleteProperty: (id: string) =>
+    request<{ id: string; status: "ARCHIVED" }>(
+      `/host/properties/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    ),
   createRoomType: (body: {
     propertyId: string;
     name: string;
     basePriceKobo: number;
     maxGuests: number;
+    unitCount?: number;
     description?: string;
   }) =>
     request<unknown>("/host/room-types", {
@@ -258,6 +265,11 @@ export const hostApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  removeRoomUnit: (roomTypeId: string) =>
+    request<{ unitCount: number }>(
+      `/host/room-types/${encodeURIComponent(roomTypeId)}/units`,
+      { method: "DELETE" },
+    ),
   requestUpload: (body: {
     scope: "property" | "room";
     filename: string;
@@ -363,6 +375,11 @@ export const adminApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  deleteProperty: (id: string) =>
+    request<{ id: string; status: "ARCHIVED" }>(
+      `/admin/properties/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    ),
   bookings: (query?: AdminListQuery) =>
     request<AdminBookingsPage>(`/admin/bookings${adminListQueryString(query)}`),
   payments: (query?: AdminListQuery) =>
@@ -505,7 +522,7 @@ export const authApi = {
       body: JSON.stringify(body),
     }),
   google: (idToken: string, intent?: "GUEST" | "OWNER") =>
-    request<AuthUser>("/auth/google", {
+    request<AuthResponse>("/auth/google", {
       method: "POST",
       body: JSON.stringify(intent ? { idToken, intent } : { idToken }),
     }),
@@ -849,6 +866,8 @@ export const notificationsApi = {
     request<NotificationsPage>(
       `/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
     ),
+  get: (id: string) =>
+    request<NotificationRow>(`/notifications/${encodeURIComponent(id)}`),
   markRead: (ids?: string[]) =>
     request<{ updated: number }>("/notifications/read", {
       method: "POST",

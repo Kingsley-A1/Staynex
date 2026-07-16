@@ -48,8 +48,9 @@ export function RoomGalleryCarousel({
               <OptimizedFillImage
                 src={slide.url}
                 alt={slide.altText ?? ""}
-                sizes="(min-width: 1024px) 60vw, 100vw"
+                sizes="(min-width: 1280px) 720px, (min-width: 1024px) 60vw, calc(100vw - 2rem)"
                 priority={i === 0}
+                quality={88}
                 className="absolute inset-0 h-full w-full object-cover"
               />
             ) : (

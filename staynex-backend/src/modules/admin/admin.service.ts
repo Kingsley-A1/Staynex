@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../db";
 import type {
@@ -40,13 +44,18 @@ import { auditActorId } from "../auth/auth.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PaymentEventsService } from "../payments/payment-events.service";
 import { PaystackService } from "../payments/paystack.service";
-import type { AdminListQuery, ApprovalActionInput, MarkPayoutPaidInput } from "./dto";
+import type {
+  AdminListQuery,
+  ApprovalActionInput,
+  MarkPayoutPaidInput,
+} from "./dto";
 
-const DECISION_STATUS: Record<ApprovalActionInput["decision"], PropertyStatus> = {
-  APPROVE: "APPROVED",
-  REJECT: "REJECTED",
-  REQUEST_CHANGES: "DRAFT",
-};
+const DECISION_STATUS: Record<ApprovalActionInput["decision"], PropertyStatus> =
+  {
+    APPROVE: "APPROVED",
+    REJECT: "REJECTED",
+    REQUEST_CHANGES: "DRAFT",
+  };
 
 const DECISION_ACTION: Record<ApprovalActionInput["decision"], string> = {
   APPROVE: "PROPERTY_APPROVED",
@@ -84,7 +93,9 @@ function encodeCursor(createdAt: Date, id: string): string {
   return `${createdAt.toISOString()}_${id}`;
 }
 
-function decodeCursor(cursor: string | undefined): { createdAt: Date; id: string } | null {
+function decodeCursor(
+  cursor: string | undefined,
+): { createdAt: Date; id: string } | null {
   if (!cursor) return null;
   const split = cursor.lastIndexOf("_");
   if (split <= 0) return null;
@@ -122,6 +133,15 @@ export class AdminService {
     const rows = await prisma.property.findMany({
       where: { status: "PENDING_REVIEW" },
       orderBy: { updatedAt: "asc" },
+      include: propertySummaryInclude,
+    });
+    return rows.map(toPropertySummary);
+  }
+
+  async listProperties(): Promise<PropertySummary[]> {
+    const rows = await prisma.property.findMany({
+      where: { status: { not: "ARCHIVED" } },
+      orderBy: { updatedAt: "desc" },
       include: propertySummaryInclude,
     });
     return rows.map(toPropertySummary);
@@ -200,7 +220,11 @@ export class AdminService {
       return next;
     });
 
-    await this.notifications.onPropertyManualDecision(propertyId, input.decision, input.note);
+    await this.notifications.onPropertyManualDecision(
+      propertyId,
+      input.decision,
+      input.note,
+    );
     return { id: updated.id, status: updated.status as PropertyStatus };
   }
 
@@ -216,11 +240,17 @@ export class AdminService {
             OR: [
               { id: query.q },
               { guestEmail: { contains: query.q, mode: "insensitive" } },
-              { payment: { reference: { contains: query.q, mode: "insensitive" } } },
+              {
+                payment: {
+                  reference: { contains: query.q, mode: "insensitive" },
+                },
+              },
               {
                 roomUnit: {
                   roomType: {
-                    property: { name: { contains: query.q, mode: "insensitive" } },
+                    property: {
+                      name: { contains: query.q, mode: "insensitive" },
+                    },
                   },
                 },
               },
@@ -239,7 +269,10 @@ export class AdminService {
     const last = page[page.length - 1];
     return {
       rows: page.map(toBookingRow),
-      nextCursor: rows.length > query.take && last ? encodeCursor(last.createdAt, last.id) : null,
+      nextCursor:
+        rows.length > query.take && last
+          ? encodeCursor(last.createdAt, last.id)
+          : null,
     };
   }
 
@@ -252,12 +285,18 @@ export class AdminService {
         ? {
             OR: [
               { reference: { contains: query.q, mode: "insensitive" } },
-              { booking: { guestEmail: { contains: query.q, mode: "insensitive" } } },
+              {
+                booking: {
+                  guestEmail: { contains: query.q, mode: "insensitive" },
+                },
+              },
               {
                 booking: {
                   roomUnit: {
                     roomType: {
-                      property: { name: { contains: query.q, mode: "insensitive" } },
+                      property: {
+                        name: { contains: query.q, mode: "insensitive" },
+                      },
                     },
                   },
                 },
@@ -277,7 +316,10 @@ export class AdminService {
     const last = page[page.length - 1];
     return {
       rows: page.map(toPaymentRow),
-      nextCursor: rows.length > query.take && last ? encodeCursor(last.createdAt, last.id) : null,
+      nextCursor:
+        rows.length > query.take && last
+          ? encodeCursor(last.createdAt, last.id)
+          : null,
     };
   }
 
@@ -295,7 +337,9 @@ export class AdminService {
         booking: {
           include: {
             roomUnit: {
-              include: { roomType: { include: { property: { select: { name: true } } } } },
+              include: {
+                roomType: { include: { property: { select: { name: true } } } },
+              },
             },
           },
         },
@@ -330,18 +374,23 @@ export class AdminService {
       status: p.status as PaymentState,
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
-      events: (p.reference ? (eventsByRef.get(p.reference) ?? []) : []).map((e) => ({
-        id: e.id,
-        eventType: e.eventType,
-        outcome: e.outcome,
-        detail: e.detail,
-        createdAt: e.createdAt.toISOString(),
-      })),
+      events: (p.reference ? (eventsByRef.get(p.reference) ?? []) : []).map(
+        (e) => ({
+          id: e.id,
+          eventType: e.eventType,
+          outcome: e.outcome,
+          detail: e.detail,
+          createdAt: e.createdAt.toISOString(),
+        }),
+      ),
     }));
   }
 
   /** Audited support action: force a fresh provider verification. */
-  async reverifyPayment(admin: AuthUser, reference: string): Promise<AdminPaymentRow> {
+  async reverifyPayment(
+    admin: AuthUser,
+    reference: string,
+  ): Promise<AdminPaymentRow> {
     const exists = await prisma.payment.findUnique({
       where: { reference },
       select: { id: true },
@@ -420,7 +469,11 @@ export class AdminService {
         include: payoutRowInclude,
       }),
       prisma.payment.aggregate({
-        _sum: { grossAmountKobo: true, platformFeeKobo: true, ownerPayoutKobo: true },
+        _sum: {
+          grossAmountKobo: true,
+          platformFeeKobo: true,
+          ownerPayoutKobo: true,
+        },
         where: { status: "SUCCESS" },
       }),
       prisma.payout.groupBy({ by: ["status"], _sum: { amount: true } }),
@@ -430,7 +483,8 @@ export class AdminService {
     let paidPayoutKobo = 0;
     for (const group of payoutByStatus) {
       const sum = group._sum.amount ?? 0;
-      if (group.status === "PENDING" || group.status === "PROCESSING") pendingPayoutKobo += sum;
+      if (group.status === "PENDING" || group.status === "PROCESSING")
+        pendingPayoutKobo += sum;
       else if (group.status === "PAID") paidPayoutKobo += sum;
     }
 
@@ -462,8 +516,10 @@ export class AdminService {
       select: { id: true, status: true, propertyId: true, eligibleAt: true },
     });
     if (!existing) throw new NotFoundException("Payout not found");
-    if (existing.status === "PAID") throw new BadRequestException("Payout is already marked paid");
-    if (existing.status === "FAILED") throw new BadRequestException("This payout is marked failed");
+    if (existing.status === "PAID")
+      throw new BadRequestException("Payout is already marked paid");
+    if (existing.status === "FAILED")
+      throw new BadRequestException("This payout is marked failed");
 
     const now = new Date();
     const early = existing.eligibleAt.getTime() > now.getTime();
@@ -474,7 +530,9 @@ export class AdminService {
       );
     }
     if (early && !input.note?.trim()) {
-      throw new BadRequestException("Early settlement requires a note explaining why.");
+      throw new BadRequestException(
+        "Early settlement requires a note explaining why.",
+      );
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -518,7 +576,9 @@ export class AdminService {
     });
     if (!existing) throw new NotFoundException("Payout not found");
     if (existing.status !== "PENDING" && existing.status !== "PROCESSING") {
-      throw new BadRequestException(`Only unsettled payouts can be failed (status is ${existing.status}).`);
+      throw new BadRequestException(
+        `Only unsettled payouts can be failed (status is ${existing.status}).`,
+      );
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -550,7 +610,10 @@ export class AdminService {
 
   /** Audit trail (admin overrides). */
   async auditLogs(): Promise<AuditLogRow[]> {
-    const rows = await prisma.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 });
+    const rows = await prisma.auditLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
     return rows.map((r) => ({
       id: r.id,
       action: r.action,
@@ -564,7 +627,10 @@ export class AdminService {
 
   /** AI assistant action log (conversations are tool-first; never authority). */
   async aiLogs(): Promise<AiLogRow[]> {
-    const rows = await prisma.aIActionLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 });
+    const rows = await prisma.aIActionLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
     return rows.map((r) => ({
       id: r.id,
       conversationId: r.conversationId,
@@ -574,7 +640,9 @@ export class AdminService {
     }));
   }
 
-  private async paymentRowByReference(reference: string): Promise<AdminPaymentRow> {
+  private async paymentRowByReference(
+    reference: string,
+  ): Promise<AdminPaymentRow> {
     const payment = await prisma.payment.findUnique({
       where: { reference },
       include: paymentRowInclude,

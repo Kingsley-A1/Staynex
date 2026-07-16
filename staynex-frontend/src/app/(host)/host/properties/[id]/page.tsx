@@ -6,6 +6,7 @@ import { RoomManager } from "@/features/properties/room-manager";
 import { AvailabilityEditor } from "@/features/properties/availability-editor";
 import { SubmitForReview } from "@/features/properties/submit-for-review";
 import { MediaManager } from "@/features/media/media-manager";
+import { PropertyDeleteAction } from "@/features/properties/property-delete-action";
 import { getCities, getHostProperty } from "@/lib/server-host";
 
 export const dynamic = "force-dynamic";
@@ -82,13 +83,19 @@ export default async function EditPropertyPage({
               target={{ kind: "property", id: property.id }}
               media={property.media}
               heading="Property photos"
-              description="Guests see the cover photo first. At least 4 photos are needed to go live; large photos are resized automatically."
+              description="Guests see the cover photo first. Add at least 4 sharp landscape photos; 1600px wide or larger is recommended. Large originals are optimized automatically."
             />
           </section>
           <section id="review-status" className="scroll-mt-24">
             <ReviewStatusPanel property={property} />
           </section>
           <SubmitForReview propertyId={property.id} status={property.status} />
+          <PropertyDeleteAction
+            propertyId={property.id}
+            propertyName={property.name}
+            scope="host"
+            returnHref="/host/properties"
+          />
         </aside>
       </div>
     </div>

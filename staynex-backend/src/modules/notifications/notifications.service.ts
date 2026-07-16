@@ -15,6 +15,7 @@ import {
   renderPayoutFailedEmail,
   renderPayoutSettledEmail,
   renderPropertyApprovedEmail,
+  renderPropertyAvailabilityExpiringEmail,
   renderPropertyAutoReviewScheduledEmail,
   renderPropertyChangesRequestedEmail,
   renderPropertyPublishedEmail,
@@ -53,6 +54,7 @@ interface NotifyInput {
   type: NotificationType;
   title: string;
   body: string;
+  imageUrl?: string;
   linkUrl?: string;
   bookingId?: string;
   /** Idempotency key — a trigger firing twice can never double-notify. */
@@ -98,6 +100,7 @@ export class NotificationsService {
             type: input.type,
             title: input.title,
             body: input.body,
+            imageUrl: input.imageUrl ?? null,
             linkUrl: input.linkUrl ?? null,
             dedupeKey: input.dedupeKey ?? null,
           },
@@ -640,6 +643,88 @@ export class NotificationsService {
           propertyName: property.name,
         }),
     });
+  }
+
+  /**
+   * Alert hosts exactly three UTC calendar days before the final configured
+   * availability date. The end-date-specific dedupe key makes hourly scans safe.
+   */
+  async sendAvailabilityExpiryReminders(): Promise<number> {
+    const target = addUtcDays(utcToday(), 3);
+    const targetEnd = addUtcDays(target, 1);
+    const properties = await prisma.property.findMany({
+      where: {
+        status: "APPROVED",
+        roomTypes: {
+          some: {
+            availability: {
+              some: {
+                date: { gte: target, lt: targetEnd },
+                totalUnits: { gt: 0 },
+              },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        ownerId: true,
+        name: true,
+        owner: { select: { name: true, email: true } },
+        media: {
+          orderBy: { sortOrder: "asc" },
+          take: 1,
+          select: { url: true },
+        },
+        roomTypes: {
+          select: {
+            availability: {
+              where: { totalUnits: { gt: 0 } },
+              orderBy: { date: "desc" },
+              take: 1,
+              select: { date: true },
+            },
+          },
+        },
+      },
+    });
+
+    let reminded = 0;
+    for (const property of properties) {
+      const availabilityEndsAt = property.roomTypes.reduce<Date | null>(
+        (latest, roomType) => {
+          const date = roomType.availability[0]?.date ?? null;
+          return date && (!latest || date > latest) ? date : latest;
+        },
+        null,
+      );
+      if (!availabilityEndsAt || iso(availabilityEndsAt) !== iso(target)) {
+        continue;
+      }
+
+      const imageUrl = property.media[0]?.url;
+      const rendered = renderPropertyAvailabilityExpiringEmail({
+        appOrigin: getStaynexAppOrigin(),
+        propertyId: property.id,
+        propertyName: property.name,
+        ownerName: property.owner.name,
+        availabilityEndsAt,
+        imageUrl,
+      });
+      await this.notifyUser(property.ownerId, {
+        type: "PROPERTY_AVAILABILITY",
+        title: "Property availability ends in 3 days",
+        body: `${property.name}: configured availability ends on ${iso(availabilityEndsAt)}. Add more dates to keep the listing visible to guests.`,
+        imageUrl,
+        linkUrl: `/host/properties/${property.id}#availability`,
+        dedupeKey: `property-availability-expiring:${property.id}:${iso(availabilityEndsAt)}`,
+        email: property.owner.email
+          ? toEmailPayload(property.owner.email, rendered)
+          : undefined,
+      });
+      reminded += 1;
+    }
+    return reminded;
   }
 
   async onPropertyManualDecision(

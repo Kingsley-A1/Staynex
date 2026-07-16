@@ -11,6 +11,7 @@ export * from "./payout-failed.template";
 export * from "./property-auto-review-scheduled.template";
 export * from "./property-review-needs-changes.template";
 export * from "./property-published.template";
+export * from "./property-availability-expiring.template";
 export * from "./property-approved.template";
 export * from "./property-changes-requested.template";
 export * from "./property-rejected.template";

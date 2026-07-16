@@ -47,7 +47,8 @@ const SEED: SeedProperty[] = [
     slug: "marina-crest-hotel",
     cityName: "Calabar",
     status: "APPROVED",
-    description: "Waterfront hotel with calm rooms and easy access to the marina.",
+    description:
+      "Waterfront hotel with calm rooms and easy access to the marina.",
     rooms: [
       { name: "Standard Room", priceNaira: 48000, maxGuests: 2, units: 5 },
       { name: "Deluxe Room", priceNaira: 72000, maxGuests: 3, units: 3 },
@@ -60,7 +61,9 @@ const SEED: SeedProperty[] = [
     cityName: "Calabar",
     status: "PENDING_REVIEW",
     description: "Resort stays near Tinapa with family-friendly suites.",
-    rooms: [{ name: "Resort Suite", priceNaira: 72000, maxGuests: 4, units: 4 }],
+    rooms: [
+      { name: "Resort Suite", priceNaira: 72000, maxGuests: 4, units: 4 },
+    ],
   },
   {
     id: "prop_harbor_nest",
@@ -69,7 +72,14 @@ const SEED: SeedProperty[] = [
     cityName: "Uyo",
     status: "PENDING_REVIEW",
     description: "Quiet serviced apartments ideal for longer stays.",
-    rooms: [{ name: "One-Bedroom Apartment", priceNaira: 29500, maxGuests: 2, units: 4 }],
+    rooms: [
+      {
+        name: "One-Bedroom Apartment",
+        priceNaira: 29500,
+        maxGuests: 2,
+        units: 4,
+      },
+    ],
   },
   {
     id: "prop_duke_town",
@@ -78,7 +88,9 @@ const SEED: SeedProperty[] = [
     cityName: "Calabar",
     status: "DRAFT",
     description: "Modern self-contained suites in the heart of Calabar.",
-    rooms: [{ name: "Studio Suite", priceNaira: 36000, maxGuests: 2, units: 6 }],
+    rooms: [
+      { name: "Studio Suite", priceNaira: 36000, maxGuests: 2, units: 6 },
+    ],
   },
 ];
 
@@ -106,6 +118,7 @@ function buildDetail(p: SeedProperty): PropertyDetail {
     fromPriceKobo: prices.length ? Math.min(...prices) : null,
     roomTypeCount: roomTypes.length,
     coverImageUrl: null,
+    availabilityEndsAt: "2026-12-31T00:00:00.000Z",
     updatedAt: "2026-06-20T10:00:00.000Z",
     description: p.description,
     media: [],
@@ -130,6 +143,7 @@ function toSummary(d: PropertyDetail): PropertySummary {
     fromPriceKobo: d.fromPriceKobo,
     roomTypeCount: d.roomTypeCount,
     coverImageUrl: d.coverImageUrl,
+    availabilityEndsAt: d.availabilityEndsAt,
     updatedAt: d.updatedAt,
   };
 }
@@ -176,6 +190,8 @@ export function listApprovedProperties(): PropertySummary[] {
   return DETAILS.filter((d) => d.status === "APPROVED").map(toSummary);
 }
 
-export function getApprovedPropertyBySlug(slug: string): PropertyDetail | undefined {
+export function getApprovedPropertyBySlug(
+  slug: string,
+): PropertyDetail | undefined {
   return DETAILS.find((d) => d.slug === slug && d.status === "APPROVED");
 }

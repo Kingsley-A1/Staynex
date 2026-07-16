@@ -86,6 +86,9 @@ test("workspace chrome uses the shared accessible breadcrumb", async () => {
   assert.match(breadcrumb, /aria-current/);
   assert.match(chrome, /workspaceBreadcrumbs/);
   assert.match(chrome, /<Breadcrumbs/);
+  assert.match(chrome, /showBreadcrumbs = breadcrumbs\.length > 1/);
+  assert.match(chrome, /sticky top-0/);
+  assert.match(chrome, /sticky top-16/);
 });
 
 test("welcome gradient avoids oversized conic textures and blur filters", async () => {
@@ -97,4 +100,122 @@ test("welcome gradient avoids oversized conic textures and blur filters", async 
   assert.match(gradient, /linear-gradient/);
   assert.match(gradient, /sx-gradient-drift-a/);
   assert.doesNotMatch(gradient, /conic-gradient|220vw|filter:\s*blur/);
+});
+
+test("host room counts use explicit accessible increase and decrease controls", async () => {
+  const [rooms, api] = await Promise.all([
+    source("../src/features/properties/room-manager.tsx"),
+    source("../src/lib/api.ts"),
+  ]);
+  assert.match(rooms, /Physical rooms/);
+  assert.match(rooms, /aria-label={`Remove one/);
+  assert.match(rooms, /aria-label={`Add one/);
+  assert.match(rooms, /aria-live="polite"/);
+  assert.match(api, /removeRoomUnit/);
+});
+
+test("host workspace label moves to the desktop header without sidebar duplication", async () => {
+  const [chrome, hostNav, layout] = await Promise.all([
+    source("../src/components/dashboard-chrome.tsx"),
+    source("../src/components/nav-config.ts"),
+    source("../src/app/(host)/host/layout.tsx"),
+  ]);
+  assert.match(layout, /workspace="Host Workspace"/);
+  assert.match(chrome, /hidden text-sm font-semibold text-ink lg:block/);
+  const hostItems = hostNav.slice(
+    hostNav.indexOf("export const HOST_NAV"),
+    hostNav.indexOf("export const ADMIN_NAV"),
+  );
+  assert.doesNotMatch(hostItems, /section: "Workspace"/);
+  assert.match(hostItems, /href: "\/host\/bookings"/);
+  assert.match(hostItems, /href: "\/host\/support"/);
+});
+
+test("notification inbox opens complete ID views with a reusable safe source CTA", async () => {
+  const [list, detail, sourceButton] = await Promise.all([
+    source("../src/features/notifications/notifications-view.tsx"),
+    source("../src/features/notifications/notification-detail-view.tsx"),
+    source("../src/features/notifications/view-source-button.tsx"),
+  ]);
+  assert.match(list, /encodeURIComponent\(item\.id\)/);
+  assert.match(detail, /Notification ID:/);
+  assert.match(detail, /<ViewSourceButton/);
+  assert.match(sourceButton, /View source/);
+  assert.match(sourceButton, /!href\.startsWith\("\/\/"\)/);
+});
+
+test("admin MFA uses one accessible OTP field rendered as six cells", async () => {
+  const [form, codeInput] = await Promise.all([
+    source("../src/features/auth/auth-form.tsx"),
+    source("../src/ui/code-input.tsx"),
+  ]);
+  assert.match(form, /<CodeInput/);
+  assert.match(codeInput, /grid-cols-6/);
+  assert.match(codeInput, /autoComplete="one-time-code"/);
+  assert.match(codeInput, /aria-invalid/);
+});
+
+test("guest images use bounded high-quality optimization and offline navigation fallback", async () => {
+  const [image, gallery, config, worker, reporter] = await Promise.all([
+    source("../src/ui/optimized-fill-image.tsx"),
+    source("../src/ui/room-gallery-carousel.tsx"),
+    source("../next.config.ts"),
+    source("../src/app/firebase-messaging-sw.js/route.ts"),
+    source("../src/components/web-vitals-reporter.tsx"),
+  ]);
+  assert.match(image, /quality = 82/);
+  assert.match(gallery, /quality=\{88\}/);
+  assert.match(config, /qualities: \[75, 82, 88\]/);
+  assert.match(worker, /caches\.match\("\/offline"\)/);
+  assert.match(reporter, /LCP: 2_500/);
+  assert.match(reporter, /INP: 200/);
+  assert.match(reporter, /CLS: 0\.1/);
+});
+
+test("approved property cards use the accessible Staynex verified mark", async () => {
+  const [card, badge, icons] = await Promise.all([
+    source("../src/ui/property-card.tsx"),
+    source("../src/ui/badge.tsx"),
+    source("../src/components/icons.tsx"),
+  ]);
+  assert.match(card, /property\.status === "APPROVED"/);
+  assert.match(card, /<VerifiedBadge \/>/);
+  assert.match(badge, /<span>Verified<\/span>/);
+  assert.match(badge, /text-primary/);
+  assert.match(icons, /export function IconVerified/);
+});
+
+test("property lifecycle controls hide expired guest inventory and expose safe deletion", async () => {
+  const [card, deleteAction, hostDetail, adminDetail, api, adminList] =
+    await Promise.all([
+      source("../src/ui/property-card.tsx"),
+      source("../src/features/properties/property-delete-action.tsx"),
+      source("../src/app/(host)/host/properties/[id]/page.tsx"),
+      source("../src/app/(admin)/admin/approvals/[id]/page.tsx"),
+      source("../src/lib/api.ts"),
+      source("../src/app/(admin)/admin/properties/page.tsx"),
+    ]);
+
+  assert.match(card, /availabilityEndsAt/);
+  assert.match(card, /Availability ended/);
+  assert.match(
+    deleteAction,
+    /Type <span className="font-mono">\{propertyName\}/,
+  );
+  assert.match(deleteAction, /apiErrorMessage/);
+  assert.match(hostDetail, /<PropertyDeleteAction/);
+  assert.match(adminDetail, /<PropertyDeleteAction/);
+  assert.match(api, /deleteProperty: \(id: string\)/);
+  assert.match(adminList, /<PropertyCard/);
+});
+
+test("new room types visibly and server-contractually default to one room", async () => {
+  const [rooms, api] = await Promise.all([
+    source("../src/features/properties/room-manager.tsx"),
+    source("../src/lib/api.ts"),
+  ]);
+  assert.match(rooms, /const DEFAULT_ROOM_QUANTITY = 1/);
+  assert.match(rooms, /label="Room quantity"/);
+  assert.match(rooms, /unitCount: Number\(roomQuantity\)/);
+  assert.match(api, /unitCount\?: number/);
 });

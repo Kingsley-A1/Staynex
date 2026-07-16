@@ -163,8 +163,7 @@ export class AuthController {
   ) {
     const input = parseBody(googleSchema, body);
     const result = await this.auth.googleSignIn(input.idToken, input.intent);
-    setSessionCookie(res, result.token, result.expiresAt);
-    return result.user;
+    return completeAuth(res, result);
   }
 
   @Post("password/forgot")

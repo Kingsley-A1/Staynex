@@ -10,6 +10,7 @@ import { DestinationImageCycle } from "@/features/landing/destination-image-cycl
 import { formatNairaFromKobo } from "@/lib/format";
 import { getHomeCatalog } from "@/lib/server-catalog";
 import { OptimizedFillImage } from "@/ui";
+import { SkipLink } from "@/components/skip-link";
 import type { DestinationShowcase, PropertySummary } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -78,6 +79,7 @@ export default async function HomePage() {
   const home = await getHomeCatalog();
   return (
     <div className="bg-white">
+      <SkipLink target="main" />
       <SiteHeader />
 
       <main id="main">

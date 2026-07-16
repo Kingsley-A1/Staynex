@@ -2,8 +2,11 @@ import { notFound } from "next/navigation";
 import { RoomGalleryCarousel, StatusBadge } from "@/ui";
 import { ApprovalActions } from "@/features/admin/approval-actions";
 import { ReviewStatusPanel } from "@/features/properties/review-status-panel";
+import { PropertyDeleteAction } from "@/features/properties/property-delete-action";
 import { formatNairaFromKobo } from "@/lib/format";
 import { getAdminApproval } from "@/lib/server-reports";
+import { getServerUser } from "@/lib/server-auth";
+import { isAdminManager } from "@/lib/types";
 
 export default async function ReviewPropertyPage({
   params,
@@ -11,19 +14,30 @@ export default async function ReviewPropertyPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { data: property, offline } = await getAdminApproval(id);
+  const [{ data: property, offline }, user] = await Promise.all([
+    getAdminApproval(id),
+    getServerUser(),
+  ]);
   if (!property) {
     if (offline) {
       return (
-        <div className="surface-card p-8 text-center text-muted-foreground" role="status">
-          We couldn't reach the approvals service. Start the API to review this submission.
+        <div
+          className="surface-card p-8 text-center text-muted-foreground"
+          role="status"
+        >
+          We couldn't reach the approvals service. Start the API to review this
+          submission.
         </div>
       );
     }
     notFound();
   }
 
-  const slides = property.media.map((m) => ({ id: m.id, url: m.url, altText: m.altText }));
+  const slides = property.media.map((m) => ({
+    id: m.id,
+    url: m.url,
+    altText: m.altText,
+  }));
 
   return (
     <div className="space-y-6">
@@ -37,7 +51,10 @@ export default async function ReviewPropertyPage({
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-6">
-          <RoomGalleryCarousel slides={slides} label={`${property.name} gallery`} />
+          <RoomGalleryCarousel
+            slides={slides}
+            label={`${property.name} gallery`}
+          />
 
           <section className="surface-card p-5">
             <h2 className="text-title-sm">Description</h2>
@@ -74,6 +91,14 @@ export default async function ReviewPropertyPage({
         <aside className="space-y-4">
           <ReviewStatusPanel property={property} />
           <ApprovalActions propertyId={property.id} />
+          {isAdminManager(user) && (
+            <PropertyDeleteAction
+              propertyId={property.id}
+              propertyName={property.name}
+              scope="admin"
+              returnHref="/admin/properties"
+            />
+          )}
         </aside>
       </div>
     </div>

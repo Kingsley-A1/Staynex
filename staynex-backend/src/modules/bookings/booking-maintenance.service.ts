@@ -12,12 +12,22 @@ import { NotificationsService } from "../notifications/notifications.service";
 import { PENDING_BOOKING_TTL_MS } from "./bookings.service";
 import { iso, nightsOf } from "./util";
 
-const SWEEP_INTERVAL_MS = readPositiveIntEnv("BOOKING_SWEEP_INTERVAL_MS", 30_000);
+const SWEEP_INTERVAL_MS = readPositiveIntEnv(
+  "BOOKING_SWEEP_INTERVAL_MS",
+  30_000,
+);
 const RECONCILE_INTERVAL_MS = readPositiveIntEnv(
   "AVAILABILITY_RECONCILE_INTERVAL_MS",
   6 * 60 * 60_000,
 );
-const REMINDER_INTERVAL_MS = readPositiveIntEnv("CHECKIN_REMINDER_INTERVAL_MS", 60 * 60_000);
+const REMINDER_INTERVAL_MS = readPositiveIntEnv(
+  "CHECKIN_REMINDER_INTERVAL_MS",
+  60 * 60_000,
+);
+const AVAILABILITY_REMINDER_INTERVAL_MS = readPositiveIntEnv(
+  "AVAILABILITY_EXPIRY_REMINDER_INTERVAL_MS",
+  60 * 60_000,
+);
 const RECONCILE_WINDOW_DAYS = 60;
 const MAX_DRIFT_ROWS = 200;
 
@@ -32,14 +42,18 @@ const MAX_DRIFT_ROWS = 200;
  * Same interval pattern as PropertyAutoPublisherService.
  */
 @Injectable()
-export class BookingMaintenanceService implements OnModuleInit, OnModuleDestroy {
+export class BookingMaintenanceService
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger(BookingMaintenanceService.name);
   private sweepTimer: NodeJS.Timeout | null = null;
   private reconcileTimer: NodeJS.Timeout | null = null;
   private reminderTimer: NodeJS.Timeout | null = null;
+  private availabilityReminderTimer: NodeJS.Timeout | null = null;
   private sweeping = false;
   private reconciling = false;
   private reminding = false;
+  private remindingAvailability = false;
 
   constructor(private readonly notifications: NotificationsService) {}
 
@@ -50,14 +64,24 @@ export class BookingMaintenanceService implements OnModuleInit, OnModuleDestroy 
       () => void this.reconcileAndLog(),
       RECONCILE_INTERVAL_MS,
     );
-    this.reminderTimer = setInterval(() => void this.remindCheckIns(), REMINDER_INTERVAL_MS);
+    this.reminderTimer = setInterval(
+      () => void this.remindCheckIns(),
+      REMINDER_INTERVAL_MS,
+    );
+    this.availabilityReminderTimer = setInterval(
+      () => void this.remindAvailabilityExpiry(),
+      AVAILABILITY_REMINDER_INTERVAL_MS,
+    );
     void this.sweep();
+    void this.remindAvailabilityExpiry();
   }
 
   onModuleDestroy(): void {
     if (this.sweepTimer) clearInterval(this.sweepTimer);
     if (this.reconcileTimer) clearInterval(this.reconcileTimer);
     if (this.reminderTimer) clearInterval(this.reminderTimer);
+    if (this.availabilityReminderTimer)
+      clearInterval(this.availabilityReminderTimer);
   }
 
   /** Hourly: remind guests + hosts of tomorrow's arrivals (dedupe-idempotent). */
@@ -66,13 +90,34 @@ export class BookingMaintenanceService implements OnModuleInit, OnModuleDestroy 
     this.reminding = true;
     try {
       const reminded = await this.notifications.sendCheckInReminders();
-      if (reminded > 0) this.logger.log(`Check-in reminders sent for ${reminded} booking(s).`);
+      if (reminded > 0)
+        this.logger.log(`Check-in reminders sent for ${reminded} booking(s).`);
     } catch (err) {
       this.logger.error(
         `Check-in reminders failed: ${err instanceof Error ? err.message : "unknown"}`,
       );
     } finally {
       this.reminding = false;
+    }
+  }
+
+  private async remindAvailabilityExpiry(): Promise<void> {
+    if (this.remindingAvailability) return;
+    this.remindingAvailability = true;
+    try {
+      const reminded =
+        await this.notifications.sendAvailabilityExpiryReminders();
+      if (reminded > 0) {
+        this.logger.log(
+          `Availability expiry reminders sent for ${reminded} property listing(s).`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        `Availability expiry reminders failed: ${err instanceof Error ? err.message : "unknown"}`,
+      );
+    } finally {
+      this.remindingAvailability = false;
     }
   }
 
@@ -92,7 +137,9 @@ export class BookingMaintenanceService implements OnModuleInit, OnModuleDestroy 
       for (const hold of expiredHolds) {
         const nights = nightsOf(iso(hold.checkIn), iso(hold.checkOut));
         await prisma.$transaction(async (tx) => {
-          const deleted = await tx.bookingHold.deleteMany({ where: { id: hold.id } });
+          const deleted = await tx.bookingHold.deleteMany({
+            where: { id: hold.id },
+          });
           if (deleted.count === 0) return; // another sweeper/checkout consumed it
           await tx.availabilityCalendar.updateMany({
             where: {
@@ -162,7 +209,9 @@ export class BookingMaintenanceService implements OnModuleInit, OnModuleDestroy 
    * bookings covering the date; bookedUnits should equal CONFIRMED bookings.
    * Returns mismatches only (empty = clean books).
    */
-  async reconcileAvailability(windowDays = RECONCILE_WINDOW_DAYS): Promise<AvailabilityDriftRow[]> {
+  async reconcileAvailability(
+    windowDays = RECONCILE_WINDOW_DAYS,
+  ): Promise<AvailabilityDriftRow[]> {
     const now = new Date();
     const start = utcToday();
     const end = addUtcDays(start, windowDays);
@@ -176,11 +225,17 @@ export class BookingMaintenanceService implements OnModuleInit, OnModuleDestroy 
           totalUnits: true,
           heldUnits: true,
           bookedUnits: true,
-          roomType: { select: { name: true, property: { select: { name: true } } } },
+          roomType: {
+            select: { name: true, property: { select: { name: true } } },
+          },
         },
       }),
       prisma.bookingHold.findMany({
-        where: { expiresAt: { gt: now }, checkIn: { lt: end }, checkOut: { gt: start } },
+        where: {
+          expiresAt: { gt: now },
+          checkIn: { lt: end },
+          checkOut: { gt: start },
+        },
         select: {
           checkIn: true,
           checkOut: true,
@@ -206,7 +261,12 @@ export class BookingMaintenanceService implements OnModuleInit, OnModuleDestroy 
     // so they count toward heldUnits alongside live holds.
     const expectedHeld = new Map<string, number>();
     const expectedBooked = new Map<string, number>();
-    const bump = (map: Map<string, number>, roomTypeId: string, checkIn: Date, checkOut: Date) => {
+    const bump = (
+      map: Map<string, number>,
+      roomTypeId: string,
+      checkIn: Date,
+      checkOut: Date,
+    ) => {
       for (const date of nightsOf(iso(checkIn), iso(checkOut))) {
         if (date < start || date >= end) continue;
         const key = `${roomTypeId}|${iso(date)}`;
@@ -217,8 +277,14 @@ export class BookingMaintenanceService implements OnModuleInit, OnModuleDestroy 
       bump(expectedHeld, hold.roomUnit.roomTypeId, hold.checkIn, hold.checkOut);
     }
     for (const booking of bookings) {
-      const target = booking.status === "CONFIRMED" ? expectedBooked : expectedHeld;
-      bump(target, booking.roomUnit.roomTypeId, booking.checkIn, booking.checkOut);
+      const target =
+        booking.status === "CONFIRMED" ? expectedBooked : expectedHeld;
+      bump(
+        target,
+        booking.roomUnit.roomTypeId,
+        booking.checkIn,
+        booking.checkOut,
+      );
     }
 
     const drift: AvailabilityDriftRow[] = [];

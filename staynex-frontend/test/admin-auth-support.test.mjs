@@ -74,6 +74,29 @@ test("support is wired into public and admin navigation", async () => {
   assert.match(adminPage, /<SupportPanel compact/);
 });
 
+test("Google sign-in can hand admin managers into the MFA form", async () => {
+  const [button, form, api, types] = await Promise.all([
+    source("../src/features/auth/google-auth-button.tsx"),
+    source("../src/features/auth/auth-form.tsx"),
+    source("../src/lib/api.ts"),
+    source("../src/lib/types.ts"),
+  ]);
+
+  assert.match(
+    api,
+    /google: \(idToken: string, intent\?: "GUEST" \| "OWNER"\)/,
+  );
+  assert.match(types, /mfaRequired: true/);
+  assert.match(
+    button,
+    /onMfaRequired\?: \(challenge: AuthMfaChallenge\) => void/,
+  );
+  assert.match(button, /isAuthMfaChallenge\(result\)/);
+  assert.match(button, /onMfaRequired\(result\)/);
+  assert.match(form, /onMfaRequired=\{\(challenge\) =>/);
+  assert.match(form, /setMfaChallenge\(challenge\)/);
+});
+
 function restoreEnv(name, value) {
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;

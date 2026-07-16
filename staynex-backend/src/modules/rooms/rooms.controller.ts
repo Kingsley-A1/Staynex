@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -90,5 +91,19 @@ export class RoomsController {
       owner.id,
       parseBody(createRoomUnitSchema, body),
     );
+  }
+
+  @Delete("room-types/:roomTypeId/units")
+  @RateLimit({
+    bucket: "owner:room-unit-deactivate",
+    limit: 30,
+    windowMs: 60_000,
+    keyBy: ["user"],
+  })
+  async removeUnit(
+    @CurrentUser() owner: AuthUser,
+    @Param("roomTypeId") roomTypeId: string,
+  ) {
+    return this.rooms.deactivateOneRoomUnit(owner.id, roomTypeId);
   }
 }

@@ -353,7 +353,8 @@ Host views (`OwnerBookingsController`, OWNER): `GET /host/bookings`,
 
 - Properties (`/host/properties`): `GET`, `POST`, `GET/:id`, `PATCH/:id`, `POST/:id/submit`.
 - Rooms (`/host`): `GET /host/properties/:propertyId/room-types`, `POST /host/room-types`,
-  `PATCH /host/room-types/:id`, `GET /host/room-types/:roomTypeId/units`, `POST /host/room-units`.
+  `PATCH /host/room-types/:id`, `GET /host/room-types/:roomTypeId/units`, `POST /host/room-units`,
+  `DELETE /host/room-types/:roomTypeId/units` (safely deactivate one uncommitted unit).
 - Onboarding/settings (`/host`): `POST /host/become`, `GET /host/onboarding`,
   `POST /host/onboarding/complete`, `GET /host/settings`, `PATCH /host/settings/profile`,
   `GET|POST /host/settings/locations`, `PATCH|DELETE /host/settings/locations/:id`,
@@ -370,7 +371,8 @@ Host views (`OwnerBookingsController`, OWNER): `GET /host/bookings`,
 
 ### 9.10 Notifications — `/notifications` (session)
 
-`GET /notifications` (inbox, keyset paginated + unreadCount), `POST /notifications/read`,
+`GET /notifications` (inbox, keyset paginated + unreadCount),
+`GET /notifications/:id` (user-scoped in-app detail), `POST /notifications/read`,
 `POST /notifications/devices` (register FCM token), `DELETE /notifications/devices/:token`.
 
 ### 9.11 Admin — `/admin` (ADMIN)
@@ -530,14 +532,21 @@ The trust anchor for check-in is **live server truth**, not a screenshot.
   Use tokens (`text-ink`, `bg-success-surface`, …), not raw colors.
 - **Media:** `next/image` optimizes R2 images when `NEXT_PUBLIC_MEDIA_BASE_URL`
   is set (allowlisted in `next.config.ts`); otherwise images render unoptimized.
-- **Host availability:** `features/properties/availability-editor.tsx` presents
-  30-day and 90-day quick-open actions plus a custom-range option. Quick setup
-  offers all active units for the chosen room type; advanced availability lets
-  experienced hosts change the saleable rooms per night or close a range with
-  zero. Every action still uses `PUT /availability/capacity`, and the backend
-  protects booked/held inventory. Property review requires at least 30 unique
-  future nights with positive bookable capacity across the property's room
-  types; the quick 30-day action satisfies that gate when inventory is valid.
+  Guest galleries use an explicit high-fidelity quality tier while responsive
+  `sizes` and AVIF/WebP output keep delivery bounded.
+- **Resilience and vitals:** the generated root service worker provides a
+  navigation-only `/offline` fallback without caching authenticated pages.
+  Field reporting records whether LCP ≤2.5s, INP ≤200ms, and CLS ≤0.1.
+- **Host availability:** `features/properties/availability-editor.tsx` lets a
+  host select a room type and the number of consecutive availability days from
+  a clear dropdown (30, 60, 90, 180, or 365), with custom dates available when
+  needed. Setup offers all active units by default; an explicit adjustment
+  control lets experienced hosts change saleable rooms per night or close a
+  range with zero. Every action still uses `PUT /availability/capacity`, and
+  the backend protects booked/held inventory. Property review requires at
+  least 30 unique future nights with positive bookable capacity across the
+  property's room types; the 30-day selection satisfies that gate when
+  inventory is valid.
 
 ---
 

@@ -29,6 +29,7 @@ interface OptimizedFillImageProps {
   sizes: string;
   className?: string;
   priority?: boolean;
+  quality?: number;
   onError?: ReactEventHandler<HTMLImageElement>;
 }
 
@@ -38,6 +39,7 @@ export function OptimizedFillImage({
   sizes,
   className,
   priority = false,
+  quality = 82,
   onError,
 }: OptimizedFillImageProps) {
   if (isOptimizable(src)) {
@@ -48,6 +50,7 @@ export function OptimizedFillImage({
         fill
         sizes={sizes}
         priority={priority}
+        quality={quality}
         className={className}
         onError={onError}
       />
