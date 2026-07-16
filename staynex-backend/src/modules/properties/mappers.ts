@@ -42,7 +42,8 @@ export type PropertySummaryRow = Prisma.PropertyGetPayload<{
 
 export const propertyDetailInclude = Prisma.validator<Prisma.PropertyInclude>()(
   {
-    city: { select: { name: true } },
+    city: { select: { id: true, name: true } },
+    area: { select: { id: true, name: true } },
     media: { orderBy: { sortOrder: "asc" } },
     roomTypes: {
       orderBy: { createdAt: "asc" },
@@ -129,6 +130,9 @@ export function toPropertyDetail(p: PropertyDetailRow): PropertyDetail {
     reviewedAt: p.reviewedAt?.toISOString() ?? null,
     scheduledPublishAt: p.scheduledPublishAt?.toISOString() ?? null,
     cityName: p.city.name,
+    cityId: p.city.id,
+    areaId: p.area?.id ?? null,
+    areaName: p.area?.name ?? null,
     description: p.description,
     fromPriceKobo: prices.length ? Math.min(...prices) : null,
     roomTypeCount: roomTypes.length,

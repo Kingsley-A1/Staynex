@@ -38,6 +38,12 @@ export const HOST_NAV: WorkspaceNavItem[] = [
     entityLabel: "Property",
   },
   {
+    href: "/host/properties/new",
+    label: "New property",
+    icon: "add",
+    entityLabel: "Property",
+  },
+  {
     href: "/host/bookings",
     label: "Bookings",
     icon: "bookings",

@@ -1,9 +1,9 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Field, Input, Select, Textarea } from "@/ui";
-import { hostApi } from "@/lib/api";
+import { areasApi, hostApi } from "@/lib/api";
 import type { PropertyDetail } from "@/lib/types";
 import type { CityOption } from "@/features/properties/fixtures";
 
@@ -18,21 +18,61 @@ export function PropertyForm({
 }) {
   const router = useRouter();
   const editing = Boolean(property);
-  const initialCityId = property
-    ? (cities.find((c) => c.name === property.cityName)?.id ??
-      cities[0]?.id ??
-      "")
-    : (cities[0]?.id ?? "");
+  const initialCityId =
+    property?.cityId ??
+    cities.find((c) => c.name === property?.cityName)?.id ??
+    cities[0]?.id ??
+    "";
 
   const [mode, setMode] = useState<"view" | "edit">(
     editing && !initialEditing ? "view" : "edit",
   );
   const [name, setName] = useState(property?.name ?? "");
   const [cityId, setCityId] = useState(initialCityId);
+  const [areaId, setAreaId] = useState(property?.areaId ?? "");
+  const [areas, setAreas] = useState<Array<{ id: string; name: string }>>(
+    property?.areaId && property.areaName
+      ? [{ id: property.areaId, name: property.areaName }]
+      : [],
+  );
+  const [loadingAreas, setLoadingAreas] = useState(false);
+  const [areaLoadError, setAreaLoadError] = useState(false);
   const [description, setDescription] = useState(property?.description ?? "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!cityId) {
+      setAreas([]);
+      setLoadingAreas(false);
+      return;
+    }
+    setLoadingAreas(true);
+    setAreaLoadError(false);
+    areasApi
+      .listForCity(cityId)
+      .then((list) => {
+        if (!active) return;
+        setAreas(
+          list.map(({ id, name: areaName }) => ({ id, name: areaName })),
+        );
+      })
+      .catch(() => {
+        if (!active) return;
+        setAreaLoadError(true);
+        setAreas(
+          property?.cityId === cityId && property.areaId && property.areaName
+            ? [{ id: property.areaId, name: property.areaName }]
+            : [],
+        );
+      })
+      .finally(() => active && setLoadingAreas(false));
+    return () => {
+      active = false;
+    };
+  }, [cityId, property?.areaId, property?.areaName, property?.cityId]);
 
   function startEdit() {
     setJustSaved(false);
@@ -43,6 +83,7 @@ export function PropertyForm({
     if (!property) return;
     setName(property.name);
     setCityId(initialCityId);
+    setAreaId(property.areaId ?? "");
     setDescription(property.description ?? "");
     setError(null);
     setMode("view");
@@ -57,6 +98,7 @@ export function PropertyForm({
         await hostApi.updateProperty(property.id, {
           name,
           cityId,
+          areaId: areaId || null,
           description,
         });
         setMode("view");
@@ -66,6 +108,7 @@ export function PropertyForm({
         const created = await hostApi.createProperty({
           name,
           cityId,
+          areaId: areaId || null,
           description,
         });
         router.push(`/host/properties/${created.id}`);
@@ -80,6 +123,8 @@ export function PropertyForm({
   if (editing && property && mode === "view") {
     const cityName =
       cities.find((c) => c.id === cityId)?.name ?? property.cityName;
+    const areaName =
+      areas.find((area) => area.id === areaId)?.name ?? property.areaName;
     return (
       <div className="surface-card max-w-2xl space-y-5 p-5 sm:p-6">
         {justSaved && (
@@ -93,7 +138,15 @@ export function PropertyForm({
         <dl className="space-y-4">
           <div>
             <dt className="text-label text-muted-foreground">Property name</dt>
-            <dd className="text-ink">{property.name}</dd>
+            <dd className="text-ink">{name}</dd>
+          </div>
+          <div>
+            <dt className="text-label text-muted-foreground">Area</dt>
+            <dd className="text-ink">
+              {areaName || (
+                <span className="text-muted-foreground">Not specified</span>
+              )}
+            </dd>
           </div>
           <div>
             <dt className="text-label text-muted-foreground">City</dt>
@@ -102,7 +155,7 @@ export function PropertyForm({
           <div>
             <dt className="text-label text-muted-foreground">Description</dt>
             <dd className="whitespace-pre-wrap text-ink">
-              {property.description || (
+              {description || (
                 <span className="text-muted-foreground">Not set</span>
               )}
             </dd>
@@ -134,7 +187,10 @@ export function PropertyForm({
         <Select
           id="city"
           value={cityId}
-          onChange={(e) => setCityId(e.target.value)}
+          onChange={(e) => {
+            setCityId(e.target.value);
+            setAreaId("");
+          }}
           required
         >
           {cities.map((c) => (
@@ -144,6 +200,37 @@ export function PropertyForm({
           ))}
         </Select>
       </Field>
+      <Field
+        label="Area"
+        htmlFor="area"
+        hint={
+          loadingAreas
+            ? "Loading areas..."
+            : areas.length > 0
+              ? "Choose the area guests will use to locate this property."
+              : "No areas are configured for this city yet."
+        }
+      >
+        <Select
+          id="area"
+          value={areaId}
+          onChange={(e) => setAreaId(e.target.value)}
+          disabled={!cityId || loadingAreas || areas.length === 0}
+        >
+          <option value="">No specific area</option>
+          {areas.map((area) => (
+            <option key={area.id} value={area.id}>
+              {area.name}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      {areaLoadError && (
+        <p className="text-sm text-warning" role="status">
+          Areas could not be refreshed. You can save without one and add it
+          later.
+        </p>
+      )}
       <Field
         label="Description"
         htmlFor="description"

@@ -39,12 +39,13 @@ export class PropertiesService {
     ownerId: string,
     input: CreatePropertyInput,
   ): Promise<PropertyDetail> {
-    await this.assertCityExists(input.cityId);
+    await this.assertCityAndArea(input.cityId, input.areaId ?? null);
     const slug = `${slugify(input.name) || "property"}-${Date.now().toString(36)}`;
     const created = await prisma.property.create({
       data: {
         ownerId,
         cityId: input.cityId,
+        areaId: input.areaId ?? null,
         name: input.name,
         slug,
         description: input.description ?? null,
@@ -59,14 +60,25 @@ export class PropertiesService {
     id: string,
     input: UpdatePropertyInput,
   ): Promise<PropertyDetail> {
-    await this.assertOwned(ownerId, id);
+    const property = await this.assertOwned(ownerId, id);
     if (!hasDefinedValue(input)) return this.getById(id);
-    if (input.cityId) await this.assertCityExists(input.cityId);
+    const nextCityId = input.cityId ?? property.cityId;
+    const cityChanged = nextCityId !== property.cityId;
+    const nextAreaId =
+      input.areaId !== undefined
+        ? input.areaId
+        : cityChanged
+          ? null
+          : property.areaId;
+    if (input.cityId !== undefined || input.areaId !== undefined) {
+      await this.assertCityAndArea(nextCityId, nextAreaId);
+    }
     await prisma.property.update({
       where: { id },
       data: {
         name: input.name,
         cityId: input.cityId,
+        areaId: cityChanged && input.areaId === undefined ? null : input.areaId,
         description: input.description,
       },
     });
@@ -141,11 +153,14 @@ export class PropertiesService {
   }
 
   /**
-   * Guard the `cityId` foreign key before writing. Without this, an unknown city
-   * id (e.g. a stale client value) reaches Prisma as a constraint violation and
-   * surfaces as an opaque 500; here it becomes an honest, actionable 400.
+   * Guard the location foreign keys and their relationship before writing.
+   * Prisma can prove that both ids exist, but not that the selected area belongs
+   * to the selected city; invalid client state becomes an actionable 400 here.
    */
-  private async assertCityExists(cityId: string): Promise<void> {
+  private async assertCityAndArea(
+    cityId: string,
+    areaId: string | null,
+  ): Promise<void> {
     const city = await prisma.city.findUnique({
       where: { id: cityId },
       select: { id: true },
@@ -154,6 +169,16 @@ export class PropertiesService {
       throw new BadRequestException(
         "Unknown city. Please pick a city from the list.",
       );
+    if (!areaId) return;
+    const area = await prisma.area.findFirst({
+      where: { id: areaId, cityId },
+      select: { id: true },
+    });
+    if (!area) {
+      throw new BadRequestException(
+        "Select an area that belongs to the chosen city.",
+      );
+    }
   }
 
   private async archive(
@@ -222,10 +247,12 @@ export class PropertiesService {
   ): Promise<{
     id: string;
     status: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED";
+    cityId: string;
+    areaId: string | null;
   }> {
     const found = await prisma.property.findFirst({
       where: { id, ownerId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, cityId: true, areaId: true },
     });
     if (!found) throw new NotFoundException("Property not found");
     return found;

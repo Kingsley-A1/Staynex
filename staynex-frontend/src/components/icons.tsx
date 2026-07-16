@@ -269,6 +269,7 @@ export type IconName =
   | "ai"
   | "settings"
   | "properties"
+  | "add"
   | "onboarding"
   | "support"
   | "chart"
@@ -285,6 +286,7 @@ export const NAV_ICONS: Record<IconName, ComponentType<IconProps>> = {
   ai: IconAi,
   settings: IconSettings,
   properties: IconProperties,
+  add: IconPlus,
   onboarding: IconOnboarding,
   support: IconSupport,
   chart: IconChart,

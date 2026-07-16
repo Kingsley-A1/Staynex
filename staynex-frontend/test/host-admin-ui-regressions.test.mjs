@@ -93,9 +93,36 @@ test("workspace chrome uses the shared accessible breadcrumb", async () => {
 
 test("mobile workspace drawer overlays sticky header and breadcrumbs", async () => {
   const mobileNav = await source("../src/components/mobile-nav.tsx");
-  assert.match(mobileNav, /z-\[var\(--z-drawer\)\]/);
-  assert.match(mobileNav, /z-\[calc\(var\(--z-drawer\)-1\)\]/);
+  assert.match(mobileNav, /createPortal/);
+  assert.match(mobileNav, /document\.body/);
+  assert.match(mobileNav, /z-\[var\(--z-overlay\)\]/);
+  assert.match(mobileNav, /z-\[calc\(var\(--z-overlay\)-1\)\]/);
+  assert.match(mobileNav, /aria-modal="true"/);
+  assert.match(mobileNav, /document\.body\.style\.overflow = "hidden"/);
   assert.doesNotMatch(mobileNav, /z-40|z-50/);
+});
+
+test("host property authoring supports validated city-area selection", async () => {
+  const [form, api, dto, service, mapper] = await Promise.all([
+    source("../src/features/properties/property-form.tsx"),
+    source("../src/lib/api.ts"),
+    source("../../staynex-backend/src/modules/properties/dto.ts"),
+    source(
+      "../../staynex-backend/src/modules/properties/properties.service.ts",
+    ),
+    source("../../staynex-backend/src/modules/properties/mappers.ts"),
+  ]);
+  assert.match(form, /areasApi\s*\.listForCity\(cityId\)/);
+  assert.match(form, /label="Area"/);
+  assert.match(form, /areaId: areaId \|\| null/);
+  assert.match(api, /areaId\?: string \| null/);
+  assert.match(
+    dto,
+    /areaId: z\.string\(\)\.min\(1\)\.nullable\(\)\.optional\(\)/,
+  );
+  assert.match(service, /assertCityAndArea/);
+  assert.match(service, /where: \{ id: areaId, cityId \}/);
+  assert.match(mapper, /area: \{ select: \{ id: true, name: true \} \}/);
 });
 
 test("welcome gradient avoids oversized conic textures and blur filters", async () => {
@@ -136,6 +163,8 @@ test("host workspace label moves to the desktop header without sidebar duplicati
   assert.doesNotMatch(hostItems, /section: "Workspace"/);
   assert.match(hostItems, /href: "\/host\/bookings"/);
   assert.match(hostItems, /href: "\/host\/support"/);
+  assert.match(hostItems, /href: "\/host\/properties\/new"/);
+  assert.match(hostItems, /label: "New property"/);
 });
 
 test("notification inbox opens complete ID views with a reusable safe source CTA", async () => {

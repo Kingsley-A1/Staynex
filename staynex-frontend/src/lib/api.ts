@@ -213,6 +213,7 @@ export const hostApi = {
   createProperty: (body: {
     name: string;
     cityId: string;
+    areaId?: string | null;
     description?: string;
   }) =>
     request<PropertyDetail>("/host/properties", {
@@ -221,7 +222,12 @@ export const hostApi = {
     }),
   updateProperty: (
     id: string,
-    body: { name?: string; cityId?: string; description?: string },
+    body: {
+      name?: string;
+      cityId?: string;
+      areaId?: string | null;
+      description?: string;
+    },
   ) =>
     request<PropertyDetail>(`/host/properties/${id}`, {
       method: "PATCH",

@@ -95,6 +95,9 @@ export interface PropertySummary {
 }
 
 export interface PropertyDetail extends PropertySummary {
+  cityId: string;
+  areaId: string | null;
+  areaName: string | null;
   description: string | null;
   media: MediaItem[];
   roomTypes: RoomTypeDetail[];
