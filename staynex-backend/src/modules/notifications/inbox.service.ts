@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { prisma } from "../../../db";
 import type { NotificationRow, NotificationsPage } from "../../../types";
-import { afterCursor, decodeCursor, encodeCursor } from "../../common/pagination";
+import {
+  afterCursor,
+  decodeCursor,
+  encodeCursor,
+} from "../../common/pagination";
 
 /**
  * The signed-in user's in-app notification inbox: what the bell renders.
@@ -9,7 +13,11 @@ import { afterCursor, decodeCursor, encodeCursor } from "../../common/pagination
  */
 @Injectable()
 export class InboxService {
-  async list(userId: string, cursor: string | undefined, take: number): Promise<NotificationsPage> {
+  async list(
+    userId: string,
+    cursor: string | undefined,
+    take: number,
+  ): Promise<NotificationsPage> {
     const where = { userId, channel: "IN_APP" as const };
     const cursorWhere = afterCursor(decodeCursor(cursor));
     const [rows, unreadCount] = await Promise.all([
@@ -25,7 +33,10 @@ export class InboxService {
     const last = page[page.length - 1];
     return {
       rows: page.map(toRow),
-      nextCursor: rows.length > take && last ? encodeCursor(last.createdAt, last.id) : null,
+      nextCursor:
+        rows.length > take && last
+          ? encodeCursor(last.createdAt, last.id)
+          : null,
       unreadCount,
     };
   }
@@ -58,6 +69,7 @@ function toRow(n: {
   type: string;
   title: string;
   body: string;
+  imageUrl: string | null;
   linkUrl: string | null;
   readAt: Date | null;
   createdAt: Date;
@@ -67,6 +79,7 @@ function toRow(n: {
     type: n.type as NotificationRow["type"],
     title: n.title,
     body: n.body,
+    imageUrl: n.imageUrl,
     linkUrl: n.linkUrl,
     readAt: n.readAt ? n.readAt.toISOString() : null,
     createdAt: n.createdAt.toISOString(),

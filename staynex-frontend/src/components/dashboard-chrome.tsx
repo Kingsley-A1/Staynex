@@ -108,6 +108,8 @@ export function DashboardChrome({
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const pathname = usePathname();
   const active = activeHref(pathname, nav);
+  const breadcrumbs = workspaceBreadcrumbs(pathname, nav);
+  const showBreadcrumbs = breadcrumbs.length > 1;
 
   function toggle() {
     setCollapsed((prev) => {
@@ -143,7 +145,7 @@ export function DashboardChrome({
         >
           <Link
             href="/"
-            aria-label="Staynex Bookings"
+            aria-label="Staynex Bookings home"
             className="inline-flex items-center"
           >
             {collapsed ? (
@@ -196,10 +198,10 @@ export function DashboardChrome({
 
       {/* Right column: a utility top bar (bell everywhere; logo + nav on mobile) + main */}
       <div className="flex min-w-0 flex-col">
-        <header className="flex h-16 items-center justify-between gap-3 border-b border-border bg-surface-raised px-4 sm:px-6">
+        <header className="sticky top-0 z-[var(--z-sticky)] flex h-16 items-center justify-between gap-3 border-b border-border bg-surface-raised/95 px-4 backdrop-blur-md sm:px-6">
           <Link
             href="/"
-            aria-label="Staynex Bookings"
+            aria-label="Staynex Bookings home"
             className="inline-flex items-center lg:hidden"
           >
             <Brandmark
@@ -222,11 +224,22 @@ export function DashboardChrome({
           </div>
         </header>
 
-        <main id="main-content" tabIndex={-1} className="layout-container py-6 sm:py-8">
-          <Breadcrumbs
-            items={workspaceBreadcrumbs(pathname, nav)}
-            className="mb-5"
-          />
+        {showBreadcrumbs && (
+          <div className="sticky top-16 z-[calc(var(--z-sticky)-1)] border-b border-border bg-background/95 backdrop-blur-md">
+            <div className="layout-container py-2.5">
+              <Breadcrumbs items={breadcrumbs} />
+            </div>
+          </div>
+        )}
+
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className={cn(
+            "layout-container pb-8",
+            showBreadcrumbs ? "pt-4 sm:pt-5" : "pt-5 sm:pt-6",
+          )}
+        >
           {children}
         </main>
       </div>

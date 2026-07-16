@@ -24,7 +24,17 @@ export const propertySummaryInclude =
       take: 1,
       select: { url: true },
     },
-    roomTypes: { select: { basePriceKobo: true } },
+    roomTypes: {
+      select: {
+        basePriceKobo: true,
+        availability: {
+          where: { totalUnits: { gt: 0 } },
+          orderBy: { date: "desc" },
+          take: 1,
+          select: { date: true },
+        },
+      },
+    },
   });
 export type PropertySummaryRow = Prisma.PropertyGetPayload<{
   include: typeof propertySummaryInclude;
@@ -38,6 +48,12 @@ export const propertyDetailInclude = Prisma.validator<Prisma.PropertyInclude>()(
       orderBy: { createdAt: "asc" },
       include: {
         media: { orderBy: { sortOrder: "asc" } },
+        availability: {
+          where: { totalUnits: { gt: 0 } },
+          orderBy: { date: "desc" },
+          take: 1,
+          select: { date: true },
+        },
         _count: {
           select: { roomUnits: { where: { isActive: true } } },
         },
@@ -72,6 +88,7 @@ function toMedia(m: {
 
 export function toPropertySummary(p: PropertySummaryRow): PropertySummary {
   const prices = p.roomTypes.map((r) => r.basePriceKobo);
+  const availabilityEndsAt = latestAvailabilityDate(p.roomTypes);
   return {
     id: p.id,
     name: p.name,
@@ -85,6 +102,7 @@ export function toPropertySummary(p: PropertySummaryRow): PropertySummary {
     fromPriceKobo: prices.length ? Math.min(...prices) : null,
     roomTypeCount: p.roomTypes.length,
     coverImageUrl: p.media[0]?.url ?? null,
+    availabilityEndsAt,
     updatedAt: p.updatedAt.toISOString(),
   };
 }
@@ -100,6 +118,7 @@ export function toPropertyDetail(p: PropertyDetailRow): PropertyDetail {
     media: rt.media.map(toMedia),
   }));
   const prices = roomTypes.map((r) => r.basePriceKobo);
+  const availabilityEndsAt = latestAvailabilityDate(p.roomTypes);
   return {
     id: p.id,
     name: p.name,
@@ -114,11 +133,22 @@ export function toPropertyDetail(p: PropertyDetailRow): PropertyDetail {
     fromPriceKobo: prices.length ? Math.min(...prices) : null,
     roomTypeCount: roomTypes.length,
     coverImageUrl: p.media.find((m) => m.mediaType === "IMAGE")?.url ?? null,
+    availabilityEndsAt,
     updatedAt: p.updatedAt.toISOString(),
     media: p.media.map(toMedia),
     roomTypes,
     latestReview: toReviewRun(p.reviewRuns[0] ?? null),
   };
+}
+
+function latestAvailabilityDate(
+  roomTypes: Array<{ availability: Array<{ date: Date }> }>,
+): string | null {
+  const latest = roomTypes.reduce<Date | null>((current, roomType) => {
+    const date = roomType.availability[0]?.date ?? null;
+    return date && (!current || date > current) ? date : current;
+  }, null);
+  return latest?.toISOString() ?? null;
 }
 
 function toReviewRun(

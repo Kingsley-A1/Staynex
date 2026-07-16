@@ -158,7 +158,7 @@ export class AuthService {
   async googleSignIn(
     idToken: string,
     intent?: "GUEST" | "OWNER",
-  ): Promise<AuthResult> {
+  ): Promise<AuthFlowResult> {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     if (!clientId)
       throw new ServiceUnavailableException("Google sign-in is not configured");
@@ -203,9 +203,7 @@ export class AuthService {
 
     const authUser = await this.loadAuthUser(userId);
     if (requiresAdminMfa(authUser)) {
-      throw new UnauthorizedException(
-        "Admin managers must use staff sign-in and verification",
-      );
+      return this.issueMfaChallenge(userId);
     }
 
     if (intent === "OWNER") await this.grantOwnerCapability(userId);

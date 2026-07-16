@@ -7,7 +7,7 @@ const expectedPrimaryTemplates = [
   "booking-refunded", "check-in-reminder", "payout-settled", "payout-failed",
   "property-auto-review-scheduled", "property-review-needs-changes",
   "property-published", "property-approved", "property-changes-requested",
-  "property-rejected",
+  "property-rejected", "property-availability-expiring",
 ];
 
 test("preview inventory includes every transactional template", () => {
@@ -26,10 +26,10 @@ for (const preview of cases) {
     assert.match(output.html, /max-width:680px/);
     assert.match(output.html, /border-radius:6px/);
     assert.doesNotMatch(output.html, /max-width:600px|border-radius:12px/);
-    assert.match(output.html, /Book trusted stays, confidently\./);
+    assert.match(output.html, /Book trusted stays, Confidently\./);
     assert.ok(output.text.trim());
     assert.match(output.text, /Staynex Bookings/);
-    assert.match(output.text, /Book trusted stays, confidently\./);
+    assert.match(output.text, /Book trusted stays, Confidently\./);
     assert.doesNotMatch(`${output.subject}${output.html}${output.text}`, /\b(?:undefined|null)\b/);
     assert.doesNotMatch(output.text, /<\/?[a-z][^>]*>/i);
     assert.doesNotMatch(output.html, /<script|onerror\s*=/i);

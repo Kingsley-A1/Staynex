@@ -131,6 +131,7 @@ enum NotificationType {
   PAYOUT_FAILED
   PAYMENT_EXCEPTION
   PROPERTY_REVIEW
+  PROPERTY_AVAILABILITY
   CHECKIN_REMINDER
   GENERAL
 }
@@ -768,6 +769,8 @@ model Notification {
   type      NotificationType    @default(GENERAL)
   title     String
   body      String
+  /// Optional visual context for property-specific inbox items.
+  imageUrl  String?
   /// In-app deep link (e.g. /host/bookings/xyz).
   linkUrl   String?
   /// Set when the user opens/acknowledges an IN_APP notification.
@@ -875,7 +878,7 @@ model AIConversation {
 // Persisted Staynex AI chat messages (history is DB-backed, not faked in
 // component state). Conversations are private to their owner.
 model AIMessage {
-  id             String        @id @default(cuid())
+  id             String             @id @default(cuid())
   conversationId String
   role           AIMessageRole
   content        String
@@ -885,7 +888,7 @@ model AIMessage {
   /// Public, verified property summaries shown with an assistant response.
   /// These are snapshots from the live catalog at generation time.
   propertyCards  Json?
-  createdAt      DateTime      @default(now())
+  createdAt      DateTime           @default(now())
 
   conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 

@@ -17,7 +17,8 @@ const AUTO_PUBLISH_DELAY_MS = readNonNegativeIntEnv(
 );
 const REVIEW_WINDOW_DAYS = 30;
 
-type ReviewableStatus = "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED";
+type ReviewableStatus =
+  "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED";
 
 export interface ContentChangeOptions {
   actorUserId?: string;
@@ -46,7 +47,9 @@ export class PropertyReviewService {
 
     const result = evaluatePropertyReview(facts);
     const now = new Date();
-    const scheduledAt = result.passed ? new Date(now.getTime() + AUTO_PUBLISH_DELAY_MS) : null;
+    const scheduledAt = result.passed
+      ? new Date(now.getTime() + AUTO_PUBLISH_DELAY_MS)
+      : null;
     const reviewStatus = result.passed ? "SCHEDULED" : "FAILED";
 
     await prisma.$transaction(async (tx) => {
@@ -96,7 +99,9 @@ export class PropertyReviewService {
       await this.audit.record(
         {
           actorUserId: null,
-          action: result.passed ? "PROPERTY_AUTO_REVIEW_PASSED" : "PROPERTY_AUTO_REVIEW_FAILED",
+          action: result.passed
+            ? "PROPERTY_AUTO_REVIEW_PASSED"
+            : "PROPERTY_AUTO_REVIEW_FAILED",
           entityType: "PropertyReviewRun",
           entityId: run.id,
           propertyId,
@@ -105,7 +110,12 @@ export class PropertyReviewService {
       );
     });
 
-    await this.notifyReviewResult(facts.ownerId, propertyId, result, scheduledAt);
+    await this.notifyReviewResult(
+      facts.ownerId,
+      propertyId,
+      result,
+      scheduledAt,
+    );
   }
 
   async recordContentChange(
@@ -120,9 +130,13 @@ export class PropertyReviewService {
     });
     if (!property || property.status === "ARCHIVED") return;
 
-    const nextStatus = this.statusAfterContentChange(property.status, unpublishApproved);
+    const nextStatus = this.statusAfterContentChange(
+      property.status,
+      unpublishApproved,
+    );
     const shouldRerun = nextStatus === "PENDING_REVIEW" && rerunIfPending;
-    const shouldPreserveReview = property.status === "APPROVED" && nextStatus === "APPROVED";
+    const shouldPreserveReview =
+      property.status === "APPROVED" && nextStatus === "APPROVED";
     const reviewStatus = shouldRerun ? "PENDING" : "NOT_SUBMITTED";
 
     await prisma.$transaction(async (tx) => {
@@ -131,7 +145,8 @@ export class PropertyReviewService {
         data: {
           status: "CANCELLED",
           completedAt: new Date(),
-          summary: "Cancelled because owner-controlled listing content changed.",
+          summary:
+            "Cancelled because owner-controlled listing content changed.",
         },
       });
       await tx.property.update({
@@ -166,7 +181,10 @@ export class PropertyReviewService {
     if (shouldRerun) await this.reviewSubmittedProperty(propertyId);
   }
 
-  async publishDueProperties(): Promise<{ published: number; cancelled: number }> {
+  async publishDueProperties(): Promise<{
+    published: number;
+    cancelled: number;
+  }> {
     const now = new Date();
     const dueRuns = await prisma.propertyReviewRun.findMany({
       where: {
@@ -185,7 +203,11 @@ export class PropertyReviewService {
     let published = 0;
     let cancelled = 0;
     for (const run of dueRuns) {
-      const outcome = await this.publishRunIfCurrent(run.id, run.propertyId, run.contentVersion);
+      const outcome = await this.publishRunIfCurrent(
+        run.id,
+        run.propertyId,
+        run.contentVersion,
+      );
       if (outcome === "published") {
         published += 1;
         await this.notifications.onPropertyPublished(run.propertyId);
@@ -225,7 +247,8 @@ export class PropertyReviewService {
           data: {
             status: "CANCELLED",
             completedAt: now,
-            summary: "Cancelled because the reviewed content version is no longer current.",
+            summary:
+              "Cancelled because the reviewed content version is no longer current.",
           },
         });
         return "cancelled";
@@ -249,7 +272,9 @@ export class PropertyReviewService {
     });
   }
 
-  private async loadFacts(propertyId: string): Promise<ReviewFactsSnapshot | null> {
+  private async loadFacts(
+    propertyId: string,
+  ): Promise<ReviewFactsSnapshot | null> {
     const start = utcToday();
     const end = addUtcDays(start, REVIEW_WINDOW_DAYS);
     const property = await prisma.property.findUnique({
@@ -269,7 +294,7 @@ export class PropertyReviewService {
             payoutMethod: { select: { status: true } },
           },
         },
-        city: { select: { id: true } },
+        city: { select: { id: true, name: true } },
         media: { where: { mediaType: "IMAGE" }, select: { id: true } },
         roomTypes: {
           select: {
@@ -279,7 +304,12 @@ export class PropertyReviewService {
             roomUnits: { select: { isActive: true } },
             availability: {
               where: { date: { gte: start, lt: end } },
-              select: { date: true, totalUnits: true, bookedUnits: true, heldUnits: true },
+              select: {
+                date: true,
+                totalUnits: true,
+                bookedUnits: true,
+                heldUnits: true,
+              },
             },
           },
         },
@@ -287,7 +317,7 @@ export class PropertyReviewService {
     });
     if (!property) return null;
 
-    const duplicateCandidateCount = await prisma.property.count({
+    const duplicateCandidates = await prisma.property.findMany({
       where: {
         id: { not: propertyId },
         ownerId: property.ownerId,
@@ -295,12 +325,17 @@ export class PropertyReviewService {
         status: { not: "ARCHIVED" },
         name: { equals: property.name, mode: "insensitive" },
       },
+      select: { name: true },
+      take: 5,
     });
 
     const listingCopy = [
       property.name,
       property.description ?? "",
-      ...property.roomTypes.flatMap((room) => [room.name, room.description ?? ""]),
+      ...property.roomTypes.flatMap((room) => [
+        room.name,
+        room.description ?? "",
+      ]),
     ].join("\n");
 
     return {
@@ -310,20 +345,29 @@ export class PropertyReviewService {
       hasOwnerEmail: Boolean(property.owner.email),
       hasOwnerCapability:
         property.owner.role === "OWNER" ||
-        property.owner.capabilities.some((grant) => grant.capability === "OWNER"),
+        property.owner.capabilities.some(
+          (grant) => grant.capability === "OWNER",
+        ),
       hasActivePayoutMethod: property.owner.payoutMethod?.status === "ACTIVE",
       name: property.name,
       description: property.description,
       hasCity: Boolean(property.city),
       propertyImageCount: property.media.length,
       roomTypeCount: property.roomTypes.length,
-      pricedRoomTypeCount: property.roomTypes.filter((room) => room.basePriceKobo > 0).length,
+      pricedRoomTypeCount: property.roomTypes.filter(
+        (room) => room.basePriceKobo > 0,
+      ).length,
       activeUnitCount: property.roomTypes.reduce(
-        (sum, room) => sum + room.roomUnits.filter((unit) => unit.isActive).length,
+        (sum, room) =>
+          sum + room.roomUnits.filter((unit) => unit.isActive).length,
         0,
       ),
       availableFutureDays: countAvailableDays(property.roomTypes),
-      duplicateCandidateCount,
+      duplicateCandidateCount: duplicateCandidates.length,
+      duplicateCandidateNames: duplicateCandidates.map(
+        (candidate) => candidate.name,
+      ),
+      cityName: property.city.name,
       hasBannedContent: hasBannedListingContent(listingCopy),
     };
   }
@@ -347,13 +391,19 @@ export class PropertyReviewService {
   ): Promise<void> {
     try {
       if (result.passed && scheduledAt) {
-        await this.notifications.onPropertyAutoReviewScheduled(propertyId, scheduledAt);
+        await this.notifications.onPropertyAutoReviewScheduled(
+          propertyId,
+          scheduledAt,
+        );
         return;
       }
       const failedLabels = result.checks
         .filter((check) => check.status === "FAIL")
         .map((check) => check.label);
-      await this.notifications.onPropertyReviewNeedsChanges(propertyId, failedLabels);
+      await this.notifications.onPropertyReviewNeedsChanges(
+        propertyId,
+        failedLabels,
+      );
     } catch (err) {
       this.logger.error(
         `Review notification failed for owner ${ownerId}: ${
@@ -366,7 +416,12 @@ export class PropertyReviewService {
 
 function countAvailableDays(
   roomTypes: Array<{
-    availability: Array<{ date: Date; totalUnits: number; bookedUnits: number; heldUnits: number }>;
+    availability: Array<{
+      date: Date;
+      totalUnits: number;
+      bookedUnits: number;
+      heldUnits: number;
+    }>;
   }>,
 ): number {
   const dates = new Set<string>();

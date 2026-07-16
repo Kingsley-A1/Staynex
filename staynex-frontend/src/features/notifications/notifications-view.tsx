@@ -13,6 +13,7 @@ import {
 } from "@/lib/firebase-messaging";
 import { IconBell } from "@/components/icons";
 import type { NotificationRow } from "@/lib/types";
+import { OptimizedFillImage } from "@/ui/optimized-fill-image";
 
 const POLL_MS = 60_000;
 
@@ -113,7 +114,9 @@ export function NotificationsView() {
       setUnread((u) => Math.max(0, u - 1));
       void notificationsApi.markRead([item.id]).catch(() => {});
     }
-    router.push(`${pathname.replace(/\/$/, "")}/${encodeURIComponent(item.id)}`);
+    router.push(
+      `${pathname.replace(/\/$/, "")}/${encodeURIComponent(item.id)}`,
+    );
   }
 
   async function turnOnPush() {
@@ -132,9 +135,7 @@ export function NotificationsView() {
         <div>
           <h1 className="text-title-lg text-ink">Notifications</h1>
           <p className="mt-1 text-body-sm text-muted-foreground">
-            {unread > 0
-              ? `${unread} unread`
-              : "You're all caught up."}
+            {unread > 0 ? `${unread} unread` : "You're all caught up."}
           </p>
         </div>
         {unread > 0 && (
@@ -180,7 +181,9 @@ export function NotificationsView() {
           <ListState>Loading…</ListState>
         ) : authRequired ? (
           <div className="surface-card p-8 text-center">
-            <p className="text-title-sm text-ink">Sign in to see notifications</p>
+            <p className="text-title-sm text-ink">
+              Sign in to see notifications
+            </p>
             <p className="mx-auto mt-2 max-w-sm text-body-sm text-muted-foreground">
               Your booking updates, reminders, and alerts appear here once you
               sign in.
@@ -215,6 +218,16 @@ export function NotificationsView() {
                         : "mt-1.5 size-2 shrink-0 rounded-full bg-primary"
                     }
                   />
+                  {n.imageUrl && (
+                    <span className="relative block size-14 shrink-0 overflow-hidden rounded-md bg-secondary">
+                      <OptimizedFillImage
+                        src={n.imageUrl}
+                        alt=""
+                        sizes="56px"
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    </span>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-ink">{n.title}</p>
                     <p className="mt-0.5 text-body-sm text-muted-foreground">

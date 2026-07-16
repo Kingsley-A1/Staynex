@@ -217,7 +217,7 @@ export function IconMinus({ className }: IconProps) {
   );
 }
 
-/** Staynex verification mark: brand-primary seal with a high-contrast check. */
+/** Staynex verification mark: brand-indigo seal with a high-contrast check. */
 export function IconVerified({ className }: IconProps) {
   return (
     <svg
@@ -267,11 +267,11 @@ export type IconName =
   | "testimonials"
   | "audit"
   | "ai"
-  | "chart"
   | "settings"
   | "properties"
   | "onboarding"
   | "support"
+  | "chart"
   | "notifications";
 
 export const NAV_ICONS: Record<IconName, ComponentType<IconProps>> = {
@@ -283,10 +283,10 @@ export const NAV_ICONS: Record<IconName, ComponentType<IconProps>> = {
   testimonials: IconTestimonials,
   audit: IconAudit,
   ai: IconAi,
-  chart: IconChart,
   settings: IconSettings,
   properties: IconProperties,
   onboarding: IconOnboarding,
   support: IconSupport,
+  chart: IconChart,
   notifications: IconBell,
 };

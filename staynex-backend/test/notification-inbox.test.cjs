@@ -14,6 +14,7 @@ test("notification detail is scoped to the signed-in user and in-app channel", a
       type: "GENERAL",
       title: "A complete update",
       body: "Full notification body",
+      imageUrl: "https://media.staynexbookings.ng/property/example.jpg",
       linkUrl: "/host/bookings",
       readAt: null,
       createdAt: new Date("2026-07-14T12:00:00.000Z"),
@@ -28,6 +29,7 @@ test("notification detail is scoped to the signed-in user and in-app channel", a
     });
     assert.equal(row.id, "notification-1");
     assert.equal(row.linkUrl, "/host/bookings");
+    assert.equal(row.imageUrl, "https://media.staynexbookings.ng/property/example.jpg");
   } finally {
     prisma.notification.findFirst = original;
   }

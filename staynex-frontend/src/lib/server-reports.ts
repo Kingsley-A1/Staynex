@@ -51,11 +51,17 @@ async function load<T>(path: string): Promise<Loaded<T>> {
 
 export const getHostBookings = () => load<OwnerBookingsView>("/host/bookings");
 
-export const getHostBooking = (id: string) => load<BookingRow>(`/host/bookings/${id}`);
+export const getHostBooking = (id: string) =>
+  load<BookingRow>(`/host/bookings/${id}`);
 
-export const getAdminApprovals = () => load<PropertySummary[]>("/admin/approvals");
+export const getAdminApprovals = () =>
+  load<PropertySummary[]>("/admin/approvals");
 
-export const getAdminApproval = (id: string) => load<PropertyDetail>(`/admin/approvals/${id}`);
+export const getAdminProperties = () =>
+  load<PropertySummary[]>("/admin/properties");
+
+export const getAdminApproval = (id: string) =>
+  load<PropertyDetail>(`/admin/approvals/${id}`);
 
 export const getAdminBookings = (query?: AdminListQuery) =>
   load<AdminBookingsPage>(`/admin/bookings${adminListQueryString(query)}`);
@@ -80,4 +86,6 @@ export const getAdminTestimonials = (status?: string) =>
   );
 
 export const getAdminAreas = (city?: string) =>
-  load<AreaOption[]>(`/admin/areas${city ? `?city=${encodeURIComponent(city)}` : ""}`);
+  load<AreaOption[]>(
+    `/admin/areas${city ? `?city=${encodeURIComponent(city)}` : ""}`,
+  );

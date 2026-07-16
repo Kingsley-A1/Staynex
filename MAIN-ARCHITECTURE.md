@@ -22,10 +22,10 @@ settle payouts.
 
 **Deployables, one repo:**
 
-| App         | Path                | Stack                                 | Host                     |
-| ----------- | ------------------- | ------------------------------------- | ------------------------ |
-| Backend API | `staynex-backend/`  | NestJS 11 + Prisma 6 (CockroachDB)    | Railway                  |
-| Frontend    | `staynex-frontend/` | Next.js 15 (App Router) + Tailwind v4 | Vercel                   |
+| App         | Path                | Stack                                    | Host                   |
+| ----------- | ------------------- | ---------------------------------------- | ---------------------- |
+| Backend API | `staynex-backend/`  | NestJS 11 + Prisma 6 (CockroachDB)       | Railway                |
+| Frontend    | `staynex-frontend/` | Next.js 15 (App Router) + Tailwind v4    | Vercel                 |
 | Mobile      | `staynex-mobile/`   | Expo SDK 52 (React Native) + Expo Router | EAS (staged, not live) |
 
 The mobile app (staged on `staynex-mobile-staging`) is a pure API client: it
@@ -532,14 +532,16 @@ The trust anchor for check-in is **live server truth**, not a screenshot.
 - **Resilience and vitals:** the generated root service worker provides a
   navigation-only `/offline` fallback without caching authenticated pages.
   Field reporting records whether LCP ≤2.5s, INP ≤200ms, and CLS ≤0.1.
-- **Host availability:** `features/properties/availability-editor.tsx` presents
-  30-day and 90-day quick-open actions plus a custom-range option. Quick setup
-  offers all active units for the chosen room type; advanced availability lets
-  experienced hosts change the saleable rooms per night or close a range with
-  zero. Every action still uses `PUT /availability/capacity`, and the backend
-  protects booked/held inventory. Property review requires at least 30 unique
-  future nights with positive bookable capacity across the property's room
-  types; the quick 30-day action satisfies that gate when inventory is valid.
+- **Host availability:** `features/properties/availability-editor.tsx` lets a
+  host select a room type and the number of consecutive availability days from
+  a clear dropdown (30, 60, 90, 180, or 365), with custom dates available when
+  needed. Setup offers all active units by default; an explicit adjustment
+  control lets experienced hosts change saleable rooms per night or close a
+  range with zero. Every action still uses `PUT /availability/capacity`, and
+  the backend protects booked/held inventory. Property review requires at
+  least 30 unique future nights with positive bookable capacity across the
+  property's room types; the 30-day selection satisfies that gate when
+  inventory is valid.
 
 ---
 

@@ -291,7 +291,7 @@ export function RoomManager({
               min={1}
               max={MAX_ROOM_QUANTITY}
               value={roomQuantity}
-              onChange={(e) => setRoomQuantity(e.target.value)}
+              onChange={(event) => setRoomQuantity(event.target.value)}
               required
             />
           </Field>

@@ -6,6 +6,7 @@ import { RoomManager } from "@/features/properties/room-manager";
 import { AvailabilityEditor } from "@/features/properties/availability-editor";
 import { SubmitForReview } from "@/features/properties/submit-for-review";
 import { MediaManager } from "@/features/media/media-manager";
+import { PropertyDeleteAction } from "@/features/properties/property-delete-action";
 import { getCities, getHostProperty } from "@/lib/server-host";
 
 export const dynamic = "force-dynamic";
@@ -89,6 +90,12 @@ export default async function EditPropertyPage({
             <ReviewStatusPanel property={property} />
           </section>
           <SubmitForReview propertyId={property.id} status={property.status} />
+          <PropertyDeleteAction
+            propertyId={property.id}
+            propertyName={property.name}
+            scope="host"
+            returnHref="/host/properties"
+          />
         </aside>
       </div>
     </div>

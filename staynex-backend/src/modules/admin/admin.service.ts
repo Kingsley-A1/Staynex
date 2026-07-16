@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../db";
 import type {
@@ -42,13 +46,18 @@ import { auditActorId } from "../auth/auth.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PaymentEventsService } from "../payments/payment-events.service";
 import { PaystackService } from "../payments/paystack.service";
-import type { AdminListQuery, ApprovalActionInput, MarkPayoutPaidInput } from "./dto";
+import type {
+  AdminListQuery,
+  ApprovalActionInput,
+  MarkPayoutPaidInput,
+} from "./dto";
 
-const DECISION_STATUS: Record<ApprovalActionInput["decision"], PropertyStatus> = {
-  APPROVE: "APPROVED",
-  REJECT: "REJECTED",
-  REQUEST_CHANGES: "DRAFT",
-};
+const DECISION_STATUS: Record<ApprovalActionInput["decision"], PropertyStatus> =
+  {
+    APPROVE: "APPROVED",
+    REJECT: "REJECTED",
+    REQUEST_CHANGES: "DRAFT",
+  };
 
 const DECISION_ACTION: Record<ApprovalActionInput["decision"], string> = {
   APPROVE: "PROPERTY_APPROVED",
@@ -95,7 +104,9 @@ function encodeCursor(createdAt: Date, id: string): string {
   return `${createdAt.toISOString()}_${id}`;
 }
 
-function decodeCursor(cursor: string | undefined): { createdAt: Date; id: string } | null {
+function decodeCursor(
+  cursor: string | undefined,
+): { createdAt: Date; id: string } | null {
   if (!cursor) return null;
   const split = cursor.lastIndexOf("_");
   if (split <= 0) return null;
@@ -131,25 +142,32 @@ function summarizeMetric(name: WebVitalName, rows: WebVitalRow[]) {
   const latest = group[0];
   const target = CORE_TARGETS[name] ?? latest?.target ?? null;
   const values = group.map((row) => row.value);
-  const goodCount = group.filter((row) => normalizedRating(row) === "good").length;
+  const goodCount = group.filter(
+    (row) => normalizedRating(row) === "good",
+  ).length;
   const needsImprovementCount = group.filter(
     (row) => normalizedRating(row) === "needs-improvement",
   ).length;
-  const poorCount = group.filter((row) => normalizedRating(row) === "poor").length;
+  const poorCount = group.filter(
+    (row) => normalizedRating(row) === "poor",
+  ).length;
   const targetMetRows = group.filter((row) => row.targetMet !== null);
 
   return {
     name,
     sampleCount: group.length,
     p75: percentile(values, 0.75),
-    average: values.length ? round(values.reduce((sum, value) => sum + value, 0) / values.length) : null,
+    average: values.length
+      ? round(values.reduce((sum, value) => sum + value, 0) / values.length)
+      : null,
     goodCount,
     needsImprovementCount,
     poorCount,
     target,
     targetMetRate: targetMetRows.length
       ? round(
-          (targetMetRows.filter((row) => row.targetMet === true).length / targetMetRows.length) *
+          (targetMetRows.filter((row) => row.targetMet === true).length /
+            targetMetRows.length) *
             100,
         )
       : null,
@@ -186,27 +204,39 @@ function performanceRecommendations(
   sampleCount: number,
 ): string[] {
   if (sampleCount === 0) {
-    return ["No browser samples yet. Open the public and host journeys once after deploy."];
+    return [
+      "No browser samples yet. Open the public and host journeys once after deploy.",
+    ];
   }
   const recommendations: string[] = [];
   const lcp = metrics.find((metric) => metric.name === "LCP");
   const inp = metrics.find((metric) => metric.name === "INP");
   const cls = metrics.find((metric) => metric.name === "CLS");
   if ((lcp?.p75 ?? 0) > 2500) {
-    recommendations.push("LCP is above 2.5s. Check hero image priority, CDN caching, and API waterfalls.");
+    recommendations.push(
+      "LCP is above 2.5s. Check hero image priority, CDN caching, and API waterfalls.",
+    );
   }
   if ((inp?.p75 ?? 0) > 200) {
-    recommendations.push("INP is above 200ms. Audit heavy client bundles and interactive handlers.");
+    recommendations.push(
+      "INP is above 200ms. Audit heavy client bundles and interactive handlers.",
+    );
   }
   if ((cls?.p75 ?? 0) > 0.1) {
-    recommendations.push("CLS is above 0.1. Reserve media/header space and avoid late layout shifts.");
+    recommendations.push(
+      "CLS is above 0.1. Reserve media/header space and avoid late layout shifts.",
+    );
   }
   const poorRoute = routes.find((route) => route.poorCount > 0);
   if (poorRoute) {
-    recommendations.push(`Prioritize ${poorRoute.route}; it has the highest poor-sample count.`);
+    recommendations.push(
+      `Prioritize ${poorRoute.route}; it has the highest poor-sample count.`,
+    );
   }
   if (recommendations.length === 0) {
-    recommendations.push("Core Web Vitals are within the current Staynex targets for this sample window.");
+    recommendations.push(
+      "Core Web Vitals are within the current Staynex targets for this sample window.",
+    );
   }
   return recommendations;
 }
@@ -225,7 +255,10 @@ function normalizedRating(row: WebVitalRow): string | null {
 function percentile(values: number[], point: number): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * point) - 1);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.ceil(sorted.length * point) - 1,
+  );
   return round(sorted[index]);
 }
 
@@ -250,6 +283,15 @@ export class AdminService {
     const rows = await prisma.property.findMany({
       where: { status: "PENDING_REVIEW" },
       orderBy: { updatedAt: "asc" },
+      include: propertySummaryInclude,
+    });
+    return rows.map(toPropertySummary);
+  }
+
+  async listProperties(): Promise<PropertySummary[]> {
+    const rows = await prisma.property.findMany({
+      where: { status: { not: "ARCHIVED" } },
+      orderBy: { updatedAt: "desc" },
       include: propertySummaryInclude,
     });
     return rows.map(toPropertySummary);
@@ -328,7 +370,11 @@ export class AdminService {
       return next;
     });
 
-    await this.notifications.onPropertyManualDecision(propertyId, input.decision, input.note);
+    await this.notifications.onPropertyManualDecision(
+      propertyId,
+      input.decision,
+      input.note,
+    );
     return { id: updated.id, status: updated.status as PropertyStatus };
   }
 
@@ -344,11 +390,17 @@ export class AdminService {
             OR: [
               { id: query.q },
               { guestEmail: { contains: query.q, mode: "insensitive" } },
-              { payment: { reference: { contains: query.q, mode: "insensitive" } } },
+              {
+                payment: {
+                  reference: { contains: query.q, mode: "insensitive" },
+                },
+              },
               {
                 roomUnit: {
                   roomType: {
-                    property: { name: { contains: query.q, mode: "insensitive" } },
+                    property: {
+                      name: { contains: query.q, mode: "insensitive" },
+                    },
                   },
                 },
               },
@@ -367,7 +419,10 @@ export class AdminService {
     const last = page[page.length - 1];
     return {
       rows: page.map(toBookingRow),
-      nextCursor: rows.length > query.take && last ? encodeCursor(last.createdAt, last.id) : null,
+      nextCursor:
+        rows.length > query.take && last
+          ? encodeCursor(last.createdAt, last.id)
+          : null,
     };
   }
 
@@ -380,12 +435,18 @@ export class AdminService {
         ? {
             OR: [
               { reference: { contains: query.q, mode: "insensitive" } },
-              { booking: { guestEmail: { contains: query.q, mode: "insensitive" } } },
+              {
+                booking: {
+                  guestEmail: { contains: query.q, mode: "insensitive" },
+                },
+              },
               {
                 booking: {
                   roomUnit: {
                     roomType: {
-                      property: { name: { contains: query.q, mode: "insensitive" } },
+                      property: {
+                        name: { contains: query.q, mode: "insensitive" },
+                      },
                     },
                   },
                 },
@@ -405,7 +466,10 @@ export class AdminService {
     const last = page[page.length - 1];
     return {
       rows: page.map(toPaymentRow),
-      nextCursor: rows.length > query.take && last ? encodeCursor(last.createdAt, last.id) : null,
+      nextCursor:
+        rows.length > query.take && last
+          ? encodeCursor(last.createdAt, last.id)
+          : null,
     };
   }
 
@@ -423,7 +487,9 @@ export class AdminService {
         booking: {
           include: {
             roomUnit: {
-              include: { roomType: { include: { property: { select: { name: true } } } } },
+              include: {
+                roomType: { include: { property: { select: { name: true } } } },
+              },
             },
           },
         },
@@ -458,18 +524,23 @@ export class AdminService {
       status: p.status as PaymentState,
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
-      events: (p.reference ? (eventsByRef.get(p.reference) ?? []) : []).map((e) => ({
-        id: e.id,
-        eventType: e.eventType,
-        outcome: e.outcome,
-        detail: e.detail,
-        createdAt: e.createdAt.toISOString(),
-      })),
+      events: (p.reference ? (eventsByRef.get(p.reference) ?? []) : []).map(
+        (e) => ({
+          id: e.id,
+          eventType: e.eventType,
+          outcome: e.outcome,
+          detail: e.detail,
+          createdAt: e.createdAt.toISOString(),
+        }),
+      ),
     }));
   }
 
   /** Audited support action: force a fresh provider verification. */
-  async reverifyPayment(admin: AuthUser, reference: string): Promise<AdminPaymentRow> {
+  async reverifyPayment(
+    admin: AuthUser,
+    reference: string,
+  ): Promise<AdminPaymentRow> {
     const exists = await prisma.payment.findUnique({
       where: { reference },
       select: { id: true },
@@ -539,7 +610,9 @@ export class AdminService {
 
   /** Core Web Vitals and route health from first-party browser beacons. */
   async performance(): Promise<AdminPerformanceView> {
-    const since = new Date(Date.now() - PERFORMANCE_WINDOW_HOURS * 60 * 60 * 1000);
+    const since = new Date(
+      Date.now() - PERFORMANCE_WINDOW_HOURS * 60 * 60 * 1000,
+    );
     const rows = await prisma.webVitalMetric.findMany({
       where: { createdAt: { gte: since } },
       orderBy: { createdAt: "desc" },
@@ -569,7 +642,11 @@ export class AdminService {
         include: payoutRowInclude,
       }),
       prisma.payment.aggregate({
-        _sum: { grossAmountKobo: true, platformFeeKobo: true, ownerPayoutKobo: true },
+        _sum: {
+          grossAmountKobo: true,
+          platformFeeKobo: true,
+          ownerPayoutKobo: true,
+        },
         where: { status: "SUCCESS" },
       }),
       prisma.payout.groupBy({ by: ["status"], _sum: { amount: true } }),
@@ -579,7 +656,8 @@ export class AdminService {
     let paidPayoutKobo = 0;
     for (const group of payoutByStatus) {
       const sum = group._sum.amount ?? 0;
-      if (group.status === "PENDING" || group.status === "PROCESSING") pendingPayoutKobo += sum;
+      if (group.status === "PENDING" || group.status === "PROCESSING")
+        pendingPayoutKobo += sum;
       else if (group.status === "PAID") paidPayoutKobo += sum;
     }
 
@@ -611,8 +689,10 @@ export class AdminService {
       select: { id: true, status: true, propertyId: true, eligibleAt: true },
     });
     if (!existing) throw new NotFoundException("Payout not found");
-    if (existing.status === "PAID") throw new BadRequestException("Payout is already marked paid");
-    if (existing.status === "FAILED") throw new BadRequestException("This payout is marked failed");
+    if (existing.status === "PAID")
+      throw new BadRequestException("Payout is already marked paid");
+    if (existing.status === "FAILED")
+      throw new BadRequestException("This payout is marked failed");
 
     const now = new Date();
     const early = existing.eligibleAt.getTime() > now.getTime();
@@ -623,7 +703,9 @@ export class AdminService {
       );
     }
     if (early && !input.note?.trim()) {
-      throw new BadRequestException("Early settlement requires a note explaining why.");
+      throw new BadRequestException(
+        "Early settlement requires a note explaining why.",
+      );
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -667,7 +749,9 @@ export class AdminService {
     });
     if (!existing) throw new NotFoundException("Payout not found");
     if (existing.status !== "PENDING" && existing.status !== "PROCESSING") {
-      throw new BadRequestException(`Only unsettled payouts can be failed (status is ${existing.status}).`);
+      throw new BadRequestException(
+        `Only unsettled payouts can be failed (status is ${existing.status}).`,
+      );
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -724,7 +808,10 @@ export class AdminService {
 
   /** AI assistant action log (conversations are tool-first; never authority). */
   async aiLogs(): Promise<AiLogRow[]> {
-    const rows = await prisma.aIActionLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 });
+    const rows = await prisma.aIActionLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
     return rows.map((r) => ({
       id: r.id,
       conversationId: r.conversationId,
@@ -734,7 +821,9 @@ export class AdminService {
     }));
   }
 
-  private async paymentRowByReference(reference: string): Promise<AdminPaymentRow> {
+  private async paymentRowByReference(
+    reference: string,
+  ): Promise<AdminPaymentRow> {
     const payment = await prisma.payment.findUnique({
       where: { reference },
       include: paymentRowInclude,

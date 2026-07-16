@@ -811,6 +811,7 @@ function toPropertySummarySnapshot(property: PropertySummary): PropertySummary {
     fromPriceKobo: property.fromPriceKobo,
     roomTypeCount: property.roomTypeCount,
     coverImageUrl: property.coverImageUrl,
+    availabilityEndsAt: property.availabilityEndsAt,
     updatedAt: property.updatedAt,
   };
 }

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../../db";
 import type {
   CityOption,
@@ -14,7 +15,22 @@ import {
   toPropertySummary,
 } from "../properties/mappers";
 import { nightsOf } from "../bookings/util";
+import { utcToday } from "../../common/dates";
 import type { SearchQuery } from "./dto";
+
+/** Public listings must be approved and have at least one configured future day. */
+function publicCatalogWhere(): Prisma.PropertyWhereInput {
+  return {
+    status: "APPROVED",
+    roomTypes: {
+      some: {
+        availability: {
+          some: { date: { gte: utcToday() }, totalUnits: { gt: 0 } },
+        },
+      },
+    },
+  };
+}
 
 /** Public guest catalog. Only APPROVED properties are ever exposed. */
 @Injectable()
@@ -22,7 +38,7 @@ export class CatalogService {
   async home(): Promise<HomeCatalogView> {
     const [latestRows, mostBooked, destinations] = await Promise.all([
       prisma.property.findMany({
-        where: { status: "APPROVED" },
+        where: publicCatalogWhere(),
         orderBy: { updatedAt: "desc" },
         take: 8,
         include: propertySummaryInclude,
@@ -61,7 +77,7 @@ export class CatalogService {
 
     const rows = await prisma.property.findMany({
       where: {
-        status: "APPROVED",
+        ...publicCatalogWhere(),
         cityId: { in: cities.map((c) => c.id) },
         ...(propertyIds ? { id: { in: propertyIds } } : {}),
         ...(query.area ? { area: { slug: query.area } } : {}),
@@ -86,7 +102,7 @@ export class CatalogService {
 
   async getPublicProperty(slug: string): Promise<PropertyDetail> {
     const property = await prisma.property.findFirst({
-      where: { slug, status: "APPROVED" },
+      where: { slug, ...publicCatalogWhere() },
       include: propertyDetailInclude,
     });
     if (!property) throw new NotFoundException("Property not found");
@@ -103,7 +119,7 @@ export class CatalogService {
     limit = 3,
   ): Promise<PropertySummary[]> {
     const candidates = await prisma.property.findMany({
-      where: { status: "APPROVED" },
+      where: publicCatalogWhere(),
       orderBy: { updatedAt: "desc" },
       take: 500,
       select: { id: true, name: true, slug: true },
@@ -123,7 +139,7 @@ export class CatalogService {
     if (matchingIds.length === 0) return [];
 
     const rows = await prisma.property.findMany({
-      where: { id: { in: matchingIds }, status: "APPROVED" },
+      where: { id: { in: matchingIds }, ...publicCatalogWhere() },
       include: propertySummaryInclude,
     });
     const byId = new Map(rows.map((row) => [row.id, toPropertySummary(row)]));
@@ -137,7 +153,7 @@ export class CatalogService {
     const bookings = await prisma.booking.findMany({
       where: {
         status: "CONFIRMED",
-        roomUnit: { roomType: { property: { status: "APPROVED" } } },
+        roomUnit: { roomType: { property: publicCatalogWhere() } },
       },
       select: {
         roomUnit: { select: { roomType: { select: { propertyId: true } } } },
@@ -158,7 +174,7 @@ export class CatalogService {
     if (orderedIds.length === 0) return [];
 
     const rows = await prisma.property.findMany({
-      where: { id: { in: orderedIds }, status: "APPROVED" },
+      where: { id: { in: orderedIds }, ...publicCatalogWhere() },
       include: propertySummaryInclude,
     });
     const byId = new Map(rows.map((row) => [row.id, toPropertySummary(row)]));
@@ -177,7 +193,7 @@ export class CatalogService {
           name: true,
           slug: true,
           properties: {
-            where: { status: "APPROVED" },
+            where: publicCatalogWhere(),
             orderBy: { updatedAt: "desc" },
             take: 6,
             select: {
@@ -193,7 +209,7 @@ export class CatalogService {
       }),
       prisma.property.groupBy({
         by: ["cityId"],
-        where: { status: "APPROVED" },
+        where: publicCatalogWhere(),
         _count: { _all: true },
       }),
     ]);
@@ -219,7 +235,7 @@ export class CatalogService {
     const nights = nightsOf(query.checkIn, query.checkOut);
     const roomTypes = await prisma.roomType.findMany({
       where: {
-        property: { status: "APPROVED", cityId: { in: cityIds } },
+        property: { ...publicCatalogWhere(), cityId: { in: cityIds } },
         ...(query.guests ? { maxGuests: { gte: query.guests } } : {}),
       },
       select: {

@@ -231,6 +231,11 @@ export const hostApi = {
     request<PropertyDetail>(`/host/properties/${id}/submit`, {
       method: "POST",
     }),
+  deleteProperty: (id: string) =>
+    request<{ id: string; status: "ARCHIVED" }>(
+      `/host/properties/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    ),
   createRoomType: (body: {
     propertyId: string;
     name: string;
@@ -371,6 +376,11 @@ export const adminApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  deleteProperty: (id: string) =>
+    request<{ id: string; status: "ARCHIVED" }>(
+      `/admin/properties/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    ),
   bookings: (query?: AdminListQuery) =>
     request<AdminBookingsPage>(`/admin/bookings${adminListQueryString(query)}`),
   payments: (query?: AdminListQuery) =>
@@ -514,7 +524,7 @@ export const authApi = {
       body: JSON.stringify(body),
     }),
   google: (idToken: string, intent?: "GUEST" | "OWNER") =>
-    request<AuthUser>("/auth/google", {
+    request<AuthResponse>("/auth/google", {
       method: "POST",
       body: JSON.stringify(intent ? { idToken, intent } : { idToken }),
     }),

@@ -89,6 +89,7 @@ export interface PropertySummary {
   fromPriceKobo: number | null;
   roomTypeCount: number;
   coverImageUrl: string | null;
+  availabilityEndsAt: string | null;
   updatedAt: string;
 }
 
@@ -416,6 +417,7 @@ export type NotificationTypeValue =
   | "PAYOUT_FAILED"
   | "PAYMENT_EXCEPTION"
   | "PROPERTY_REVIEW"
+  | "PROPERTY_AVAILABILITY"
   | "CHECKIN_REMINDER"
   | "GENERAL";
 
@@ -424,6 +426,7 @@ export interface NotificationRow {
   type: NotificationTypeValue;
   title: string;
   body: string;
+  imageUrl: string | null;
   linkUrl: string | null;
   readAt: string | null;
   createdAt: string;

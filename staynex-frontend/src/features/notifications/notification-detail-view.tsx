@@ -7,6 +7,7 @@ import { IconBell } from "@/components/icons";
 import { ApiError, notificationsApi } from "@/lib/api";
 import type { NotificationRow } from "@/lib/types";
 import { ViewSourceButton } from "./view-source-button";
+import { OptimizedFillImage } from "@/ui/optimized-fill-image";
 
 export function NotificationDetailView({
   notificationId,
@@ -15,7 +16,9 @@ export function NotificationDetailView({
   notificationId: string;
   inboxHref: string;
 }) {
-  const [notification, setNotification] = useState<NotificationRow | null>(null);
+  const [notification, setNotification] = useState<NotificationRow | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [offline, setOffline] = useState(false);
@@ -46,7 +49,10 @@ export function NotificationDetailView({
 
   if (loading) {
     return (
-      <p className="py-16 text-center text-caption text-muted-foreground" role="status">
+      <p
+        className="py-16 text-center text-caption text-muted-foreground"
+        role="status"
+      >
         Loading notification…
       </p>
     );
@@ -84,6 +90,16 @@ export function NotificationDetailView({
       </Link>
 
       <div className="surface-card mt-3 overflow-hidden">
+        {notification.imageUrl && (
+          <div className="relative aspect-[16/7] bg-secondary">
+            <OptimizedFillImage
+              src={notification.imageUrl}
+              alt="Property referenced by this notification"
+              sizes="(min-width: 768px) 672px, 100vw"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          </div>
+        )}
         <header className="border-b border-border bg-primary-subtle/35 p-5 sm:p-6">
           <span className="inline-flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground">
             <IconBell className="size-5" />

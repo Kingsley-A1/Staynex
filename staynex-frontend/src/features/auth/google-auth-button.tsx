@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { authApi } from "@/lib/api";
 import { authDestination } from "@/features/auth/navigate";
-import type { AuthUser } from "@/lib/types";
+import {
+  isAuthMfaChallenge,
+  type AuthMfaChallenge,
+  type AuthUser,
+} from "@/lib/types";
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
@@ -27,11 +31,13 @@ interface GoogleIdentity {
 export function GoogleAuthButton({
   next,
   onSuccess,
+  onMfaRequired,
   onError,
   intent,
 }: {
   next?: string;
   onSuccess?: (user: AuthUser) => void;
+  onMfaRequired?: (challenge: AuthMfaChallenge) => void;
   onError?: (message: string) => void;
   intent?: "GUEST" | "OWNER";
 }) {
@@ -64,13 +70,18 @@ export function GoogleAuthButton({
     async function handleCredential(idToken: string) {
       setError(null);
       try {
-        const user = await authApi.google(idToken, intent);
-        if (onSuccess) onSuccess(user);
+        const result = await authApi.google(idToken, intent);
+        if (isAuthMfaChallenge(result)) {
+          if (onMfaRequired) onMfaRequired(result);
+          else fail("Complete the admin verification step to continue.");
+          return;
+        }
+        if (onSuccess) onSuccess(result);
         else {
           // Full-page navigation, NOT router.push — see goHome() in
           // auth-form.tsx: a stale pre-sign-in router-cache entry for the
           // target route would bounce the user back to /sign-in.
-          window.location.assign(authDestination(user, next));
+          window.location.assign(authDestination(result, next));
         }
       } catch (err) {
         const message =
@@ -123,13 +134,16 @@ export function GoogleAuthButton({
     return () => {
       cancelled = true;
     };
-  }, [next, onSuccess, onError, intent, width]);
+  }, [next, onSuccess, onMfaRequired, onError, intent, width]);
 
   if (!CLIENT_ID) return null;
 
   return (
     <div className="space-y-3">
-      <div ref={ref} className="flex min-h-10 w-full justify-center overflow-hidden" />
+      <div
+        ref={ref}
+        className="flex min-h-10 w-full justify-center overflow-hidden"
+      />
       {error && (
         <p className="text-center text-sm text-error" role="alert">
           {error}

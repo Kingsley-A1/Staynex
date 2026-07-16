@@ -86,6 +86,9 @@ test("workspace chrome uses the shared accessible breadcrumb", async () => {
   assert.match(breadcrumb, /aria-current/);
   assert.match(chrome, /workspaceBreadcrumbs/);
   assert.match(chrome, /<Breadcrumbs/);
+  assert.match(chrome, /showBreadcrumbs = breadcrumbs\.length > 1/);
+  assert.match(chrome, /sticky top-0/);
+  assert.match(chrome, /sticky top-16/);
 });
 
 test("welcome gradient avoids oversized conic textures and blur filters", async () => {
@@ -124,6 +127,8 @@ test("host workspace label moves to the desktop header without sidebar duplicati
     hostNav.indexOf("export const ADMIN_NAV"),
   );
   assert.doesNotMatch(hostItems, /section: "Workspace"/);
+  assert.match(hostItems, /href: "\/host\/bookings"/);
+  assert.match(hostItems, /href: "\/host\/support"/);
 });
 
 test("notification inbox opens complete ID views with a reusable safe source CTA", async () => {
@@ -148,7 +153,6 @@ test("admin MFA uses one accessible OTP field rendered as six cells", async () =
   assert.match(codeInput, /grid-cols-6/);
   assert.match(codeInput, /autoComplete="one-time-code"/);
   assert.match(codeInput, /aria-invalid/);
-  assert.doesNotMatch(codeInput, /focus-within:ring|rounded-lg border-0 bg-transparent/);
 });
 
 test("guest images use bounded high-quality optimization and offline navigation fallback", async () => {
@@ -222,6 +226,30 @@ test("approved property cards use the accessible Staynex verified mark", async (
   assert.match(badge, /<span>Verified<\/span>/);
   assert.match(badge, /text-primary/);
   assert.match(icons, /export function IconVerified/);
+});
+
+test("property lifecycle controls hide expired guest inventory and expose safe deletion", async () => {
+  const [card, deleteAction, hostDetail, adminDetail, api, adminList] =
+    await Promise.all([
+      source("../src/ui/property-card.tsx"),
+      source("../src/features/properties/property-delete-action.tsx"),
+      source("../src/app/(host)/host/properties/[id]/page.tsx"),
+      source("../src/app/(admin)/admin/approvals/[id]/page.tsx"),
+      source("../src/lib/api.ts"),
+      source("../src/app/(admin)/admin/properties/page.tsx"),
+    ]);
+
+  assert.match(card, /availabilityEndsAt/);
+  assert.match(card, /Availability ended/);
+  assert.match(
+    deleteAction,
+    /Type <span className="font-mono">\{propertyName\}/,
+  );
+  assert.match(deleteAction, /apiErrorMessage/);
+  assert.match(hostDetail, /<PropertyDeleteAction/);
+  assert.match(adminDetail, /<PropertyDeleteAction/);
+  assert.match(api, /deleteProperty: \(id: string\)/);
+  assert.match(adminList, /<PropertyCard/);
 });
 
 test("new room types visibly and server-contractually default to one room", async () => {

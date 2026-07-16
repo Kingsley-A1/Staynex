@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import type { AuthUser } from "../../../types";
 import { parseBody } from "../../common/http";
 import { RateLimit } from "../../common/rate-limit.guard";
@@ -9,6 +18,7 @@ import {
   SessionGuard,
 } from "../auth/access-control";
 import { AdminService } from "./admin.service";
+import { PropertiesService } from "../properties/properties.service";
 import {
   adminListQuerySchema,
   approvalActionSchema,
@@ -21,11 +31,19 @@ import {
 @UseGuards(SessionGuard, CapabilitiesGuard)
 @RequireAnyCapability("ADMIN_REVIEWER", "ADMIN_MANAGER")
 export class AdminController {
-  constructor(private readonly admin: AdminService) {}
+  constructor(
+    private readonly admin: AdminService,
+    private readonly properties: PropertiesService,
+  ) {}
 
   @Get("approvals")
   async queue() {
     return this.admin.approvalQueue();
+  }
+
+  @Get("properties")
+  async listProperties() {
+    return this.admin.listProperties();
   }
 
   @Get("approvals/:id")
@@ -46,6 +64,21 @@ export class AdminController {
     @Body() body: unknown,
   ) {
     return this.admin.review(admin, id, parseBody(approvalActionSchema, body));
+  }
+
+  @Delete("properties/:id")
+  @RequireAnyCapability("ADMIN_MANAGER")
+  @RateLimit({
+    bucket: "admin:property-delete",
+    limit: 6,
+    windowMs: 60_000,
+    keyBy: ["user"],
+  })
+  async archiveProperty(
+    @CurrentUser() admin: AuthUser,
+    @Param("id") id: string,
+  ) {
+    return this.properties.archiveForAdmin(admin, id);
   }
 
   // --- Money operations: searchable lists, exception queue, actions --------
@@ -129,7 +162,11 @@ export class AdminController {
     @Param("id") id: string,
     @Body() body: unknown,
   ) {
-    return this.admin.markPayoutPaid(admin, id, parseBody(markPayoutPaidSchema, body));
+    return this.admin.markPayoutPaid(
+      admin,
+      id,
+      parseBody(markPayoutPaidSchema, body),
+    );
   }
 
   @Post("payouts/:id/failed")

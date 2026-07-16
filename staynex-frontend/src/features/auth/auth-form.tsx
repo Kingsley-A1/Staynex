@@ -302,6 +302,10 @@ export function AuthForm({
         <GoogleAuthButton
           next={next}
           onSuccess={onSuccess}
+          onMfaRequired={(challenge) => {
+            clearErrors();
+            setMfaChallenge(challenge);
+          }}
           onError={setError}
           intent={ownerIntent ? "OWNER" : undefined}
         />

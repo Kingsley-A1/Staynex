@@ -60,6 +60,12 @@ export const HOST_NAV: WorkspaceNavItem[] = [
     icon: "settings",
     section: "Account",
   },
+  {
+    href: "/host/support",
+    label: "Support",
+    icon: "support",
+    section: "Account",
+  },
 ];
 
 export const ADMIN_NAV: WorkspaceNavItem[] = [
@@ -70,6 +76,13 @@ export const ADMIN_NAV: WorkspaceNavItem[] = [
     icon: "approvals",
     section: "Operations",
     entityLabel: "Approval",
+  },
+  {
+    href: "/admin/properties",
+    label: "Properties",
+    icon: "properties",
+    section: "Operations",
+    entityLabel: "Property",
   },
   {
     href: "/admin/bookings",
