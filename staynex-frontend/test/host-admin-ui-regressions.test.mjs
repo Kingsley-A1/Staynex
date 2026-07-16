@@ -91,6 +91,13 @@ test("workspace chrome uses the shared accessible breadcrumb", async () => {
   assert.match(chrome, /sticky top-16/);
 });
 
+test("mobile workspace drawer overlays sticky header and breadcrumbs", async () => {
+  const mobileNav = await source("../src/components/mobile-nav.tsx");
+  assert.match(mobileNav, /z-\[var\(--z-drawer\)\]/);
+  assert.match(mobileNav, /z-\[calc\(var\(--z-drawer\)-1\)\]/);
+  assert.doesNotMatch(mobileNav, /z-40|z-50/);
+});
+
 test("welcome gradient avoids oversized conic textures and blur filters", async () => {
   const motion = await source("../src/styles/motion.css");
   const gradient = motion.slice(

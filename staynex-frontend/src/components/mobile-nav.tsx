@@ -54,7 +54,7 @@ export function MobileNav({
       {/* Backdrop */}
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-black/30"
+          className="fixed inset-0 z-[calc(var(--z-drawer)-1)] bg-black/30"
           onClick={() => setOpen(false)}
           aria-hidden
         />
@@ -65,7 +65,7 @@ export function MobileNav({
         id="mobile-sidebar"
         aria-hidden={!open}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-surface-raised transition-transform duration-200 ease-in-out",
+          "fixed inset-y-0 left-0 z-[var(--z-drawer)] flex w-64 flex-col border-r border-border bg-surface-raised shadow-2xl transition-transform duration-200 ease-in-out",
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
