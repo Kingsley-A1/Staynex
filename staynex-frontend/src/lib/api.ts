@@ -54,14 +54,13 @@ import type {
   ResolvedPayoutAccount,
   SessionSummary,
 } from "@/lib/types";
-import { API_BASE } from "@/lib/api-base";
+import { API_BASE, BROWSER_API_BASE } from "@/lib/api-base";
 import { parseAssistantEvent, splitSseBlocks } from "@/lib/ai-stream-protocol";
 import type { AssistantRecovery } from "@/lib/types";
 
 type RequestOptions = RequestInit;
 const CSRF_COOKIE = "staynex_csrf";
 const CSRF_HEADER = "X-CSRF-Token";
-const BROWSER_API_BASE = "/api/backend";
 const AI_STREAM_IDLE_TIMEOUT_MS = 30_000;
 let csrfTokenCache: string | null = null;
 let csrfTokenRequest: Promise<string | null> | null = null;

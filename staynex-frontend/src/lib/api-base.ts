@@ -7,12 +7,22 @@ function normalizeApiBase(input: string | undefined): string {
 
 export const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_URL);
 
-/** Direct link to the canonical voucher PDF (also the email attachment). */
+/** Same-origin proxy path (see app/api/backend/[...path]/route.ts). Browser
+ *  requests must go through here, never straight at API_BASE — the backend
+ *  origin isn't guaranteed reachable/CORS-open from the guest's device, and
+ *  the proxy is what every other client fetch already relies on. */
+export const BROWSER_API_BASE = "/api/backend";
+
+/** Voucher PDF link for the browser (also the exact bytes emailed as the
+ *  attachment, fetched server-side via API_BASE there). */
 export function voucherPdfUrl(reference: string): string {
-  return `${API_BASE}/vouchers/${encodeURIComponent(reference)}/pdf`;
+  return `${BROWSER_API_BASE}/vouchers/${encodeURIComponent(reference)}/pdf`;
 }
 
-/** SVG QR image the on-page voucher renders (points to /verify/<reference>). */
+/** SVG QR the on-page voucher renders (points to /verify/<reference>). Same
+ *  proxy path as the PDF link — a direct API_BASE URL broke this image for
+ *  guests whenever the backend origin wasn't reachable/CORS-open from their
+ *  device (e.g. mixed content on http-only API_BASE, or no CORS headers). */
 export function voucherQrUrl(reference: string): string {
-  return `${API_BASE}/vouchers/${encodeURIComponent(reference)}/qr.svg`;
+  return `${BROWSER_API_BASE}/vouchers/${encodeURIComponent(reference)}/qr.svg`;
 }
