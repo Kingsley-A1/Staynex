@@ -32,6 +32,14 @@
   --color-indigo-800: #1e1263;
   --color-indigo-900: #150c46;
 
+  /* Accent spectrum — the multicolour Staynex signature that circulates on the
+     search panel ring (.attention-border) and colours the welcome gradient
+     (.animated-gradient). Mature, saturated mid-tones: keep this trio the
+     single source for any "many colours" brand moment. */
+  --color-accent-sky:   #0ea5e9;
+  --color-accent-teal:  #14b8a6;
+  --color-accent-amber: #f59e0b;
+
   /* Neutrals (purple-tinted slate to match #F7F7FF / #6E6A83 / #101014) */
   --color-neutral-0:   #ffffff;
   --color-neutral-50:  #f7f7ff; /* Brand background */

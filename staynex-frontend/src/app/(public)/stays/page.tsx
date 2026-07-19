@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
+import { AnimatedGradient } from "@/components/animated-gradient";
 import { PropertyCard, PropertyCardSkeletonGrid } from "@/ui";
 import { SearchPanel } from "@/features/booking/search-panel";
 import { CITIES } from "@/features/properties/fixtures";
@@ -16,40 +17,48 @@ export const metadata: Metadata = {
 
 export default async function StaysDashboardPage() {
   return (
-    <main className="layout-container space-y-12 py-8 sm:py-10">
-      {/* Greeting + quick search render instantly */}
-      <section className="space-y-5">
-        <header className="space-y-1">
-          <h1 className="text-display-sm text-ink">
-            Find your next stay
-          </h1>
-          <p className="text-body-lg text-muted-foreground">
-            Verified stays across our launch cities — pick up where you left off.
-          </p>
-        </header>
-        <SearchPanel />
-      </section>
-
-      {/* Aggregated stays stream in with a mirrored skeleton */}
-      <Suspense fallback={<StaysSectionsFallback />}>
-        <StaysSections />
-      </Suspense>
-
-      {/* Explore by city — static, no data dependency */}
-      <section className="space-y-4">
-        <h2 className="text-title-md text-ink">Explore by city</h2>
-        <div className="flex flex-wrap gap-2">
-          {CITIES.map((c) => (
-            <Link
-              key={c.id}
-              href={`/search?city=${encodeURIComponent(c.name)}`}
-              className="inline-flex items-center rounded-full border border-border bg-surface-raised px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
-            >
-              {c.name}
-            </Link>
-          ))}
+    <main>
+      {/* Greeting + quick search render instantly, on the same brand-gradient
+          hero as the welcome page. */}
+      <section className="home-hero relative overflow-hidden">
+        <AnimatedGradient />
+        <div className="layout-container relative z-10 space-y-5 py-10 sm:py-12">
+          <header className="space-y-1">
+            <h1 className="text-display-sm text-ink">
+              Find your next stay
+            </h1>
+            <p className="text-body-lg text-muted-foreground">
+              Verified stays across our launch cities — pick up where you left off.
+            </p>
+          </header>
+          <div className="max-w-4xl">
+            <SearchPanel />
+          </div>
         </div>
       </section>
+
+      <div className="layout-container space-y-12 py-10 sm:py-12">
+        {/* Aggregated stays stream in with a mirrored skeleton */}
+        <Suspense fallback={<StaysSectionsFallback />}>
+          <StaysSections />
+        </Suspense>
+
+        {/* Explore by city — static, no data dependency */}
+        <section className="space-y-4">
+          <h2 className="text-title-md text-ink">Explore by city</h2>
+          <div className="flex flex-wrap gap-2">
+            {CITIES.map((c) => (
+              <Link
+                key={c.id}
+                href={`/search?city=${encodeURIComponent(c.name)}`}
+                className="inline-flex items-center rounded-full border border-border bg-surface-raised px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+              >
+                {c.name}
+              </Link>
+            ))}
+          </div>
+        </section>
+      </div>
     </main>
   );
 }

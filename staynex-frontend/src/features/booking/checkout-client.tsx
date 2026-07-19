@@ -1,15 +1,19 @@
 "use client";
 
 import { type FormEvent, useEffect, useState } from "react";
-import { Button, Field, Input } from "@/ui";
+import { Button, Field, Input, LinkButton } from "@/ui";
 import { AuthForm } from "@/features/auth/auth-form";
-import { guestApi, authApi } from "@/lib/api";
+import { ApiError, guestApi, authApi } from "@/lib/api";
 import { formatNairaFromKobo } from "@/lib/format";
 import type { AuthUser, HoldSummary } from "@/lib/types";
 
 export function CheckoutClient({ holdId }: { holdId: string }) {
   const [hold, setHold] = useState<HoldSummary | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // The hold no longer exists server-side — it was consumed when a payment
+  // attempt started, or released after expiry. Common when a guest navigates
+  // back to checkout after a failed/abandoned Paystack payment.
+  const [holdGone, setHoldGone] = useState(false);
   // undefined = still checking session; null = signed out.
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
@@ -22,9 +26,11 @@ export function CheckoutClient({ holdId }: { holdId: string }) {
     guestApi
       .getHold(holdId)
       .then((h) => active && setHold(h))
-      .catch((err) =>
-        active && setLoadError(err instanceof Error ? err.message : "Could not load reservation"),
-      );
+      .catch((err) => {
+        if (!active) return;
+        if (err instanceof ApiError && err.status === 404) setHoldGone(true);
+        else setLoadError(err instanceof Error ? err.message : "Could not load reservation");
+      });
     authApi
       .me()
       .then((u) => {
@@ -51,10 +57,41 @@ export function CheckoutClient({ holdId }: { holdId: string }) {
     }
   }
 
+  if (holdGone) {
+    return (
+      <div className="surface-card space-y-3 p-6 text-center">
+        <div className="mx-auto grid size-12 place-items-center rounded-full bg-warning-surface text-lg font-bold text-warning" aria-hidden>
+          ⏳
+        </div>
+        <h2 className="text-title-md text-ink">This checkout session has ended</h2>
+        <p className="text-muted-foreground">
+          Your reservation hold is no longer active. This happens after a payment
+          attempt finishes or a hold expires — rooms are only held briefly so
+          availability stays accurate for everyone.
+        </p>
+        <p className="text-caption">
+          If your payment didn&apos;t go through, nothing was booked and you
+          haven&apos;t been charged for a stay. You can pick your dates again in
+          seconds.
+        </p>
+        <div className="flex flex-col justify-center gap-2 sm:flex-row">
+          <LinkButton href="/search">Search stays again</LinkButton>
+          <LinkButton href="/" variant="secondary">
+            Back to home
+          </LinkButton>
+        </div>
+      </div>
+    );
+  }
   if (loadError) {
     return (
-      <div className="surface-card p-5 text-sm text-error" role="alert">
-        {loadError}
+      <div className="surface-card space-y-3 p-6 text-center">
+        <p className="text-sm text-error" role="alert">
+          {loadError}
+        </p>
+        <LinkButton href="/search" variant="secondary">
+          Back to search
+        </LinkButton>
       </div>
     );
   }

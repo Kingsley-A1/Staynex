@@ -97,8 +97,11 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // data-theme="light" pins the light theme app-wide (including for visitors
+  // whose OS prefers dark) until the dark theme ships. Remove the pin — or
+  // replace it with a user-controlled toggle — when dark mode launches.
   return (
-    <html lang="en" className={brandFont.variable}>
+    <html lang="en" data-theme="light" className={brandFont.variable}>
       <body>
         <Suspense fallback={null}>
           <PageLoadingLine />

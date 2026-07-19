@@ -15,6 +15,9 @@
      - Light is default (:root).
      - Dark applies on [data-theme="dark"], OR via OS preference when no theme
        attribute is pinned.
+     - CURRENT STATUS: light mode is enforced app-wide — layout.tsx pins
+       data-theme="light" on <html> until the dark theme is finished. The dark
+       blocks below stay defined so the launch is a one-line unpin.
    ============================================================================= */
 
 /* -----------------------------------------------------------------------------
