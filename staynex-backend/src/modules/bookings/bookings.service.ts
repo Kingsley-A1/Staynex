@@ -18,7 +18,7 @@ import type {
   PaymentStatusView,
 } from "../../../types";
 import { NotificationsService } from "../notifications/notifications.service";
-import { PaystackService } from "../payments/paystack.service";
+import { PaymentProviderRegistry } from "../payments/payment-provider.registry";
 import {
   PaymentEventsService,
   type PaymentOutcomeResult,
@@ -66,7 +66,7 @@ export class BookingsService {
   private readonly logger = new Logger(BookingsService.name);
 
   constructor(
-    private readonly paystack: PaystackService,
+    private readonly providers: PaymentProviderRegistry,
     private readonly notifications: NotificationsService,
     private readonly paymentEvents: PaymentEventsService,
   ) {}
@@ -169,9 +169,15 @@ export class BookingsService {
     );
   }
 
-  /** Convert a valid hold into a PENDING_PAYMENT booking + Paystack transaction. */
+  /**
+   * Convert a valid hold into a PENDING_PAYMENT booking + a provider
+   * transaction. The provider is chosen once, here, and persisted on the
+   * Payment row — every later operation on this payment resolves its adapter
+   * from that stored name rather than from a default.
+   */
   async checkout(input: CheckoutInput, guestUserId: string | null): Promise<CheckoutResult> {
     const reference = `stx_${randomUUID().replace(/-/g, "")}`;
+    const provider = this.providers.selectForCheckout(reference);
 
     const prepared = await prisma.$transaction(async (tx) => {
       const hold = await tx.bookingHold.findUnique({
@@ -223,7 +229,7 @@ export class BookingsService {
           ownerPayoutKobo: split.ownerPayoutKobo,
           commissionRateBps: split.commissionRateBps,
           currency: CURRENCY,
-          provider: "paystack",
+          provider: provider.name,
           reference,
           status: "PENDING",
         },
@@ -234,19 +240,40 @@ export class BookingsService {
     });
 
     try {
-      const init = await this.paystack.initializeTransaction({
+      const init = await provider.initializeTransaction({
         email: input.email,
         amountKobo: prepared.totalKobo,
         reference,
         metadata: { bookingId: prepared.bookingId },
       });
-      return { bookingId: prepared.bookingId, reference, authorizationUrl: init.authorizationUrl };
+      if (init.providerReference) {
+        await prisma.payment
+          .update({
+            where: { reference },
+            data: { providerReference: init.providerReference },
+          })
+          // Reconciliation metadata only — never fail a started payment over it.
+          .catch((err: unknown) =>
+            this.logger.warn(
+              `Could not store providerReference for ${reference}: ${
+                err instanceof Error ? err.message : "unknown error"
+              }`,
+            ),
+          );
+      }
+      return {
+        bookingId: prepared.bookingId,
+        reference,
+        authorizationUrl: init.authorizationUrl,
+        provider: provider.name,
+      };
     } catch (err) {
       // Never leave a pending booking holding capacity if payment can't start —
       // and leave an audit row for the support ticket that follows.
       const result = await this.applyChargeFailure(reference);
       await this.paymentEvents.record({
         eventType: "checkout.init_failed",
+        provider: provider.name,
         reference,
         outcome: result.outcome,
         detail: `Provider initialize failed: ${err instanceof Error ? err.message : "unknown"}.`,
@@ -273,8 +300,11 @@ export class BookingsService {
     let currency = paid.currency;
     if (amountKobo == null || currency == null) {
       // Missing amount OR currency — never confirm unvalidated. Verify with
-      // the provider; a thrown error propagates so the webhook 500s and retries.
-      const verified = await this.paystack.verifyTransaction(reference);
+      // the payment's OWN provider (never a default): asking the wrong provider
+      // would report "not found" and could fail a payment the guest completed.
+      // A thrown error propagates so the webhook 500s and retries.
+      const provider = await this.providerForReference(reference);
+      const verified = await provider.verifyTransaction(reference);
       if (verified.status !== "success") {
         return {
           outcome: "NO_CHANGE",
@@ -428,7 +458,9 @@ export class BookingsService {
     });
 
     try {
-      const verified = await this.paystack.verifyTransaction(reference);
+      // Resolve the adapter from the stored provider — see providerForReference.
+      const provider = await this.providerForReference(reference);
+      const verified = await provider.verifyTransaction(reference);
       if (verified.status === "success") {
         const result = await this.applyChargeSuccess(reference, {
           amountKobo: verified.amountKobo,
@@ -437,6 +469,7 @@ export class BookingsService {
         if (result.outcome !== "NO_CHANGE" && result.outcome !== "DUPLICATE") {
           await this.paymentEvents.record({
             eventType: "sync.verify",
+            provider: provider.name,
             reference,
             outcome: result.outcome,
             detail: result.detail,
@@ -444,11 +477,14 @@ export class BookingsService {
         }
         return;
       }
-      if (["abandoned", "failed", "reversed"].includes(verified.status)) {
+      // Only terminal states release capacity. "pending" (which adapters also
+      // use for any status they don't recognize) deliberately does nothing.
+      if (verified.status === "failed" || verified.status === "abandoned") {
         const result = await this.applyChargeFailure(reference);
         if (result.outcome === "MARKED_FAILED") {
           await this.paymentEvents.record({
             eventType: "sync.verify",
+            provider: provider.name,
             reference,
             outcome: result.outcome,
             detail: `Provider verify reports '${verified.status}'.`,
@@ -500,6 +536,27 @@ export class BookingsService {
   }
 
   // --- internals ---------------------------------------------------------
+
+  /**
+   * Resolve the adapter for an EXISTING payment from the provider persisted on
+   * its row. This is the guard against the worst failure mode in a
+   * multi-provider setup: verifying an Opay payment against Paystack returns
+   * "not found", which `syncPaymentStatus` would read as abandoned and use to
+   * cancel a booking the guest actually paid for.
+   *
+   * Throws (rather than defaulting) on an unknown reference or an unconfigured
+   * provider, so the caller records a failure instead of acting on a guess.
+   */
+  private async providerForReference(reference: string) {
+    const payment = await prisma.payment.findUnique({
+      where: { reference },
+      select: { provider: true },
+    });
+    if (!payment) {
+      throw new NotFoundException(`No payment found for reference ${reference}`);
+    }
+    return this.providers.get(payment.provider);
+  }
 
   /** The success truth table, inside one serializable transaction. */
   private async applySuccessTx(

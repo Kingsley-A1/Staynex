@@ -58,7 +58,7 @@ const FEATURES = [
   },
   {
     title: "Secure payments",
-    desc: "Pay safely with Paystack. Your booking is protected end to end.",
+    desc: "Pay safely through licensed payment partners. Your booking is protected end to end.",
     icon: IconLock,
   },
   {
@@ -164,7 +164,7 @@ function Hero() {
 
         <ul className="mx-auto mt-6 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
           {[
-            "Secure Paystack payments",
+            "Secure verified payments",
             "Verified properties",
             "Payment-verified bookings",
           ].map((t) => (

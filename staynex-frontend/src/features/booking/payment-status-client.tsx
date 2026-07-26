@@ -143,7 +143,7 @@ export function PaymentStatusClient({ reference }: { reference: string }) {
       <div className="mx-auto size-10 animate-spin rounded-full border-2 border-border border-t-primary" />
       <h1 className="text-title-md text-ink">Confirming your payment…</h1>
       <p className="text-muted-foreground">
-        This can take a few seconds while we verify with Paystack.
+        This can take a few seconds while we verify with your payment provider.
       </p>
     </div>
   );

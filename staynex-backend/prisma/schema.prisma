@@ -646,8 +646,17 @@ model Payment {
   /// Snapshotted so historical accounting never shifts if the platform rate changes.
   commissionRateBps Int           @default(0)
   currency          String        @default("NGN")
+  /// Which payin provider captured this payment ("paystack" | "opay"). Every
+  /// later operation (verify, refund, webhook) resolves its adapter from THIS
+  /// value — never from a default. Asking the wrong provider about a reference
+  /// returns "not found", which the sync path would read as abandoned and use
+  /// to cancel a booking the guest actually paid for.
   provider          String?
+  /// OUR reference (`stx_<uuid>`), shown to the guest and used as the key.
   reference         String?       @unique
+  /// The provider's own transaction id, when it issues one. Reconciliation
+  /// only — never used to look up a payment.
+  providerReference String?
   status            PaymentStatus @default(PENDING)
   /// Set once when the payment is verified SUCCESS.
   paidAt            DateTime?

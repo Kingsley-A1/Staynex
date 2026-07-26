@@ -48,8 +48,8 @@ export default function AboutPage() {
           <li>Properties are reviewed before they appear publicly.</li>
           <li>Bookings are confirmed only after payment is verified.</li>
           <li>
-            Payments are processed through Paystack, not stored directly by
-            Staynex.
+            Payments are processed through licensed payment partners, not
+            stored directly by Staynex.
           </li>
           <li>
             Guest reviews are tied to real booking activity before publication.

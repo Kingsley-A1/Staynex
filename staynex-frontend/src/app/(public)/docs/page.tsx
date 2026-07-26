@@ -73,7 +73,7 @@ const DOCS: DocGroup[] = [
               "Open a stay to view rooms, photos, amenities, and policies.",
               "Check availability for your dates and pick a room.",
               "Hold your selection and sign in to continue.",
-              "Pay securely with Paystack.",
+              "Pay securely with our payment partner.",
               "Get an instant confirmation and a booking voucher.",
             ],
           },
@@ -154,16 +154,16 @@ const DOCS: DocGroup[] = [
         id: "payments",
         title: "Paying securely",
         summary:
-          "Payments are processed by Paystack. Card details are never stored by Staynex.",
+          "Payments are processed by licensed payment partners. Card details are never stored by Staynex.",
         blocks: [
           {
             kind: "p",
-            text: "Checkout payments are handled by Paystack, a trusted payment processor. Staynex does not store your raw card details. Your booking is confirmed only after your payment is verified.",
+            text: "Checkout payments are handled by licensed payment partners (currently Paystack, with Opay being rolled out). You are shown which partner is handling your payment before you are redirected. Staynex does not store your raw card details, and your booking is confirmed only after your payment is verified.",
           },
           {
             kind: "list",
             items: [
-              "Pay with the options Paystack supports at checkout.",
+              "Pay with the options your payment partner supports at checkout.",
               "A booking is never confirmed without a verified payment.",
               "If a payment fails or is interrupted, no confirmed booking is created and any hold is released.",
             ],
@@ -305,7 +305,7 @@ const DOCS: DocGroup[] = [
             items: [
               "Properties are reviewed before they appear publicly.",
               "Bookings are confirmed only after payment is verified.",
-              "Payments run through Paystack; raw card data is never stored by Staynex.",
+              "Payments run through licensed payment partners; raw card data is never stored by Staynex.",
               "Reviews are linked to real bookings before publication.",
               "Staynex AI can guide and retrieve verified public facts, but it cannot change availability, bookings, payments, or refunds.",
             ],

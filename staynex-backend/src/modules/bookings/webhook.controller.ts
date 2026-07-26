@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Controller,
   Get,
-  Headers,
   HttpCode,
   Param,
   Post,
@@ -12,28 +11,22 @@ import {
 } from "@nestjs/common";
 import type { IncomingMessage } from "node:http";
 import { RateLimit } from "../../common/rate-limit.guard";
-import { PaystackService } from "../payments/paystack.service";
+import { PaymentProviderRegistry } from "../payments/payment-provider.registry";
+import type {
+  NormalizedWebhookEvent,
+  PaymentProvider,
+  ProviderName,
+} from "../payments/payment-provider.port";
 import {
   PaymentEventsService,
   type PaymentOutcomeResult,
 } from "../payments/payment-events.service";
 import { BookingsService } from "./bookings.service";
 
-interface PaystackEvent {
-  event: string;
-  data?: {
-    reference?: string;
-    amount?: number;
-    currency?: string;
-    status?: string;
-    transaction_reference?: string;
-  };
-}
-
 @Controller("payments")
 export class PaymentsWebhookController {
   constructor(
-    private readonly paystack: PaystackService,
+    private readonly providers: PaymentProviderRegistry,
     private readonly bookings: BookingsService,
     private readonly paymentEvents: PaymentEventsService,
   ) {}
@@ -46,71 +39,103 @@ export class PaymentsWebhookController {
    */
   @Post("paystack/webhook")
   @HttpCode(200)
-  async webhook(
-    @Headers("x-paystack-signature") signature: string | undefined,
-    @Req() req: RawBodyRequest<IncomingMessage>,
+  webhook(@Req() req: RawBodyRequest<IncomingMessage>) {
+    return this.handle("paystack", req);
+  }
+
+  /**
+   * Opay webhook. A separate route with its own verifier by design — there is
+   * deliberately no shared "try every provider's signature" path, which would
+   * weaken authenticity to that of the weakest scheme.
+   */
+  @Post("opay/webhook")
+  @HttpCode(200)
+  opayWebhook(@Req() req: RawBodyRequest<IncomingMessage>) {
+    return this.handle("opay", req);
+  }
+
+  /**
+   * Shared delivery pipeline: verify signature -> parse -> apply -> audit.
+   * Both providers get identical audit and outcome behaviour; only signature
+   * verification and payload parsing differ, and those live in the adapter.
+   */
+  private async handle(
+    providerName: ProviderName,
+    req: RawBodyRequest<IncomingMessage>,
   ) {
+    const provider = this.providers.get(providerName);
     const raw = req.rawBody;
-    if (!raw || !this.paystack.verifySignature(raw, signature)) {
+    if (!raw || !provider.verifySignature(raw, req.headers)) {
       throw new UnauthorizedException("Invalid webhook signature");
     }
-    let event: PaystackEvent;
+
+    let event: NormalizedWebhookEvent;
     try {
-      event = JSON.parse(raw.toString("utf8")) as PaystackEvent;
+      event = provider.parseWebhook(raw);
     } catch {
       throw new BadRequestException("Invalid webhook payload");
     }
 
-    // Refund events reference the original transaction via a separate field.
-    const reference = event.data?.reference ?? event.data?.transaction_reference ?? null;
     let result: PaymentOutcomeResult;
     try {
-      result = await this.process(event, reference);
+      result = await this.process(provider, event);
     } catch (err) {
       // Record the failed delivery, then rethrow: the non-2xx response makes
       // the provider retry, and the audit row proves the attempt happened.
       await this.paymentEvents.record({
-        eventType: event.event,
-        reference,
+        eventType: event.rawType,
+        provider: provider.name,
+        reference: event.reference,
         outcome: "NO_CHANGE",
         detail: `Processing failed: ${err instanceof Error ? err.message : "unknown"} — provider will retry.`,
-        payload: event,
+        payload: event.payload,
       });
       throw err;
     }
 
     await this.paymentEvents.record({
-      eventType: event.event,
-      reference,
+      eventType: event.rawType,
+      provider: provider.name,
+      reference: event.reference,
       outcome: result.outcome,
       detail: result.detail,
-      payload: event,
+      payload: event.payload,
     });
     return { received: true };
   }
 
   private async process(
-    event: PaystackEvent,
-    reference: string | null,
+    provider: PaymentProvider,
+    event: NormalizedWebhookEvent,
   ): Promise<PaymentOutcomeResult> {
-    if (!reference) {
-      return { outcome: "RECORDED", detail: "Event carried no transaction reference." };
+    if (!event.reference) {
+      return {
+        outcome: "RECORDED",
+        detail: "Event carried no transaction reference.",
+      };
     }
-    switch (event.event) {
+    switch (event.kind) {
       case "charge.success":
-        return this.bookings.applyChargeSuccess(reference, {
-          amountKobo: event.data?.amount ?? null,
-          currency: event.data?.currency ?? null,
+        return this.bookings.applyChargeSuccess(event.reference, {
+          amountKobo: event.amountKobo,
+          currency: event.currency,
         });
       case "charge.failed":
-        return this.bookings.applyChargeFailure(reference);
+        return this.bookings.applyChargeFailure(event.reference);
       case "refund.processed":
-        return this.bookings.applyRefund(reference, "provider (refund.processed)");
+        return this.bookings.applyRefund(
+          event.reference,
+          `${provider.name} (refund webhook: ${event.rawType})`,
+        );
       default:
-        if (event.event.startsWith("refund.") || event.event.startsWith("charge.dispute.")) {
+        if (
+          event.rawType.startsWith("refund.") ||
+          event.rawType.startsWith("charge.dispute.")
+        ) {
           return {
             outcome: "RECORDED",
-            detail: "Money-relevant event stored for the admin timeline; no automatic transition.",
+            detail:
+              "Money-relevant event stored for the admin timeline; no automatic transition.",
           };
         }
         return { outcome: "RECORDED", detail: "Unhandled event type." };

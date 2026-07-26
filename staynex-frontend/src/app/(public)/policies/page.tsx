@@ -44,7 +44,10 @@ export default function PoliciesPage() {
         </p>
         <p>
           Where a refund is approved, timing can depend on{" "}
-          <GradientText>Paystack and bank processing windows</GradientText>.
+          <GradientText>
+            your payment provider and bank processing windows
+          </GradientText>
+          .
         </p>
       </LegalSection>
 

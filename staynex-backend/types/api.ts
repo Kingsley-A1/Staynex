@@ -198,10 +198,19 @@ export interface HoldSummary {
   expired: boolean;
 }
 
+/**
+ * Payin providers the platform can charge a guest through. Distinct from the
+ * payout-side `provider: "paystack"` fields below — payouts are a separate
+ * money direction and remain Paystack-only.
+ */
+export type PaymentProviderName = "paystack" | "opay";
+
 export interface CheckoutResult {
   bookingId: string;
   reference: string;
   authorizationUrl: string;
+  /** Which provider the guest is being redirected to, so the UI can say so. */
+  provider: PaymentProviderName;
 }
 
 export interface PaymentStatusView {
@@ -359,6 +368,8 @@ export interface AdminPaymentExceptionRow {
   guestEmail: string | null;
   grossAmountKobo: number;
   currency: string;
+  /** Provider that captured the payment — refunds are actioned from here. */
+  provider: string | null;
   status: PaymentState;
   createdAt: string;
   updatedAt: string;

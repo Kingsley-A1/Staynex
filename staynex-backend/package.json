@@ -20,7 +20,7 @@
     "test:emails": "pnpm build && node --test test/email-templates.test.cjs",
     "email:preview": "pnpm build && node scripts/preview-emails.cjs",
     "test:ai": "node --experimental-strip-types --test test/ai-reliability.test.mjs test/ai-context.test.mjs test/ai-message-actions.test.mjs",
-    "test:payments": "pnpm build && node --test test/paystack-bank-verification.test.mjs",
+    "test:payments": "pnpm build && node --test test/paystack-bank-verification.test.mjs test/payment-provider-routing.test.mjs",
     "test:availability": "pnpm build && node --test test/availability.test.cjs",
     "test:workspace": "pnpm build && node --test test/rooms.test.cjs test/notification-inbox.test.cjs test/platform-lifecycle-source.test.cjs",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",

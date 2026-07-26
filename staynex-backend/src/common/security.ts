@@ -20,8 +20,11 @@ interface SecurityResponse {
 type Next = () => void;
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+// Provider webhooks authenticate with their own signature over the raw body,
+// not with our CSRF token — they are server-to-server and carry no session.
 const CSRF_EXEMPT_PATHS = new Set([
   "/payments/paystack/webhook",
+  "/payments/opay/webhook",
   "/observability/web-vitals",
 ]);
 

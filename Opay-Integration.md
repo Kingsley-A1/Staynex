@@ -2,6 +2,12 @@
 
 Adding Opay as a **second payment provider** alongside Paystack.
 
+> **Status:** Slices 1–2 are **implemented and merged**, Slice 3 is **implemented
+> but dark** (inert until `OPAY_ENABLED=true`), and Slice 4's copy work is done.
+> The Opay wire contract is **not yet verified against a live sandbox** — see
+> **§11 Remaining work (your machine)** for exactly what is left and why it
+> cannot be done from CI.
+
 This document is the plan of record: how payments work today, what Opay actually
 buys us, what it puts at risk, and the ordered slices that get us there without
 ever putting a guest's money in an ambiguous state.
@@ -629,3 +635,182 @@ Suggested first move: **Slice 0 and Slice 1 in parallel** — Slice 0 is
 integration/commercial work (docs, sandbox, Opay support), Slice 1 is internal
 refactor with no external dependency. Neither blocks the other, and together they
 de-risk everything downstream.
+
+---
+
+## 10. What has been implemented
+
+Branch: `feature/Opay-integration`.
+
+### Slice 1 — provider port ✅
+
+| File | Change |
+| --- | --- |
+| `payments/payment-provider.port.ts` | **new** — `PaymentProvider` interface, normalized status/event vocabulary, `RefundNotSupportedError` |
+| `payments/paystack.provider.ts` | **new** — Paystack behind the port. Thin wrapper; all HTTP/signature logic stays in the untouched `paystack.service.ts`, so the refactor carries no behavioural risk |
+| `payments/payment-provider.registry.ts` | **new** — `get()` (existing payments, **throws**, never falls back), `default()` / `selectForCheckout()` (new payments only) |
+| `bookings.service.ts` | 4 call sites now resolve via the registry; new private `providerForReference()` reads the persisted provider |
+| `admin.service.ts` | refund resolves the provider from the payment row; `PaystackService` injection replaced by the registry |
+| `webhook.controller.ts` | rewritten: per-provider routes over one shared verify → parse → apply → audit pipeline |
+
+The `syncPaymentStatus` terminal check changed from
+`["abandoned","failed","reversed"].includes(...)` to the normalized
+`failed | abandoned`. Adapters map anything unrecognized to `pending`, so an
+unknown status can no longer release a guest's held capacity.
+
+### Slice 2 — provider identity ✅
+
+- `Payment.providerReference` (nullable) + documentation on `Payment.provider`.
+- `PaymentEvent.provider` is now **set explicitly** at every `record()` call
+  site. Previously every row silently defaulted to `"paystack"`.
+- `AdminPaymentExceptionRow.provider` added end-to-end — refunds are actioned
+  from that queue, so the admin must see who captured the money.
+
+### Slice 3 — Opay adapter, dark ✅
+
+- `payments/opay.provider.ts` — full adapter. **Inert** unless `OPAY_ENABLED=true`
+  *and* all three credentials are present, so a half-configured deploy silently
+  falls back to Paystack instead of failing checkout.
+- `POST /payments/opay/webhook` + CSRF exemption.
+- Every provider-specific fact isolated in one `CONTRACT` block for verification.
+
+### Slice 4 — guest-facing copy ✅ (rollout still 0%)
+
+`CheckoutResult.provider` added; all "Pay with Paystack" UI copy removed.
+
+| Surface | Before | After |
+| --- | --- | --- |
+| Checkout button | `Pay ₦50,000 with Paystack` | `Pay ₦50,000` |
+| Checkout note | "redirected to Paystack's secure test checkout" | "redirected to our payment partner's secure checkout" |
+| Payment status | "verify with Paystack" | "verify with your payment provider" |
+| Admin refund | "Refund via Paystack?" | names the payment's **actual** provider |
+| Home / About / Docs / Legal / Policies | named Paystack | "licensed payment partners" |
+
+Payout surfaces (`host-cards.tsx`, `PayoutBankOption`, `ResolvedPayoutAccount`)
+**deliberately still say Paystack** — payouts are out of scope (§4).
+
+### Verification run
+
+- Backend `tsc --noEmit`, frontend `tsc --noEmit`, production `next build` — all green.
+- `test/payment-provider-routing.test.mjs` — **14 new tests, all passing**,
+  covering R1 (no silent fallback, unknown/null/unconfigured all throw), R2 (kobo
+  round-trip exact over 0–20,000 plus large values; non-integers refused), R3
+  (tampered body, wrong key, missing/empty signature all rejected), rollout
+  determinism, and unknown-status-never-terminal.
+- Existing suites green, unmodified: `paystack-bank-verification` (6),
+  `availability` + `rooms` + `property-review-policy` (13).
+- Browser check against a stubbed backend: checkout renders `Pay ₦50,000`, no
+  "Paystack" anywhere in guest checkout or status copy.
+
+### Not implemented (unchanged from the plan)
+
+Slice 5 (failover), Slice 6 (Opay refund parity), Slice 7 (reconciliation).
+Slice 5 in particular should not be built before the Opay path has proven itself
+on real traffic.
+
+---
+
+## 11. Remaining work (your machine)
+
+None of the below can be done from this environment — each needs credentials,
+a database, or a real Opay account.
+
+### 11.1 Apply the migration ⚠ required before deploy
+
+The schema changed (`Payment.providerReference` + an index). I updated
+`schema.prisma` but **did not generate a migration** — that needs a live
+database URL.
+
+```bash
+cd staynex-backend
+pnpm prisma:migrate --name add_payment_provider_reference
+# review the generated SQL, then:
+pnpm prisma:migrate:deploy
+```
+
+Both changes are **additive and nullable**, so this is safe on live data and
+existing rows keep working. Deploying the code **without** the migration will
+break checkout — Prisma will reject the unknown `providerReference` field.
+
+### 11.2 Backfill `Payment.provider` on historical rows ⚠ important
+
+`provider` is nullable and older rows may hold `NULL`. The registry **throws**
+on `NULL` by design (it refuses to guess). Every payment created before this
+change was Paystack, so backfill them explicitly:
+
+```sql
+UPDATE "Payment" SET provider = 'paystack' WHERE provider IS NULL;
+```
+
+Skipping this means admin refund / re-verify on an old payment returns a
+"unknown payment provider" error instead of working. Run it right after the
+migration.
+
+### 11.3 Slice 0 — verify the Opay contract 🔴 blocks enabling Opay
+
+`opay.provider.ts` is written to Opay's *documented* Cashier shape but has
+**never touched a live sandbox**. Confirm every field in the `CONTRACT` block
+at the top of that file against your merchant dashboard + a real sandbox
+transaction, then fill in `docs/future/opay-contract.md`:
+
+- [ ] Base URLs (sandbox vs live) and whether `OPAY_BASE_URL` needs overriding
+- [ ] Create / status / refund endpoint paths and versions
+- [ ] **Amount representation** — the adapter assumes `{currency, total}` with
+      `total` in **kobo**. If it is decimal naira instead, change
+      `CONTRACT.minorUnitExponent` and re-run the R2 test. This is the 100×
+      money bug — verify it first.
+- [ ] Whether Opay accepts **our** `stx_<uuid>` reference (length/charset limits)
+- [ ] Webhook signature: algorithm, header name, and whether it signs the raw
+      body or a field subset. The adapter assumes HMAC-SHA512 over the raw body
+      in `Authorization: Bearer <hex>`.
+- [ ] Success/failure status vocabulary vs `CONTRACT.successStatuses` / `failedStatuses`
+- [ ] Response envelope success code (adapter assumes `"00000"`)
+- [ ] Which query param the return URL carries the reference in —
+      `/payment/status` currently reads `reference` and `trxref` (Paystack's names)
+- [ ] Refunds: supported? sync or async? partial-only? If async, wire the
+      terminal refund webhook to `applyRefund` (Slice 6)
+- [ ] Settlement schedule + per-rail fees (feeds Slice 7 and the §2.3 case)
+
+### 11.4 Configure and test in sandbox
+
+```bash
+# staynex-backend/.env
+OPAY_ENABLED=true
+OPAY_MERCHANT_ID=...
+OPAY_PUBLIC_KEY=...
+OPAY_SECRET_KEY=...
+OPAY_BASE_URL=https://testapi.opaycheckout.com
+PAYMENT_DEFAULT_PROVIDER=paystack
+PAYMENT_OPAY_ROLLOUT_PERCENT=0        # keep at 0 until sandbox passes
+```
+
+Expose the webhook to Opay (`ngrok http 4000` → point
+`POST /payments/opay/webhook` at it), then walk the real flow:
+
+- [ ] initialize → pay → webhook → booking `CONFIRMED`, `PaymentEvent` row with
+      `provider: "opay"`
+- [ ] failed payment → `MARKED_FAILED`, capacity released
+- [ ] amount arrives **exactly** as charged (the R2 check, live)
+- [ ] refund → `REFUNDED`, booking cancelled, payout clawed back
+- [ ] re-run `pnpm test:payments` after any `CONTRACT` edit
+
+### 11.5 Roll out
+
+Only after 11.4 passes end to end:
+
+```
+PAYMENT_OPAY_ROLLOUT_PERCENT=5     # then 25, 50, 100
+```
+
+Watch per-provider confirm rate and the exception queue at each step.
+`PAYMENT_OPAY_ROLLOUT_PERCENT=0` is an instant, deploy-free kill switch;
+`OPAY_ENABLED=false` is the harder one.
+
+### 11.6 Commercial / compliance
+
+- [ ] Opay merchant account approved for production, settlement account confirmed
+- [ ] Negotiated per-rail fees recorded next to Paystack's for comparison
+- [ ] Legal/policy wording (now "licensed payment partners — currently Paystack,
+      and Opay as it is enabled") reviewed by whoever signs off on legal copy
+- [ ] `seo.ts` still carries the "Paystack hotel payments" keyword — intentional
+      (Paystack remains real), but revisit if Opay becomes the default

@@ -45,7 +45,7 @@ import { AuditService } from "../audit/audit.service";
 import { auditActorId } from "../auth/auth.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PaymentEventsService } from "../payments/payment-events.service";
-import { PaystackService } from "../payments/paystack.service";
+import { PaymentProviderRegistry } from "../payments/payment-provider.registry";
 import type {
   AdminListQuery,
   ApprovalActionInput,
@@ -275,7 +275,7 @@ export class AdminService {
     private readonly notifications: NotificationsService,
     private readonly bookings: BookingsService,
     private readonly maintenance: BookingMaintenanceService,
-    private readonly paystack: PaystackService,
+    private readonly providers: PaymentProviderRegistry,
     private readonly paymentEvents: PaymentEventsService,
   ) {}
 
@@ -521,6 +521,9 @@ export class AdminService {
       guestEmail: p.booking.guestEmail,
       grossAmountKobo: p.grossAmountKobo > 0 ? p.grossAmountKobo : p.amount,
       currency: p.currency,
+      // Refunds are actioned from this queue, so the admin must see which
+      // provider actually captured the money before confirming.
+      provider: p.provider,
       status: p.status as PaymentState,
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
@@ -570,7 +573,7 @@ export class AdminService {
   ): Promise<AdminPaymentRow> {
     const payment = await prisma.payment.findUnique({
       where: { reference },
-      select: { id: true, status: true },
+      select: { id: true, status: true, provider: true },
     });
     if (!payment) throw new NotFoundException("Payment not found");
     if (payment.status === "REFUNDED") {
@@ -582,13 +585,17 @@ export class AdminService {
       );
     }
 
-    // Provider first: if Paystack rejects, nothing changes locally.
-    await this.paystack.refundTransaction(reference);
+    // Refund through the provider that actually captured the money, resolved
+    // from the payment row — never a default. Provider first: if it rejects,
+    // nothing changes locally, so an admin never sees a refund we didn't make.
+    const provider = this.providers.get(payment.provider);
+    await provider.refundTransaction(reference);
 
     const initiator = `admin ${admin.email ?? admin.id}${note ? ` — ${note}` : ""}`;
     const result = await this.bookings.applyRefund(reference, initiator);
     await this.paymentEvents.record({
       eventType: "admin.refund",
+      provider: provider.name,
       reference,
       outcome: result.outcome,
       detail: result.detail,

@@ -217,10 +217,24 @@ export interface HoldSummary {
   expired: boolean;
 }
 
+/**
+ * Payin providers a guest can be charged through. Distinct from the payout-side
+ * `provider: "paystack"` fields (host payouts stay Paystack-only).
+ */
+export type PaymentProviderName = "paystack" | "opay";
+
+/** Guest-facing provider names, for checkout and status copy. */
+export const PAYMENT_PROVIDER_LABELS: Record<PaymentProviderName, string> = {
+  paystack: "Paystack",
+  opay: "Opay",
+};
+
 export interface CheckoutResult {
   bookingId: string;
   reference: string;
   authorizationUrl: string;
+  /** Which provider the guest is redirected to, so the UI never mislabels it. */
+  provider: PaymentProviderName;
 }
 
 export interface PaymentStatusView {
@@ -392,6 +406,8 @@ export interface AdminPaymentExceptionRow {
   guestEmail: string | null;
   grossAmountKobo: number;
   currency: string;
+  /** Provider that captured the payment — refunds are actioned from here. */
+  provider: string | null;
   status: PaymentState;
   createdAt: string;
   updatedAt: string;

@@ -107,7 +107,7 @@ export default async function AdminBookingsPage({
                     </td>
                     <td className="px-4 py-3 text-right">
                       {e.reference ? (
-                        <PaymentActions reference={e.reference} status={e.status} />
+                        <PaymentActions reference={e.reference} status={e.status} provider={e.provider} />
                       ) : (
                         <span className="text-caption text-muted-foreground">No reference</span>
                       )}
@@ -280,7 +280,7 @@ export default async function AdminBookingsPage({
                     <td className="px-4 py-3 text-muted-foreground">{formatDate(p.createdAt)}</td>
                     <td className="px-4 py-3 text-right">
                       {p.reference ? (
-                        <PaymentActions reference={p.reference} status={p.status} />
+                        <PaymentActions reference={p.reference} status={p.status} provider={p.provider} />
                       ) : (
                         <span className="text-caption text-muted-foreground">—</span>
                       )}

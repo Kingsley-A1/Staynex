@@ -49,6 +49,12 @@ export class PaymentEventsService {
     eventType: string;
     reference: string | null;
     outcome: PaymentOutcome;
+    /**
+     * Which provider the event came from. Optional only so legacy call sites
+     * keep compiling; always pass it — the column defaults to "paystack", so
+     * omitting it on an Opay event silently mislabels the audit trail.
+     */
+    provider?: string;
     detail?: string;
     payload?: unknown;
   }): Promise<void> {
@@ -56,6 +62,7 @@ export class PaymentEventsService {
       await prisma.paymentEvent.create({
         data: {
           eventType: entry.eventType,
+          ...(entry.provider ? { provider: entry.provider } : {}),
           reference: entry.reference,
           outcome: entry.outcome,
           detail: entry.detail ?? null,

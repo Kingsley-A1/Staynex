@@ -12,7 +12,7 @@ export function CheckoutClient({ holdId }: { holdId: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   // The hold no longer exists server-side — it was consumed when a payment
   // attempt started, or released after expiry. Common when a guest navigates
-  // back to checkout after a failed/abandoned Paystack payment.
+  // back to checkout after a failed/abandoned payment attempt.
   const [holdGone, setHoldGone] = useState(false);
   // undefined = still checking session; null = signed out.
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
@@ -173,9 +173,14 @@ export function CheckoutClient({ holdId }: { holdId: string }) {
             </p>
           )}
           <Button type="submit" disabled={busy} className="w-full">
-            {busy ? "Starting payment…" : `Pay ${formatNairaFromKobo(hold.totalKobo)} with Paystack`}
+            {busy ? "Starting payment…" : `Pay ${formatNairaFromKobo(hold.totalKobo)}`}
           </Button>
-          <p className="text-caption">You'll be redirected to Paystack's secure test checkout.</p>
+          {/* The provider is chosen server-side at checkout, so naming one here
+              would eventually be wrong. Describe the guarantee, not the vendor. */}
+          <p className="text-caption">
+            You&apos;ll be redirected to our payment partner&apos;s secure checkout to
+            complete this payment.
+          </p>
         </form>
       )}
     </div>
