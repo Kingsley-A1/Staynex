@@ -1,3 +1,8 @@
+> **ARCHIVED 2026-08-21 — historical record only. Do not follow.**
+>
+> Superseded by `skill.md` (the standard) and `docs/architecture.md`.
+> Kept for provenance. Nothing here is authoritative.
+
 # Staynex Prototype.md
 
 **Product:** Staynex  

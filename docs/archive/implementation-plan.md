@@ -1,3 +1,8 @@
+> **ARCHIVED 2026-08-21 — historical record only. Do not follow.**
+>
+> Superseded by `skill.md` (the standard) and `docs/architecture.md`.
+> Kept for provenance. Nothing here is authoritative.
+
 # Staynex Implementation Plan
 
 This plan converts the 4-week roadmap in `Staynex_plan.md` into four actionable phases. Each phase should be run as vertical slices with clear agent prompts, acceptance criteria, and verification.

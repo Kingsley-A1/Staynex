@@ -1,3 +1,8 @@
+> **ARCHIVED 2026-08-21 — historical record only. Do not follow.**
+>
+> Superseded by `skill.md` (the standard) and `docs/architecture.md`.
+> Kept for provenance. Nothing here is authoritative.
+
 # Staynex AI desktop companion design QA
 
 ## Comparison target
@@ -6,13 +11,13 @@
 - Supporting behavior source: Google Gemini in Chrome help documentation for dock/pop-out, new chat, and recent chat behavior.
 - Implementation URL: `http://127.0.0.1:3010/`
 - Implementation screenshots:
-  - `artifacts/assistant-design-qa/desktop-docked.png`
-  - `artifacts/assistant-design-qa/desktop-floating.png`
-  - `artifacts/assistant-design-qa/desktop-expanded.png`
-  - `artifacts/assistant-design-qa/desktop-history.png`
-  - `artifacts/assistant-design-qa/desktop-floating-dragged.png`
-  - `artifacts/assistant-design-qa/mobile-open.png`
-  - `artifacts/assistant-design-qa/mobile-history.png`
+  - `docs/archive/assets/assistant-design-qa/desktop-docked.png`
+  - `docs/archive/assets/assistant-design-qa/desktop-floating.png`
+  - `docs/archive/assets/assistant-design-qa/desktop-expanded.png`
+  - `docs/archive/assets/assistant-design-qa/desktop-history.png`
+  - `docs/archive/assets/assistant-design-qa/desktop-floating-dragged.png`
+  - `docs/archive/assets/assistant-design-qa/mobile-open.png`
+  - `docs/archive/assets/assistant-design-qa/mobile-history.png`
 - Desktop viewport: 1365 x 768, device scale factor 1.
 - Mobile viewport: 390 x 844, device scale factor 1.
 - Browser: Google Chrome, headless rendering through the Chrome DevTools Protocol.

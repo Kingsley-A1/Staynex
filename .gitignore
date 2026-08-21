@@ -12,3 +12,5 @@ pnpm-debug.log*
 *.docx
 skill.zip
 .email-previews/
+artifacts/
+lighthouse-*.html
