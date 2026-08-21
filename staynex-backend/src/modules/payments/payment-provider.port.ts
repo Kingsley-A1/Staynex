@@ -18,6 +18,8 @@
 /** Providers the platform can charge through. */
 export const PROVIDER_NAMES = ["paystack", "opay"] as const;
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
+export const PAYMENT_MODES = ["TEST", "LIVE"] as const;
+export type PaymentMode = (typeof PAYMENT_MODES)[number];
 
 export function isProviderName(value: unknown): value is ProviderName {
   return (
@@ -89,6 +91,7 @@ export class RefundNotSupportedError extends Error {
 
 export interface PaymentProvider {
   readonly name: ProviderName;
+  readonly mode: PaymentMode;
 
   /**
    * False when the provider's secrets are absent. The registry refuses to

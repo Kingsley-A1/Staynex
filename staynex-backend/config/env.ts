@@ -16,6 +16,24 @@ const optionalString = z.preprocess(
   z.string().optional(),
 );
 
+const optionalUrl = z.preprocess(
+  normalizeOptionalString,
+  z.string().url().optional(),
+);
+
+function strictBoolean(defaultValue: boolean) {
+  return z.preprocess((value) => {
+    if (value === undefined) return defaultValue;
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed === "true") return true;
+      if (trimmed === "false") return false;
+    }
+    return value;
+  }, z.boolean());
+}
+
 /**
  * Backend environment contract. Keep this in sync with the root `.env.example`.
  * Validated once at boot via `loadEnv()` so the API fails fast on misconfig.
@@ -27,7 +45,31 @@ export const envSchema = z.object({
   DATABASE_URL: requiredString,
   API_PORT: z.coerce.number().int().positive().default(4000),
   CORS_ORIGIN: optionalString,
-  // Payments (optional so the API boots in dev; PaystackService fails clearly if used unconfigured).
+  // Payment mode is explicit: false uses provider test/sandbox credentials;
+  // true uses live credentials. Ambiguous boolean spellings are rejected.
+  PAYMENT_ENABLED: strictBoolean(false),
+  PAYMENT_DEFAULT_PROVIDER: z.enum(["paystack", "opay"]).default("paystack"),
+  PAYMENT_OPAY_ROLLOUT_PERCENT: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .default(0),
+  OPAY_ENABLED: strictBoolean(false),
+  PAYSTACK_TEST_SECRET_KEY: optionalString,
+  PAYSTACK_LIVE_SECRET_KEY: optionalString,
+  PAYSTACK_TEST_PUBLIC_KEY: optionalString,
+  PAYSTACK_LIVE_PUBLIC_KEY: optionalString,
+  OPAY_TEST_MERCHANT_ID: optionalString,
+  OPAY_TEST_PUBLIC_KEY: optionalString,
+  OPAY_TEST_SECRET_KEY: optionalString,
+  OPAY_TEST_BASE_URL: optionalUrl,
+  OPAY_LIVE_MERCHANT_ID: optionalString,
+  OPAY_LIVE_PUBLIC_KEY: optionalString,
+  OPAY_LIVE_SECRET_KEY: optionalString,
+  OPAY_LIVE_BASE_URL: optionalUrl,
+  // Deprecated names stay parseable during configuration migration, but the
+  // payment runtime never treats an ambiguous key as a live credential.
   PAYSTACK_SECRET_KEY: optionalString,
   PAYSTACK_PUBLIC_KEY: optionalString,
   // Public base URL of the web app, used for the Paystack payment callback.
@@ -76,6 +118,7 @@ export const envSchema = z.object({
       .regex(/^\d{6}$/, "ADMIN_MANAGER_ACCESS_CODE must be 6 digits")
       .optional(),
   ),
+  ADMIN_REGISTRATION_ENABLED: strictBoolean(false),
   SESSION_TTL_MS: z.coerce.number().int().positive().optional(),
   ADMIN_SESSION_TTL_MS: z.coerce.number().int().positive().optional(),
   // Set in production so session cookies are marked Secure.

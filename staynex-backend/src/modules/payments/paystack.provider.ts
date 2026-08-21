@@ -6,6 +6,7 @@ import type {
   NormalizedEventKind,
   NormalizedStatus,
   NormalizedWebhookEvent,
+  PaymentMode,
   PaymentProvider,
   ProviderName,
   VerifiedTransaction,
@@ -36,8 +37,12 @@ export class PaystackProvider implements PaymentProvider {
 
   constructor(private readonly paystack: PaystackService) {}
 
+  get mode(): PaymentMode {
+    return this.paystack.mode;
+  }
+
   isConfigured(): boolean {
-    return Boolean(process.env.PAYSTACK_SECRET_KEY);
+    return this.paystack.isConfigured();
   }
 
   async initializeTransaction(

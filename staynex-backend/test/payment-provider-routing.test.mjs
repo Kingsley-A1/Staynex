@@ -52,11 +52,15 @@ function withEnv(vars, fn) {
 }
 
 const PAYSTACK_ONLY = {
-  PAYSTACK_SECRET_KEY: "sk_test_paystack",
+  NODE_ENV: "test",
+  DATABASE_URL: "postgresql://user:password@localhost:26257/staynex?schema=public",
+  PAYMENT_ENABLED: "false",
+  PAYSTACK_TEST_SECRET_KEY: "sk_test_paystack",
   OPAY_ENABLED: undefined,
-  OPAY_MERCHANT_ID: undefined,
-  OPAY_PUBLIC_KEY: undefined,
-  OPAY_SECRET_KEY: undefined,
+  OPAY_TEST_MERCHANT_ID: undefined,
+  OPAY_TEST_PUBLIC_KEY: undefined,
+  OPAY_TEST_SECRET_KEY: undefined,
+  OPAY_TEST_BASE_URL: undefined,
   PAYMENT_DEFAULT_PROVIDER: undefined,
   PAYMENT_OPAY_ROLLOUT_PERCENT: undefined,
 };
@@ -64,9 +68,10 @@ const PAYSTACK_ONLY = {
 const BOTH_ENABLED = {
   ...PAYSTACK_ONLY,
   OPAY_ENABLED: "true",
-  OPAY_MERCHANT_ID: "merchant-1",
-  OPAY_PUBLIC_KEY: "pk_test_opay",
-  OPAY_SECRET_KEY: "sk_test_opay",
+  OPAY_TEST_MERCHANT_ID: "merchant-1",
+  OPAY_TEST_PUBLIC_KEY: "pk_test_opay",
+  OPAY_TEST_SECRET_KEY: "sk_test_opay",
+  OPAY_TEST_BASE_URL: "https://testapi.opaycheckout.com",
 };
 
 // --- R1: no silent fallback ------------------------------------------------
@@ -114,16 +119,14 @@ test("R1: a configured provider resolves to its own adapter, not the default", (
 
 // --- Registry / rollout behaviour ------------------------------------------
 
-test("checkout defaults to Paystack and never selects a disabled Opay", () => {
+test("a non-zero OPay rollout fails closed when OPay is disabled", () => {
   withEnv(
     { ...PAYSTACK_ONLY, PAYMENT_OPAY_ROLLOUT_PERCENT: "100" },
     () => {
-      const registry = buildRegistry();
-      assert.equal(registry.isEnabled("opay"), false);
-      // Even at 100% rollout, an unconfigured Opay must never be selected.
-      for (let i = 0; i < 200; i += 1) {
-        assert.equal(registry.selectForCheckout(`stx_${i}`).name, "paystack");
-      }
+      assert.throws(
+        () => buildRegistry(),
+        /PAYMENT_OPAY_ROLLOUT_PERCENT requires complete OPay configuration/,
+      );
     },
   );
 });
@@ -158,7 +161,7 @@ test("rollout at 100 sends new payments to Opay once it is configured", () => {
 
 test("with no provider configured, checkout fails loudly rather than silently", () => {
   withEnv(
-    { ...PAYSTACK_ONLY, PAYSTACK_SECRET_KEY: undefined },
+    { ...PAYSTACK_ONLY, PAYSTACK_TEST_SECRET_KEY: undefined },
     () => {
       const registry = buildRegistry();
       assert.deepEqual(registry.configured(), []);

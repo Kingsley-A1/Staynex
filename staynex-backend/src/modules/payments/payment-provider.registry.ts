@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  ServiceUnavailableException,
-} from "@nestjs/common";
+import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { OpayProvider } from "./opay.provider";
 import { PaystackProvider } from "./paystack.provider";
 import {
@@ -10,6 +6,7 @@ import {
   type PaymentProvider,
   type ProviderName,
 } from "./payment-provider.port";
+import { PaymentConfigService } from "./payment-config.service";
 
 /**
  * Resolves which adapter handles a given payment.
@@ -25,11 +22,10 @@ import {
  */
 @Injectable()
 export class PaymentProviderRegistry {
-  private readonly logger = new Logger(PaymentProviderRegistry.name);
-
   constructor(
     private readonly paystack: PaystackProvider,
     private readonly opay: OpayProvider,
+    private readonly paymentConfig: PaymentConfigService = new PaymentConfigService(),
   ) {}
 
   private all(): PaymentProvider[] {
@@ -67,10 +63,8 @@ export class PaymentProviderRegistry {
   }
 
   /**
-   * The provider a NEW payment should use. Honors PAYMENT_DEFAULT_PROVIDER when
-   * that provider is configured, else falls back to any configured provider so a
-   * partial misconfiguration degrades to "charge through what works" instead of
-   * taking checkout down.
+   * The provider a NEW payment should use. The configured default is explicit;
+   * a missing default fails closed instead of charging through another rail.
    */
   default(): PaymentProvider {
     const configured = this.configured();
@@ -80,20 +74,16 @@ export class PaymentProviderRegistry {
       );
     }
 
-    const preferred = process.env.PAYMENT_DEFAULT_PROVIDER?.trim();
-    if (preferred) {
-      const match = configured.find((p) => p.name === preferred);
-      if (match) return match;
-      this.logger.warn(
-        `PAYMENT_DEFAULT_PROVIDER='${preferred}' is not configured; using '${configured[0].name}'.`,
+    const preferred = this.paymentConfig.current().defaultProvider;
+    const match = configured.find((provider) => provider.name === preferred);
+    if (!match) {
+      throw new ServiceUnavailableException(
+        `Default payment provider '${preferred}' is not configured for ${this.paymentConfig.current().mode.toLowerCase()} payments.`,
       );
     }
     // Paystack first when present — the incumbent stays the default until a
     // rollout policy explicitly says otherwise.
-    return (
-      configured.find((provider) => provider.name === "paystack") ??
-      configured[0]
-    );
+    return match;
   }
 
   /**
@@ -102,7 +92,7 @@ export class PaymentProviderRegistry {
    */
   selectForCheckout(reference: string): PaymentProvider {
     const fallback = this.default();
-    const rollout = rolloutPercent();
+    const rollout = this.paymentConfig.current().opayRolloutPercent;
     if (rollout <= 0 || !this.isEnabled("opay")) return fallback;
     if (rollout >= 100) return this.get("opay");
     return bucketOf(reference) < rollout ? this.get("opay") : fallback;
@@ -110,12 +100,6 @@ export class PaymentProviderRegistry {
 }
 
 /** `PAYMENT_OPAY_ROLLOUT_PERCENT`, clamped to [0, 100]. Default 0 (off). */
-function rolloutPercent(): number {
-  const raw = Number(process.env.PAYMENT_OPAY_ROLLOUT_PERCENT ?? "0");
-  if (!Number.isFinite(raw)) return 0;
-  return Math.min(100, Math.max(0, Math.round(raw)));
-}
-
 /** Stable 0–99 bucket derived from the reference (FNV-1a). */
 function bucketOf(reference: string): number {
   let hash = 0x811c9dc5;

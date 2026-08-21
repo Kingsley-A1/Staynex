@@ -10,10 +10,12 @@ import type {
   NormalizedEventKind,
   NormalizedStatus,
   NormalizedWebhookEvent,
+  PaymentMode,
   PaymentProvider,
   ProviderName,
   VerifiedTransaction,
 } from "./payment-provider.port";
+import { PaymentConfigService } from "./payment-config.service";
 
 /**
  * Opay (Cashier) behind the provider port.
@@ -86,49 +88,50 @@ export class OpayProvider implements PaymentProvider {
   readonly name: ProviderName = "opay";
   private readonly logger = new Logger(OpayProvider.name);
 
+  constructor(
+    private readonly paymentConfig: PaymentConfigService = new PaymentConfigService(),
+  ) {}
+
+  get mode(): PaymentMode {
+    return this.paymentConfig.current().mode;
+  }
+
   /**
    * Inert unless explicitly enabled AND fully credentialed. A half-configured
    * deploy therefore falls back to Paystack rather than failing at checkout.
    */
   isConfigured(): boolean {
-    return (
-      process.env.OPAY_ENABLED === "true" &&
-      Boolean(process.env.OPAY_MERCHANT_ID) &&
-      Boolean(process.env.OPAY_PUBLIC_KEY) &&
-      Boolean(process.env.OPAY_SECRET_KEY)
-    );
+    return this.paymentConfig.provider("opay").configured;
   }
 
   private secret(): string {
-    const key = process.env.OPAY_SECRET_KEY;
+    const key = this.paymentConfig.provider("opay").secretKey;
     if (!key) {
       throw new ServiceUnavailableException(
-        "Opay is not configured (OPAY_SECRET_KEY missing)",
+        `Opay ${this.mode.toLowerCase()} payments are not configured`,
       );
     }
     return key;
   }
 
   private merchantId(): string {
-    const id = process.env.OPAY_MERCHANT_ID;
+    const id = this.paymentConfig.provider("opay").merchantId;
     if (!id) {
       throw new ServiceUnavailableException(
-        "Opay is not configured (OPAY_MERCHANT_ID missing)",
+        `Opay ${this.mode.toLowerCase()} merchant is not configured`,
       );
     }
     return id;
   }
 
   private baseUrl(): string {
-    const override = process.env.OPAY_BASE_URL?.trim().replace(/\/+$/, "");
-    if (override) return override;
-    return process.env.NODE_ENV === "production"
-      ? CONTRACT.liveBaseUrl
-      : CONTRACT.testBaseUrl;
+    const configured = this.paymentConfig.provider("opay").baseUrl;
+    if (configured) return configured;
+    return this.mode === "LIVE" ? CONTRACT.liveBaseUrl : CONTRACT.testBaseUrl;
   }
 
   private callbackUrl(): string {
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const base = this.paymentConfig.current().appUrl;
     return `${base.replace(/\/$/, "")}/payment/status`;
   }
 
