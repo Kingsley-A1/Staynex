@@ -242,6 +242,7 @@ export interface CheckoutResult {
 
 export interface PaymentStatusView {
   reference: string;
+  paymentMode: PaymentMode;
   paymentStatus: PaymentState;
   bookingId: string;
   bookingStatus: BookingStatus;
@@ -266,6 +267,7 @@ export interface BookingView {
   unitCode: string | null;
   paymentStatus: PaymentState;
   paymentReference: string | null;
+  paymentMode: PaymentMode | null;
 }
 
 /**
@@ -274,21 +276,15 @@ export interface BookingView {
  * Mirrors the backend VoucherVerification shape.
  */
 export interface VoucherVerification {
-  valid: boolean;
-  status: "CONFIRMED" | "PENDING" | "CANCELLED" | "NOT_FOUND";
+  validForCheckIn: boolean;
+  status: "CONFIRMED" | "TEST" | "PENDING" | "CANCELLED" | "NOT_FOUND";
   reference: string;
-  guestName: string | null;
-  guestEmailMasked: string | null;
+  mode: PaymentMode | null;
   propertyName: string | null;
   cityName: string | null;
-  areaName: string | null;
   roomTypeName: string | null;
-  unitCode: string | null;
   checkIn: string | null;
   checkOut: string | null;
-  nights: number | null;
-  guests: { adults: number; children: number; infants: number } | null;
-  confirmedAt: string | null;
 }
 
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {

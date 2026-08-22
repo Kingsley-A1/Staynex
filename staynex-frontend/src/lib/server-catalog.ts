@@ -6,6 +6,7 @@ import {
   getApprovedPropertyBySlug,
   listApprovedProperties,
 } from "@/features/properties/fixtures";
+import { cookies } from "next/headers";
 import { API_BASE } from "@/lib/api-base";
 import type {
   AreaOption,
@@ -34,6 +35,13 @@ const emptyHomeCatalog: HomeCatalogView = {
 const HOME_REVALIDATE_SECONDS = 300;
 const BROWSE_REVALIDATE_SECONDS = 120;
 const DETAIL_REVALIDATE_SECONDS = 300;
+
+async function authHeaders(): Promise<HeadersInit | undefined> {
+  const store = await cookies();
+  const all = store.getAll();
+  if (all.length === 0) return undefined;
+  return { cookie: all.map((item) => `${item.name}=${item.value}`).join("; ") };
+}
 
 export async function getHomeCatalog(): Promise<{
   catalog: HomeCatalogView;
@@ -95,7 +103,10 @@ export async function getPublicProperty(
 /** Confirmation is backend authority — no fixture fallback here. */
 export async function getBookingServer(id: string): Promise<BookingView | null> {
   try {
-    const res = await fetch(`${API_BASE}/bookings/${id}`, { cache: "no-store" });
+    const res = await fetch(`${API_BASE}/bookings/${id}`, {
+      cache: "no-store",
+      headers: await authHeaders(),
+    });
     if (!res.ok) return null;
     return (await res.json()) as BookingView;
   } catch {

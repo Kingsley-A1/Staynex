@@ -6,68 +6,76 @@ import { qrPngDataUrl, qrSvg } from "./qr";
 import { renderVoucherPdf } from "./voucher-document";
 import type { VoucherData } from "./voucher.types";
 
-/**
- * Voucher authority: turns a payment reference into the one canonical
- * VoucherData, then renders it as the downloadable/attachable PDF or reduces it
- * to the public verification card reception scans. The reference (`stx_` + a
- * 128-bit UUID) is an unguessable capability token, so these reads are keyed by
- * it rather than the guessable booking id — the same model as an airline PNR.
- */
+/** Builds private voucher documents and the minimal public verification view. */
 @Injectable()
 export class VoucherService {
-  /** {APP_URL}/verify/{reference} — the QR target and printed verify link. */
   verifyUrl(reference: string): string {
-    const base = (process.env.NEXT_PUBLIC_APP_URL || "https://staynexbookings.ng").replace(
-      /\/+$/,
-      "",
-    );
+    const base = (
+      process.env.NEXT_PUBLIC_APP_URL || "https://staynexbookings.ng"
+    ).replace(/\/+$/, "");
     return `${base}/verify/${encodeURIComponent(reference)}`;
   }
 
-  /** SVG QR for the on-page voucher. Deterministic from the reference alone. */
   qrSvg(reference: string): Promise<string> {
     return qrSvg(this.verifyUrl(reference));
   }
 
-  /**
-   * Render the canonical PDF. Returns null unless the booking is paid AND
-   * confirmed — a receipt is only issued for money actually captured.
-   */
-  async renderPdf(reference: string): Promise<{ buffer: Buffer; filename: string } | null> {
-    const data = await this.load(reference);
+  async qrSvgForUser(reference: string, userId: string): Promise<string | null> {
+    const owned = await prisma.payment.findFirst({
+      where: { reference, booking: { userId } },
+      select: { id: true },
+    });
+    return owned ? this.qrSvg(reference) : null;
+  }
+
+  /** Internal notification attachment path; the caller already owns the event. */
+  renderPdf(
+    reference: string,
+  ): Promise<{ buffer: Buffer; filename: string } | null> {
+    return this.renderPdfForOwner(reference);
+  }
+
+  /** Browser download path: the persisted booking owner is mandatory. */
+  renderPdfForUser(
+    reference: string,
+    userId: string,
+  ): Promise<{ buffer: Buffer; filename: string } | null> {
+    return this.renderPdfForOwner(reference, userId);
+  }
+
+  private async renderPdfForOwner(
+    reference: string,
+    userId?: string,
+  ): Promise<{ buffer: Buffer; filename: string } | null> {
+    const data = await this.load(reference, userId);
     if (!data || !data.paidAndConfirmed) return null;
     const qr = await qrPngDataUrl(data.verifyUrl);
     const buffer = await renderVoucherPdf(data, qr);
     return { buffer, filename: `staynex-booking-${reference}.pdf` };
   }
 
-  /** Public, unauthenticated verification card — never exposes the amount. */
+  /** Public verification deliberately excludes guest identity and unit details. */
   async getVerification(reference: string): Promise<VoucherVerification> {
     const data = await this.load(reference);
     if (!data) return notFoundVerification(reference);
     return {
-      valid: data.paidAndConfirmed,
-      status: mapStatus(data.bookingStatus, data.paidAndConfirmed),
+      validForCheckIn: data.mode === "LIVE" && data.paidAndConfirmed,
+      status: mapStatus(data.bookingStatus, data.paidAndConfirmed, data.mode),
       reference: data.reference,
-      guestName: data.guestName,
-      guestEmailMasked: maskEmail(data.guestEmail),
+      mode: data.mode,
       propertyName: data.propertyName,
       cityName: data.cityName,
-      areaName: data.areaName,
       roomTypeName: data.roomTypeName,
-      unitCode: data.unitCode,
       checkIn: data.checkIn,
       checkOut: data.checkOut,
-      nights: data.nights,
-      guests: { adults: data.adults, children: data.children, infants: data.infants },
-      confirmedAt: data.paidAt,
     };
   }
 
-  /** Load persisted rows and reduce to the canonical VoucherData (or null). */
-  private async load(reference: string): Promise<VoucherData | null> {
-    const payment = await prisma.payment.findUnique({
-      where: { reference },
+  private async load(
+    reference: string,
+    userId?: string,
+  ): Promise<VoucherData | null> {
+    const query = {
       include: {
         booking: {
           include: {
@@ -90,17 +98,27 @@ export class VoucherService {
           },
         },
       },
-    });
+    } as const;
+
+    const payment = userId
+      ? await prisma.payment.findFirst({
+          where: { reference, booking: { userId } },
+          ...query,
+        })
+      : await prisma.payment.findUnique({ where: { reference }, ...query });
     if (!payment) return null;
 
     const booking = payment.booking;
     const property = booking.roomUnit.roomType.property;
     const nights = nightsOf(iso(booking.checkIn), iso(booking.checkOut)).length;
-    const amountKobo = payment.grossAmountKobo > 0 ? payment.grossAmountKobo : payment.amount;
+    const amountKobo =
+      payment.grossAmountKobo > 0 ? payment.grossAmountKobo : payment.amount;
 
     return {
       reference,
-      paidAndConfirmed: booking.status === "CONFIRMED" && payment.status === "SUCCESS",
+      mode: payment.mode,
+      paidAndConfirmed:
+        booking.status === "CONFIRMED" && payment.status === "SUCCESS",
       bookingStatus: booking.status,
       guestName: booking.user?.name ?? null,
       guestEmail: booking.guestEmail ?? booking.user?.email ?? null,
@@ -118,7 +136,7 @@ export class VoucherService {
       infants: booking.infants,
       amountKobo,
       currency: payment.currency,
-      provider: payment.provider ?? null,
+      provider: payment.provider,
       paidAt: payment.paidAt ? payment.paidAt.toISOString() : null,
       verifyUrl: this.verifyUrl(reference),
     };
@@ -128,39 +146,26 @@ export class VoucherService {
 function mapStatus(
   bookingStatus: string,
   paidAndConfirmed: boolean,
+  mode: "TEST" | "LIVE",
 ): VoucherVerification["status"] {
+  if (mode === "TEST" && paidAndConfirmed) return "TEST";
   if (paidAndConfirmed) return "CONFIRMED";
-  if (bookingStatus === "CANCELLED" || bookingStatus === "EXPIRED") return "CANCELLED";
+  if (bookingStatus === "CANCELLED" || bookingStatus === "EXPIRED") {
+    return "CANCELLED";
+  }
   return "PENDING";
 }
 
 function notFoundVerification(reference: string): VoucherVerification {
   return {
-    valid: false,
+    validForCheckIn: false,
     status: "NOT_FOUND",
     reference,
-    guestName: null,
-    guestEmailMasked: null,
+    mode: null,
     propertyName: null,
     cityName: null,
-    areaName: null,
     roomTypeName: null,
-    unitCode: null,
     checkIn: null,
     checkOut: null,
-    nights: null,
-    guests: null,
-    confirmedAt: null,
   };
-}
-
-/** "john.doe@gmail.com" -> "jo•••@gmail.com"; keeps enough to match, hides the rest. */
-function maskEmail(email: string | null): string | null {
-  if (!email) return null;
-  const at = email.indexOf("@");
-  if (at <= 0) return null;
-  const local = email.slice(0, at);
-  const domain = email.slice(at);
-  const keep = local.length <= 2 ? 1 : 2;
-  return `${local.slice(0, keep)}•••${domain}`;
 }

@@ -218,6 +218,7 @@ export interface CheckoutResult {
 
 export interface PaymentStatusView {
   reference: string;
+  paymentMode: PaymentMode;
   paymentStatus: PaymentState;
   bookingId: string;
   bookingStatus: BookingStatus;
@@ -242,6 +243,7 @@ export interface BookingView {
   unitCode: string | null;
   paymentStatus: PaymentState;
   paymentReference: string | null;
+  paymentMode: PaymentMode | null;
 }
 
 /**
@@ -251,22 +253,16 @@ export interface BookingView {
  * paid booking without leaking price or PII to whoever holds the QR.
  */
 export interface VoucherVerification {
-  /** True only when the booking is CONFIRMED and its payment is SUCCESS. */
-  valid: boolean;
-  status: "CONFIRMED" | "PENDING" | "CANCELLED" | "NOT_FOUND";
+  /** TEST bookings are always false even after a successful sandbox charge. */
+  validForCheckIn: boolean;
+  status: "CONFIRMED" | "TEST" | "PENDING" | "CANCELLED" | "NOT_FOUND";
   reference: string;
-  guestName: string | null;
-  guestEmailMasked: string | null;
+  mode: PaymentMode | null;
   propertyName: string | null;
   cityName: string | null;
-  areaName: string | null;
   roomTypeName: string | null;
-  unitCode: string | null;
   checkIn: string | null;
   checkOut: string | null;
-  nights: number | null;
-  guests: { adults: number; children: number; infants: number } | null;
-  confirmedAt: string | null;
 }
 
 // --- Phase 4: dashboards, notifications, AI logs ---

@@ -23,6 +23,7 @@ export function PaymentStatusClient({ reference }: { reference: string }) {
       try {
         const next = await guestApi.getPaymentStatus(reference);
         if (!active) return;
+        setError(null);
         setState(next);
         if ((TERMINAL_STATES as readonly string[]).includes(next.paymentStatus)) return;
       } catch (err) {
@@ -52,21 +53,41 @@ export function PaymentStatusClient({ reference }: { reference: string }) {
         <p className="text-sm text-error" role="alert">
           {error}
         </p>
-        <LinkButton href="/search" variant="secondary">
-          Back to search
-        </LinkButton>
+        <p className="text-sm text-muted-foreground">
+          Your session may have expired or Staynex could not reach the payment record. Retry after
+          signing in with the booking account, or close this status page.
+        </p>
+        <div className="flex justify-center gap-2">
+          <Button onClick={checkAgain}>Retry</Button>
+          <LinkButton href="/search" variant="secondary">
+            Close
+          </LinkButton>
+        </div>
       </div>
     );
   }
 
   if (state?.paymentStatus === "SUCCESS") {
+    const isTest = state.paymentMode === "TEST";
     return (
       <div className="surface-card space-y-3 p-6 text-center">
-        <div className="mx-auto grid size-12 place-items-center rounded-full bg-success-surface text-lg font-bold text-success">
-          ✓
+        <div
+          className={`mx-auto grid size-12 place-items-center rounded-full text-lg font-bold ${
+            isTest
+              ? "bg-warning-surface text-warning"
+              : "bg-success-surface text-success"
+          }`}
+        >
+          {isTest ? "T" : "✓"}
         </div>
-        <h1 className="text-title-md text-ink">Payment confirmed</h1>
-        <p className="text-muted-foreground">Your booking is confirmed.</p>
+        <h1 className="text-title-md text-ink">
+          {isTest ? "Test payment confirmed" : "Payment confirmed"}
+        </h1>
+        <p className="text-muted-foreground">
+          {isTest
+            ? "No money was charged. This test booking is not valid for check-in and does not reserve live inventory."
+            : "Your booking is confirmed."}
+        </p>
         <LinkButton href={`/booking/confirmed?booking=${state.bookingId}`}>
           View confirmation
         </LinkButton>
@@ -75,13 +96,18 @@ export function PaymentStatusClient({ reference }: { reference: string }) {
   }
 
   if (state?.paymentStatus === "FAILED") {
+    const isTest = state.paymentMode === "TEST";
     return (
       <div className="surface-card space-y-3 p-6 text-center">
         <div className="mx-auto grid size-12 place-items-center rounded-full bg-error-surface text-lg font-bold text-error">
           ✕
         </div>
         <h1 className="text-title-md text-ink">Payment not completed</h1>
-        <p className="text-muted-foreground">Your booking was not confirmed. No stay was reserved.</p>
+        <p className="text-muted-foreground">
+          {isTest
+            ? "The sandbox payment did not complete. No money was charged and live inventory was unchanged."
+            : "Your booking was not confirmed. No stay was reserved."}
+        </p>
         <LinkButton href="/search" variant="secondary">
           Try another stay
         </LinkButton>
@@ -90,19 +116,27 @@ export function PaymentStatusClient({ reference }: { reference: string }) {
   }
 
   if (state?.paymentStatus === "REQUIRES_REFUND" || state?.paymentStatus === "REFUNDED") {
+    const isTest = state.paymentMode === "TEST";
     return (
       <div className="surface-card space-y-3 p-6 text-center">
         <div className="mx-auto grid size-12 place-items-center rounded-full bg-warning-surface text-lg font-bold text-warning">
           !
         </div>
         <h1 className="text-title-md text-ink">
-          {state.paymentStatus === "REFUNDED" ? "Payment refunded" : "We're refunding this payment"}
+          {isTest
+            ? "Test payment closed"
+            : state.paymentStatus === "REFUNDED"
+              ? "Payment refunded"
+              : "We're refunding this payment"}
         </h1>
         <p className="text-muted-foreground">
-          Your payment went through, but the stay could no longer be confirmed for those dates.
-          {state.paymentStatus === "REFUNDED"
-            ? " Your refund has been issued to your payment method."
-            : " Our team is processing your refund — you don't need to do anything."}
+          {isTest
+            ? "No money moved. The test booking was closed and live inventory was unchanged."
+            : `Your payment went through, but the stay could no longer be confirmed for those dates.${
+                state.paymentStatus === "REFUNDED"
+                  ? " Your refund has been issued to your payment method."
+                  : " Our team is processing your refund — you don't need to do anything."
+              }`}
         </p>
         <p className="text-caption text-muted-foreground">
           Reference: <span className="font-mono">{reference}</span>
@@ -141,9 +175,13 @@ export function PaymentStatusClient({ reference }: { reference: string }) {
   return (
     <div className="surface-card space-y-3 p-6 text-center">
       <div className="mx-auto size-10 animate-spin rounded-full border-2 border-border border-t-primary" />
-      <h1 className="text-title-md text-ink">Confirming your payment…</h1>
+      <h1 className="text-title-md text-ink">
+        {state?.paymentMode === "TEST" ? "Confirming test payment…" : "Confirming your payment…"}
+      </h1>
       <p className="text-muted-foreground">
-        This can take a few seconds while we verify with your payment provider.
+        {state?.paymentMode === "TEST"
+          ? "The provider sandbox is verifying this test. No money will be charged."
+          : "This can take a few seconds while we verify with your payment provider."}
       </p>
     </div>
   );

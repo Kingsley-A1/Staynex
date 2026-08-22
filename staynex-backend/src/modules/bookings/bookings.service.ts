@@ -495,15 +495,25 @@ export class BookingsService {
     return { outcome: result.outcome, detail: result.detail };
   }
 
-  async getPaymentStatus(reference: string): Promise<PaymentStatusView> {
+  async getPaymentStatusForUser(
+    reference: string,
+    userId: string,
+  ): Promise<PaymentStatusView> {
+    const owned = await prisma.payment.findFirst({
+      where: { reference, booking: { userId } },
+      select: { id: true },
+    });
+    if (!owned) throw new NotFoundException("Payment not found");
+
     await this.syncPaymentStatus(reference);
-    const payment = await prisma.payment.findUnique({
-      where: { reference },
+    const payment = await prisma.payment.findFirst({
+      where: { reference, booking: { userId } },
       include: { booking: { select: { id: true, status: true } } },
     });
     if (!payment) throw new NotFoundException("Payment not found");
     return {
       reference,
+      paymentMode: payment.mode,
       paymentStatus: payment.status as PaymentState,
       bookingId: payment.bookingId,
       bookingStatus: payment.booking.status as BookingStatus,
@@ -600,9 +610,12 @@ export class BookingsService {
     }
   }
 
-  async getBooking(bookingId: string): Promise<BookingView> {
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
+  async getBookingForUser(
+    bookingId: string,
+    userId: string,
+  ): Promise<BookingView> {
+    const booking = await prisma.booking.findFirst({
+      where: { id: bookingId, userId },
       include: {
         roomUnit: {
           include: { roomType: { include: { property: { include: { city: { select: { name: true } } } } } } },
@@ -632,6 +645,7 @@ export class BookingsService {
       unitCode: booking.roomUnit.code ?? null,
       paymentStatus: (booking.payment?.status ?? "PENDING") as PaymentState,
       paymentReference: booking.payment?.reference ?? null,
+      paymentMode: booking.payment?.mode ?? null,
     };
   }
 

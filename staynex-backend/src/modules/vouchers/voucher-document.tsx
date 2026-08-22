@@ -42,6 +42,17 @@ const styles = StyleSheet.create({
   badge: { borderRadius: 4, paddingVertical: 5, paddingHorizontal: 10 },
   badgeText: { fontSize: 9, fontFamily: "Helvetica-Bold", letterSpacing: 0.5 },
   divider: { borderBottomWidth: 1, borderBottomColor: C.border, marginVertical: 16 },
+  testNotice: {
+    borderWidth: 1,
+    borderColor: C.warnFg,
+    backgroundColor: C.warnBg,
+    color: C.warnFg,
+    padding: 10,
+    marginBottom: 16,
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+    textAlign: "center",
+  },
   body: { flexDirection: "row" },
   leftCol: { width: "60%", paddingRight: 18 },
   rightCol: { width: "40%" },
@@ -149,6 +160,7 @@ function Field({ label, value, sub }: { label: string; value: string; sub?: stri
 
 function VoucherDoc({ data, qr }: { data: VoucherData; qr: string }) {
   const confirmed = data.paidAndConfirmed;
+  const isTest = data.mode === "TEST";
   const roomSub = data.unitCode
     ? `Unit ${data.unitCode} · assigned at check-in`
     : "Room assigned at check-in";
@@ -157,7 +169,7 @@ function VoucherDoc({ data, qr }: { data: VoucherData; qr: string }) {
     <Document
       title={`Staynex booking ${data.reference}`}
       author="Staynex"
-      subject="Booking Confirmation & Receipt"
+      subject={isTest ? "Test Booking — Not Valid for Check-in" : "Booking Confirmation & Receipt"}
     >
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
@@ -177,12 +189,22 @@ function VoucherDoc({ data, qr }: { data: VoucherData; qr: string }) {
                 { color: confirmed ? C.successFg : C.warnFg },
               ]}
             >
-              {confirmed ? "PAID & CONFIRMED" : data.bookingStatus.replace(/_/g, " ")}
+              {isTest
+                ? "TEST — NO MONEY CHARGED"
+                : confirmed
+                  ? "PAID & CONFIRMED"
+                  : data.bookingStatus.replace(/_/g, " ")}
             </Text>
           </View>
         </View>
 
         <View style={styles.divider} />
+
+        {isTest ? (
+          <Text style={styles.testNotice}>
+            TEST BOOKING — NOT VALID FOR CHECK-IN OR LIVE INVENTORY
+          </Text>
+        ) : null}
 
         <View style={styles.body}>
           <View style={styles.leftCol}>
@@ -226,12 +248,17 @@ function VoucherDoc({ data, qr }: { data: VoucherData; qr: string }) {
 
         <View style={styles.receipt}>
           <View>
-            <Text style={styles.amountLabel}>AMOUNT PAID</Text>
+            <Text style={styles.amountLabel}>
+              {isTest ? "TEST AMOUNT — NOT CHARGED" : "AMOUNT PAID"}
+            </Text>
             <Text style={styles.amount}>{formatMoney(data.amountKobo, data.currency)}</Text>
           </View>
           <View style={styles.receiptMeta}>
             <Text style={styles.metaRow}>
-              Status: <Text style={styles.metaStrong}>{confirmed ? "Paid in full" : "Pending"}</Text>
+              Status:{" "}
+              <Text style={styles.metaStrong}>
+                {isTest ? "Sandbox success — no money charged" : confirmed ? "Paid in full" : "Pending"}
+              </Text>
             </Text>
             <Text style={styles.metaRow}>
               Method: <Text style={styles.metaStrong}>{formatProvider(data.provider)}</Text>
@@ -244,7 +271,9 @@ function VoucherDoc({ data, qr }: { data: VoucherData; qr: string }) {
 
         <View style={styles.footer}>
           <Text style={styles.footerStrong}>
-            Present this confirmation at check-in.
+            {isTest
+              ? "Test only — do not accept this document at check-in."
+              : "Present this confirmation at check-in."}
           </Text>
           <Text style={styles.footerText}>
             Your room type is guaranteed. The specific room is assigned by the host on arrival.

@@ -8,9 +8,12 @@ import {
   type RawBodyRequest,
   Req,
   UnauthorizedException,
+  UseGuards,
 } from "@nestjs/common";
+import type { AuthUser } from "../../../types";
 import type { IncomingMessage } from "node:http";
 import { RateLimit } from "../../common/rate-limit.guard";
+import { CurrentUser, SessionGuard } from "../auth/access-control";
 import { PaymentProviderRegistry } from "../payments/payment-provider.registry";
 import type {
   NormalizedWebhookEvent,
@@ -169,14 +172,18 @@ export class PaymentsWebhookController {
   // Polled by the payment-status page. Rate-limited because each poll can
   // trigger a (debounced) provider verify (payment-review P8).
   @Get(":reference")
+  @UseGuards(SessionGuard)
   @RateLimit({
     bucket: "payments:status",
     limit: 30,
     windowMs: 60_000,
     keyBy: ["ip"],
   })
-  status(@Param("reference") reference: string) {
-    return this.bookings.getPaymentStatus(reference);
+  status(
+    @CurrentUser() user: AuthUser,
+    @Param("reference") reference: string,
+  ) {
+    return this.bookings.getPaymentStatusForUser(reference, user.id);
   }
 }
 

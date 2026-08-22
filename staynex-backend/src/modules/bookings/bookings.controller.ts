@@ -84,7 +84,8 @@ export class BookingsController {
   }
 
   @Get("bookings/:id")
-  getBooking(@Param("id") id: string) {
-    return this.bookings.getBooking(id);
+  @UseGuards(SessionGuard)
+  getBooking(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.bookings.getBookingForUser(id, user.id);
   }
 }

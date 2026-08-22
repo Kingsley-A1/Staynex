@@ -5,6 +5,7 @@
  */
 export interface VoucherData {
   reference: string;
+  mode: "TEST" | "LIVE";
   /** True only when the booking is CONFIRMED and its payment is SUCCESS. */
   paidAndConfirmed: boolean;
   bookingStatus: string;
