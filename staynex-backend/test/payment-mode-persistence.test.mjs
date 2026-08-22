@@ -38,6 +38,15 @@ function paymentFixture(mode) {
   };
 }
 
+function paymentEvidence(payment) {
+  return {
+    provider: payment.provider,
+    mode: payment.mode,
+    reference: payment.reference,
+    providerReference: payment.providerReference,
+  };
+}
+
 function transitionHarness(mode) {
   const payment = paymentFixture(mode);
   const calls = {
@@ -99,10 +108,11 @@ async function withTransaction(tx, action) {
 test("TEST payment confirmation releases the hold without live inventory or payout", async () => {
   const harness = transitionHarness("TEST");
   const result = await withTransaction(harness.tx, () =>
-    harness.service.applyChargeSuccess(harness.payment.reference, {
-      amountKobo: 100_000,
-      currency: "NGN",
-    }),
+    harness.service.applyChargeSuccess(
+      harness.payment.reference,
+      { amountKobo: 100_000, currency: "NGN" },
+      paymentEvidence(harness.payment),
+    ),
   );
 
   assert.equal(result.outcome, "CONFIRMED");
@@ -117,10 +127,11 @@ test("TEST payment confirmation releases the hold without live inventory or payo
 test("LIVE payment confirmation converts held inventory and creates one payout", async () => {
   const harness = transitionHarness("LIVE");
   const result = await withTransaction(harness.tx, () =>
-    harness.service.applyChargeSuccess(harness.payment.reference, {
-      amountKobo: 100_000,
-      currency: "NGN",
-    }),
+    harness.service.applyChargeSuccess(
+      harness.payment.reference,
+      { amountKobo: 100_000, currency: "NGN" },
+      paymentEvidence(harness.payment),
+    ),
   );
 
   assert.equal(result.outcome, "CONFIRMED");
@@ -142,7 +153,11 @@ test("refunding a TEST booking does not decrement live booked inventory", async 
   };
 
   const result = await withTransaction(harness.tx, () =>
-    harness.service.applyRefund(harness.payment.reference, "sandbox acceptance"),
+    harness.service.applyRefund(
+      harness.payment.reference,
+      "sandbox acceptance",
+      paymentEvidence(harness.payment),
+    ),
   );
 
   assert.equal(result.outcome, "REFUNDED");

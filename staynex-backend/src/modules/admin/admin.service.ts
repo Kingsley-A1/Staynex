@@ -573,7 +573,13 @@ export class AdminService {
   ): Promise<AdminPaymentRow> {
     const payment = await prisma.payment.findUnique({
       where: { reference },
-      select: { id: true, status: true, provider: true },
+      select: {
+        id: true,
+        status: true,
+        provider: true,
+        mode: true,
+        providerReference: true,
+      },
     });
     if (!payment) throw new NotFoundException("Payment not found");
     if (payment.status === "REFUNDED") {
@@ -589,13 +595,25 @@ export class AdminService {
     // from the payment row — never a default. Provider first: if it rejects,
     // nothing changes locally, so an admin never sees a refund we didn't make.
     const provider = this.providers.get(payment.provider);
+    if (provider.mode !== payment.mode) {
+      throw new BadRequestException(
+        `This ${payment.mode.toLowerCase()} payment cannot be refunded while ${provider.name} is configured for ${provider.mode.toLowerCase()} mode. Restore the matching provider environment and retry.`,
+      );
+    }
     await provider.refundTransaction(reference);
 
     const initiator = `admin ${admin.email ?? admin.id}${note ? ` — ${note}` : ""}`;
-    const result = await this.bookings.applyRefund(reference, initiator);
+    const result = await this.bookings.applyRefund(reference, initiator, {
+      provider: provider.name,
+      mode: provider.mode,
+      reference,
+      providerReference: payment.providerReference,
+    });
     await this.paymentEvents.record({
       eventType: "admin.refund",
       provider: provider.name,
+      mode: provider.mode,
+      providerReference: payment.providerReference,
       reference,
       outcome: result.outcome,
       detail: result.detail,

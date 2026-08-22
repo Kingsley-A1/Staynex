@@ -686,8 +686,10 @@ model Payment {
 /// always with the processing outcome. Nothing that touches funds may resolve
 /// invisibly (payment-review P1).
 model PaymentEvent {
-  id        String   @id @default(cuid())
-  provider  String   @default("paystack")
+  id                String      @id @default(cuid())
+  provider          String      @default("paystack")
+  mode              PaymentMode @default(TEST)
+  providerReference String?
   /// e.g. charge.success, charge.failed, refund.processed, sync.verify, admin.refund
   eventType String
   reference String?
@@ -701,6 +703,7 @@ model PaymentEvent {
   createdAt DateTime @default(now())
 
   @@index([reference])
+  @@index([provider, mode, reference])
   @@index([outcome])
   @@index([createdAt])
 }

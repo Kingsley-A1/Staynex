@@ -2,30 +2,42 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../db";
 import { NotificationsService } from "../notifications/notifications.service";
+import {
+  PAYMENT_MODES,
+  isProviderName,
+  type PaymentMode,
+  type ProviderName,
+} from "./payment-provider.port";
 
-/**
- * Outcomes a money-touching action can resolve to. Everything lands in the
- * PaymentEvent audit trail; EXCEPTION_OUTCOMES additionally surface in the
- * admin exception queue.
- */
+/** Outcomes a money-touching action can resolve to. */
 export type PaymentOutcome =
-  | "CONFIRMED" // normal PENDING_PAYMENT -> CONFIRMED
-  | "REVIVED" // late success; capacity still free, booking re-confirmed
-  | "REQUIRES_REFUND" // money captured, booking cannot be honored
-  | "UNDERPAID" // captured less than owed — needs refund + never confirms
-  | "CURRENCY_MISMATCH" // captured in the wrong currency — needs human review
-  | "MARKED_FAILED" // charge failed / abandoned; capacity released
-  | "REFUNDED" // refund applied (admin- or provider-initiated)
-  | "DUPLICATE" // already in a terminal state; delivery ignored
-  | "UNKNOWN_REFERENCE" // no payment row for this reference
-  | "NO_CHANGE" // nothing to do (e.g. still pending on verify)
-  | "RECORDED"; // informational event stored without state change
+  | "CONFIRMED"
+  | "REVIVED"
+  | "REQUIRES_REFUND"
+  | "UNDERPAID"
+  | "AMOUNT_MISMATCH"
+  | "CURRENCY_MISMATCH"
+  | "PROVIDER_MISMATCH"
+  | "MODE_MISMATCH"
+  | "REFERENCE_MISMATCH"
+  | "PROVIDER_REFERENCE_MISMATCH"
+  | "MARKED_FAILED"
+  | "REFUNDED"
+  | "DUPLICATE"
+  | "UNKNOWN_REFERENCE"
+  | "NO_CHANGE"
+  | "RECORDED";
 
-/** Outcomes that indicate funds moved but the platform owes a human action. */
+/** Outcomes that require operator visibility or follow-up. */
 export const EXCEPTION_OUTCOMES: PaymentOutcome[] = [
   "REQUIRES_REFUND",
   "UNDERPAID",
+  "AMOUNT_MISMATCH",
   "CURRENCY_MISMATCH",
+  "PROVIDER_MISMATCH",
+  "MODE_MISMATCH",
+  "REFERENCE_MISMATCH",
+  "PROVIDER_REFERENCE_MISMATCH",
 ];
 
 export interface PaymentOutcomeResult {
@@ -34,10 +46,9 @@ export interface PaymentOutcomeResult {
 }
 
 /**
- * Immutable money audit trail. One row per provider webhook delivery, per
- * state-changing provider verification, and per admin money action. Recording
- * is best-effort by design: an audit-write failure is loudly logged but never
- * rolls back a verified financial state change.
+ * Immutable money audit trail. Audit persistence fails closed: a provider
+ * delivery is not acknowledged when its evidence cannot be stored, allowing
+ * the provider to retry instead of making a financial transition invisible.
  */
 @Injectable()
 export class PaymentEventsService {
@@ -49,39 +60,33 @@ export class PaymentEventsService {
     eventType: string;
     reference: string | null;
     outcome: PaymentOutcome;
-    /**
-     * Which provider the event came from. Optional only so legacy call sites
-     * keep compiling; always pass it — the column defaults to "paystack", so
-     * omitting it on an Opay event silently mislabels the audit trail.
-     */
-    provider?: string;
+    provider: ProviderName;
+    mode: PaymentMode;
+    providerReference: string | null;
     detail?: string;
     payload?: unknown;
   }): Promise<void> {
-    try {
-      await prisma.paymentEvent.create({
-        data: {
-          eventType: entry.eventType,
-          ...(entry.provider ? { provider: entry.provider } : {}),
-          reference: entry.reference,
-          outcome: entry.outcome,
-          detail: entry.detail ?? null,
-          payload:
-            entry.payload === undefined
-              ? Prisma.DbNull
-              : (entry.payload as Prisma.InputJsonValue),
-        },
-      });
-    } catch (err) {
-      this.logger.error(
-        `PaymentEvent write failed (${entry.eventType} ${entry.reference ?? "-"} -> ${entry.outcome}): ${
-          err instanceof Error ? err.message : "unknown"
-        }`,
-      );
+    if (!isProviderName(entry.provider)) {
+      throw new Error("Payment audit provider is missing or unsupported.");
     }
+    if (!(PAYMENT_MODES as readonly string[]).includes(entry.mode)) {
+      throw new Error("Payment audit mode is missing or unsupported.");
+    }
+
+    await prisma.paymentEvent.create({
+      data: {
+        eventType: entry.eventType,
+        provider: entry.provider,
+        mode: entry.mode,
+        providerReference: entry.providerReference,
+        reference: entry.reference,
+        outcome: entry.outcome,
+        detail: entry.detail ?? null,
+        payload: minimizeAuditPayload(entry.payload),
+      },
+    });
+
     if (EXCEPTION_OUTCOMES.includes(entry.outcome)) {
-      // Exceptions must be impossible to miss: ops log + every admin's inbox
-      // and devices (deduped per reference, so retries never spam).
       this.logger.error(
         `PAYMENT EXCEPTION [${entry.outcome}] ref=${entry.reference ?? "-"} via ${entry.eventType}: ${entry.detail ?? ""}`,
       );
@@ -91,4 +96,35 @@ export class PaymentEventsService {
       );
     }
   }
+}
+
+function minimizeAuditPayload(
+  payload: unknown,
+): Prisma.InputJsonValue | typeof Prisma.DbNull {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return Prisma.DbNull;
+  }
+
+  const source = payload as Record<string, unknown>;
+  const minimized: Record<string, string | number | null> = {};
+  for (const key of [
+    "kind",
+    "reference",
+    "providerReference",
+    "amountKobo",
+    "currency",
+  ]) {
+    const value = source[key];
+    if (
+      value === null ||
+      typeof value === "string" ||
+      typeof value === "number"
+    ) {
+      minimized[key] = value;
+    }
+  }
+
+  return Object.keys(minimized).length > 0
+    ? (minimized as Prisma.InputJsonValue)
+    : Prisma.DbNull;
 }

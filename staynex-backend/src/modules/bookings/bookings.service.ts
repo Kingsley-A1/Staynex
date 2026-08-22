@@ -19,6 +19,7 @@ import type {
 } from "../../../types";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PaymentProviderRegistry } from "../payments/payment-provider.registry";
+import type { PaymentTransitionEvidence } from "../payments/payment-provider.port";
 import {
   PaymentEventsService,
   type PaymentOutcomeResult,
@@ -272,10 +273,18 @@ export class BookingsService {
     } catch (err) {
       // Never leave a pending booking holding capacity if payment can't start —
       // and leave an audit row for the support ticket that follows.
-      const result = await this.applyChargeFailure(reference);
+      const evidence: PaymentTransitionEvidence = {
+        provider: provider.name,
+        mode: provider.mode,
+        reference,
+        providerReference: null,
+      };
+      const result = await this.applyChargeFailure(reference, evidence);
       await this.paymentEvents.record({
         eventType: "checkout.init_failed",
         provider: provider.name,
+        mode: provider.mode,
+        providerReference: null,
         reference,
         outcome: result.outcome,
         detail: `Provider initialize failed: ${err instanceof Error ? err.message : "unknown"}.`,
@@ -297,10 +306,16 @@ export class BookingsService {
   async applyChargeSuccess(
     reference: string,
     paid: { amountKobo: number | null; currency: string | null },
+    evidence: PaymentTransitionEvidence,
   ): Promise<PaymentOutcomeResult> {
     let amountKobo = paid.amountKobo;
     let currency = paid.currency;
     if (amountKobo == null || currency == null) {
+      const initialMismatch = await this.assertPaymentProvider(
+        reference,
+        evidence,
+      );
+      if (initialMismatch) return initialMismatch;
       // Missing amount OR currency — never confirm unvalidated. Verify with
       // the payment's OWN provider (never a default): asking the wrong provider
       // would report "not found" and could fail a payment the guest completed.
@@ -315,10 +330,17 @@ export class BookingsService {
       }
       amountKobo = verified.amountKobo;
       currency = verified.currency;
+      evidence = {
+        provider: provider.name,
+        mode: provider.mode,
+        reference: verified.reference,
+        providerReference: verified.providerReference,
+      };
     }
 
     const result = await prisma.$transaction(
-      async (tx) => this.applySuccessTx(tx, reference, amountKobo, currency),
+      async (tx) =>
+        this.applySuccessTx(tx, reference, amountKobo, currency, evidence),
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
 
@@ -330,13 +352,22 @@ export class BookingsService {
   }
 
   /** Mark a payment failed and release any capacity its booking was holding. */
-  async applyChargeFailure(reference: string): Promise<PaymentOutcomeResult> {
+  async applyChargeFailure(
+    reference: string,
+    evidence: PaymentTransitionEvidence,
+  ): Promise<PaymentOutcomeResult> {
     return prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
         where: { reference },
         include: paymentWithBookingInclude,
       });
       if (!payment) return { outcome: "UNKNOWN_REFERENCE" };
+      const mismatch = this.paymentEvidenceMismatch(
+        payment,
+        reference,
+        evidence,
+      );
+      if (mismatch) return mismatch;
       if (payment.status !== "PENDING" && payment.status !== "INITIATED") {
         return {
           outcome: "DUPLICATE",
@@ -345,7 +376,15 @@ export class BookingsService {
       }
 
       await this.cancelPendingBooking(tx, payment);
-      await tx.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } });
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: "FAILED",
+          ...(evidence.providerReference && !payment.providerReference
+            ? { providerReference: evidence.providerReference }
+            : {}),
+        },
+      });
       return { outcome: "MARKED_FAILED" };
     });
   }
@@ -356,61 +395,95 @@ export class BookingsService {
    * is cancelled with its capacity released, and an unsettled payout is
    * clawed back. A payout already PAID is flagged for out-of-band recovery.
    */
-  async applyRefund(reference: string, initiatedBy: string): Promise<PaymentOutcomeResult> {
+  async applyRefund(
+    reference: string,
+    initiatedBy: string,
+    evidence: PaymentTransitionEvidence,
+  ): Promise<PaymentOutcomeResult> {
     const result = await prisma.$transaction(
-      async (tx): Promise<PaymentOutcomeResult & { refundedBookingId?: string }> => {
-      const payment = await tx.payment.findUnique({
-        where: { reference },
-        include: { ...paymentWithBookingInclude, payout: true },
-      });
-      if (!payment) return { outcome: "UNKNOWN_REFERENCE" };
-      if (payment.status === "REFUNDED") {
-        return { outcome: "DUPLICATE", detail: "Payment already refunded." };
-      }
-
-      const booking = payment.booking;
-      const roomTypeId = booking.roomUnit.roomType.id;
-      const nights = nightsOf(iso(booking.checkIn), iso(booking.checkOut));
-      const details: string[] = [`Refund initiated by ${initiatedBy}.`];
-
-      if (booking.status === "CONFIRMED") {
-        if (payment.mode === "LIVE") {
-          await tx.availabilityCalendar.updateMany({
-            where: { roomTypeId, date: { in: nights }, bookedUnits: { gt: 0 } },
-            data: { bookedUnits: { decrement: 1 } },
-          });
-          details.push("Confirmed booking cancelled; capacity released.");
-        } else {
-          details.push("Test booking cancelled; live capacity was unchanged.");
+      async (
+        tx,
+      ): Promise<PaymentOutcomeResult & { refundedBookingId?: string }> => {
+        const payment = await tx.payment.findUnique({
+          where: { reference },
+          include: { ...paymentWithBookingInclude, payout: true },
+        });
+        if (!payment) return { outcome: "UNKNOWN_REFERENCE" };
+        const mismatch = this.paymentEvidenceMismatch(
+          payment,
+          reference,
+          evidence,
+        );
+        if (mismatch) return mismatch;
+        if (payment.status === "REFUNDED") {
+          return { outcome: "DUPLICATE", detail: "Payment already refunded." };
         }
-        await tx.booking.update({ where: { id: booking.id }, data: { status: "CANCELLED" } });
-      } else if (booking.status === "PENDING_PAYMENT") {
-        await this.cancelPendingBooking(tx, payment);
-        details.push("Pending booking cancelled; held capacity released.");
-      }
 
-      if (payment.payout) {
-        if (payment.payout.status === "PENDING" || payment.payout.status === "PROCESSING") {
-          await tx.payout.update({
-            where: { id: payment.payout.id },
-            data: {
-              status: "FAILED",
-              failedAt: new Date(),
-              note: "Clawed back — payment refunded.",
-            },
+        const booking = payment.booking;
+        const roomTypeId = booking.roomUnit.roomType.id;
+        const nights = nightsOf(iso(booking.checkIn), iso(booking.checkOut));
+        const details: string[] = [`Refund initiated by ${initiatedBy}.`];
+
+        if (booking.status === "CONFIRMED") {
+          if (payment.mode === "LIVE") {
+            await tx.availabilityCalendar.updateMany({
+              where: {
+                roomTypeId,
+                date: { in: nights },
+                bookedUnits: { gt: 0 },
+              },
+              data: { bookedUnits: { decrement: 1 } },
+            });
+            details.push("Confirmed booking cancelled; capacity released.");
+          } else {
+            details.push(
+              "Test booking cancelled; live capacity was unchanged.",
+            );
+          }
+          await tx.booking.update({
+            where: { id: booking.id },
+            data: { status: "CANCELLED" },
           });
-          details.push("Unsettled payout clawed back.");
-        } else if (payment.payout.status === "PAID") {
-          details.push("WARNING: payout already PAID — recover from the host out of band.");
+        } else if (booking.status === "PENDING_PAYMENT") {
+          await this.cancelPendingBooking(tx, payment);
+          details.push("Pending booking cancelled; held capacity released.");
         }
-      }
 
-      await tx.payment.update({ where: { id: payment.id }, data: { status: "REFUNDED" } });
-      return {
-        outcome: "REFUNDED",
-        detail: details.join(" "),
-        refundedBookingId: booking.id,
-      };
+        if (payment.payout) {
+          if (
+            payment.payout.status === "PENDING" ||
+            payment.payout.status === "PROCESSING"
+          ) {
+            await tx.payout.update({
+              where: { id: payment.payout.id },
+              data: {
+                status: "FAILED",
+                failedAt: new Date(),
+                note: "Clawed back — payment refunded.",
+              },
+            });
+            details.push("Unsettled payout clawed back.");
+          } else if (payment.payout.status === "PAID") {
+            details.push(
+              "WARNING: payout already PAID — recover from the host out of band.",
+            );
+          }
+        }
+
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: "REFUNDED",
+            ...(evidence.providerReference && !payment.providerReference
+              ? { providerReference: evidence.providerReference }
+              : {}),
+          },
+        });
+        return {
+          outcome: "REFUNDED",
+          detail: details.join(" "),
+          refundedBookingId: booking.id,
+        };
       },
     );
 
@@ -442,7 +515,10 @@ export class BookingsService {
    * status-page polling can't hammer Paystack's verify API; `force` bypasses
    * the debounce for the audited admin re-verify action.
    */
-  async syncPaymentStatus(reference: string, options: { force?: boolean } = {}): Promise<void> {
+  async syncPaymentStatus(
+    reference: string,
+    options: { force?: boolean } = {},
+  ): Promise<void> {
     const payment = await prisma.payment.findUnique({
       where: { reference },
       select: { id: true, status: true, lastVerifiedAt: true },
@@ -468,14 +544,25 @@ export class BookingsService {
       const provider = await this.providerForReference(reference);
       const verified = await provider.verifyTransaction(reference);
       if (verified.status === "success") {
-        const result = await this.applyChargeSuccess(reference, {
-          amountKobo: verified.amountKobo,
-          currency: verified.currency,
-        });
+        const result = await this.applyChargeSuccess(
+          reference,
+          {
+            amountKobo: verified.amountKobo,
+            currency: verified.currency,
+          },
+          {
+            provider: provider.name,
+            mode: provider.mode,
+            reference: verified.reference,
+            providerReference: verified.providerReference,
+          },
+        );
         if (result.outcome !== "NO_CHANGE" && result.outcome !== "DUPLICATE") {
           await this.paymentEvents.record({
             eventType: "sync.verify",
             provider: provider.name,
+            mode: provider.mode,
+            providerReference: verified.providerReference,
             reference,
             outcome: result.outcome,
             detail: result.detail,
@@ -486,11 +573,18 @@ export class BookingsService {
       // Only terminal states release capacity. "pending" (which adapters also
       // use for any status they don't recognize) deliberately does nothing.
       if (verified.status === "failed" || verified.status === "abandoned") {
-        const result = await this.applyChargeFailure(reference);
+        const result = await this.applyChargeFailure(reference, {
+          provider: provider.name,
+          mode: provider.mode,
+          reference: verified.reference,
+          providerReference: verified.providerReference,
+        });
         if (result.outcome === "MARKED_FAILED") {
           await this.paymentEvents.record({
             eventType: "sync.verify",
             provider: provider.name,
+            mode: provider.mode,
+            providerReference: verified.providerReference,
             reference,
             outcome: result.outcome,
             detail: `Provider verify reports '${verified.status}'.`,
@@ -543,6 +637,64 @@ export class BookingsService {
 
   // --- internals ---------------------------------------------------------
 
+  private async assertPaymentProvider(
+    reference: string,
+    evidence: PaymentTransitionEvidence,
+  ): Promise<PaymentOutcomeResult | null> {
+    const payment = await prisma.payment.findUnique({
+      where: { reference },
+      select: {
+        provider: true,
+        mode: true,
+        reference: true,
+        providerReference: true,
+      },
+    });
+    if (!payment) return { outcome: "UNKNOWN_REFERENCE" };
+    return this.paymentEvidenceMismatch(payment, reference, evidence);
+  }
+
+  private paymentEvidenceMismatch(
+    payment: {
+      provider: string;
+      mode: "TEST" | "LIVE";
+      reference: string | null;
+      providerReference: string | null;
+    },
+    reference: string,
+    evidence: PaymentTransitionEvidence,
+  ): PaymentOutcomeResult | null {
+    if (payment.provider !== evidence.provider) {
+      return {
+        outcome: "PROVIDER_MISMATCH",
+        detail: `Rejected ${evidence.provider} evidence for a ${payment.provider} payment.`,
+      };
+    }
+    if (payment.mode !== evidence.mode) {
+      return {
+        outcome: "MODE_MISMATCH",
+        detail: `Rejected ${evidence.mode} evidence for a ${payment.mode} payment.`,
+      };
+    }
+    if (evidence.reference !== reference || payment.reference !== reference) {
+      return {
+        outcome: "REFERENCE_MISMATCH",
+        detail: "Provider evidence did not echo the Staynex payment reference.",
+      };
+    }
+    if (
+      payment.providerReference !== null &&
+      evidence.providerReference !== payment.providerReference
+    ) {
+      return {
+        outcome: "PROVIDER_REFERENCE_MISMATCH",
+        detail:
+          "Provider transaction identity conflicts with persisted payment evidence.",
+      };
+    }
+    return null;
+  }
+
   /**
    * Resolve the adapter for an EXISTING payment from the provider persisted on
    * its row. This is the guard against the worst failure mode in a
@@ -556,12 +708,20 @@ export class BookingsService {
   private async providerForReference(reference: string) {
     const payment = await prisma.payment.findUnique({
       where: { reference },
-      select: { provider: true },
+      select: { provider: true, mode: true },
     });
     if (!payment) {
-      throw new NotFoundException(`No payment found for reference ${reference}`);
+      throw new NotFoundException(
+        `No payment found for reference ${reference}`,
+      );
     }
-    return this.providers.get(payment.provider);
+    const provider = this.providers.get(payment.provider);
+    if (provider.mode !== payment.mode) {
+      throw new ConflictException(
+        `Payment ${reference} belongs to ${payment.mode} mode, but ${provider.name} is configured for ${provider.mode}. Retry after restoring the matching provider environment.`,
+      );
+    }
+    return provider;
   }
 
   /** The success truth table, inside one serializable transaction. */
@@ -570,17 +730,26 @@ export class BookingsService {
     reference: string,
     amountKobo: number | null,
     currency: string | null,
+    evidence: PaymentTransitionEvidence,
   ): Promise<PaymentOutcomeResult & { confirmedBookingId?: string }> {
     const payment = await tx.payment.findUnique({
       where: { reference },
       include: paymentWithBookingInclude,
     });
     if (!payment) return { outcome: "UNKNOWN_REFERENCE" };
+    const mismatch = this.paymentEvidenceMismatch(payment, reference, evidence);
+    if (mismatch) return mismatch;
     if (payment.status === "SUCCESS" || payment.status === "REFUNDED") {
-      return { outcome: "DUPLICATE", detail: `Payment already ${payment.status}.` };
+      return {
+        outcome: "DUPLICATE",
+        detail: `Payment already ${payment.status}.`,
+      };
     }
     if (payment.status === "REQUIRES_REFUND") {
-      return { outcome: "DUPLICATE", detail: "Payment already flagged for refund." };
+      return {
+        outcome: "DUPLICATE",
+        detail: "Payment already flagged for refund.",
+      };
     }
 
     const booking = payment.booking;
@@ -588,14 +757,19 @@ export class BookingsService {
     const property = booking.roomUnit.roomType.property;
     const nights = nightsOf(iso(booking.checkIn), iso(booking.checkOut));
     // Prefer the canonical gross; fall back to the compat `amount` for pre-Phase-A rows.
-    const expectedKobo = payment.grossAmountKobo > 0 ? payment.grossAmountKobo : payment.amount;
+    const expectedKobo =
+      payment.grossAmountKobo > 0 ? payment.grossAmountKobo : payment.amount;
+    const providerReferenceData =
+      evidence.providerReference && !payment.providerReference
+        ? { providerReference: evidence.providerReference }
+        : {};
 
     // P5 — wrong currency: funds moved but the books can't reconcile it.
     if (currency && currency.toUpperCase() !== payment.currency.toUpperCase()) {
       await this.cancelPendingBooking(tx, payment);
       await tx.payment.update({
         where: { id: payment.id },
-        data: { status: "REQUIRES_REFUND" },
+        data: { status: "REQUIRES_REFUND", ...providerReferenceData },
       });
       return {
         outcome: "CURRENCY_MISMATCH",
@@ -605,15 +779,16 @@ export class BookingsService {
 
     // Underpaid: funds captured but less than owed — never confirms, and the
     // captured money must be visible for refund (not silently FAILED).
-    if (amountKobo != null && amountKobo < expectedKobo) {
+    if (amountKobo != null && amountKobo !== expectedKobo) {
       await this.cancelPendingBooking(tx, payment);
       await tx.payment.update({
         where: { id: payment.id },
-        data: { status: "REQUIRES_REFUND" },
+        data: { status: "REQUIRES_REFUND", ...providerReferenceData },
       });
+      const underpaid = amountKobo < expectedKobo;
       return {
-        outcome: "UNDERPAID",
-        detail: `Charged ${amountKobo} kobo of ${expectedKobo} expected. Needs manual refund.`,
+        outcome: underpaid ? "UNDERPAID" : "AMOUNT_MISMATCH",
+        detail: `Charged ${amountKobo} kobo; expected exactly ${expectedKobo}. Needs manual refund.`,
       };
     }
 
@@ -628,8 +803,18 @@ export class BookingsService {
                 bookedUnits: { increment: 1 },
               },
       });
-      await tx.booking.update({ where: { id: booking.id }, data: { status: "CONFIRMED" } });
-      await this.settlePayment(tx, payment, property.ownerId, property.id, expectedKobo);
+      await tx.booking.update({
+        where: { id: booking.id },
+        data: { status: "CONFIRMED" },
+      });
+      await this.settlePayment(
+        tx,
+        payment,
+        property.ownerId,
+        property.id,
+        expectedKobo,
+        evidence.providerReference,
+      );
       return { outcome: "CONFIRMED", confirmedBookingId: booking.id };
     }
 
@@ -645,6 +830,7 @@ export class BookingsService {
           property.ownerId,
           property.id,
           expectedKobo,
+          evidence.providerReference,
         );
         return {
           outcome: "REVIVED",
@@ -659,16 +845,19 @@ export class BookingsService {
       });
       const bookable =
         rows.length === nights.length &&
-        rows.every((row) => row.totalUnits - row.bookedUnits - row.heldUnits >= 1);
+        rows.every(
+          (row) => row.totalUnits - row.bookedUnits - row.heldUnits >= 1,
+        );
 
       if (!bookable) {
         await tx.payment.update({
           where: { id: payment.id },
-          data: { status: "REQUIRES_REFUND" },
+          data: { status: "REQUIRES_REFUND", ...providerReferenceData },
         });
         return {
           outcome: "REQUIRES_REFUND",
-          detail: "Paid after expiry and the dates are no longer available. Needs manual refund.",
+          detail:
+            "Paid after expiry and the dates are no longer available. Needs manual refund.",
         };
       }
 
@@ -676,8 +865,18 @@ export class BookingsService {
         where: { roomTypeId, date: { in: nights } },
         data: { bookedUnits: { increment: 1 } },
       });
-      await tx.booking.update({ where: { id: booking.id }, data: { status: "CONFIRMED" } });
-      await this.settlePayment(tx, payment, property.ownerId, property.id, expectedKobo);
+      await tx.booking.update({
+        where: { id: booking.id },
+        data: { status: "CONFIRMED" },
+      });
+      await this.settlePayment(
+        tx,
+        payment,
+        property.ownerId,
+        property.id,
+        expectedKobo,
+        evidence.providerReference,
+      );
       return {
         outcome: "REVIVED",
         confirmedBookingId: booking.id,
@@ -688,14 +887,24 @@ export class BookingsService {
     if (booking.status === "CONFIRMED") {
       // Booking confirmed but the payment row lagged (crash between updates,
       // or duplicate delivery racing) — heal the payment side idempotently.
-      await this.settlePayment(tx, payment, property.ownerId, property.id, expectedKobo);
+      await this.settlePayment(
+        tx,
+        payment,
+        property.ownerId,
+        property.id,
+        expectedKobo,
+        evidence.providerReference,
+      );
       return {
         outcome: "CONFIRMED",
         detail: "Payment state healed to match already-confirmed booking.",
       };
     }
 
-    return { outcome: "NO_CHANGE", detail: `Unhandled booking status ${booking.status}.` };
+    return {
+      outcome: "NO_CHANGE",
+      detail: `Unhandled booking status ${booking.status}.`,
+    };
   }
 
   /** Payment -> SUCCESS plus the idempotent owner-settlement payout. */
@@ -705,11 +914,19 @@ export class BookingsService {
     ownerId: string,
     propertyId: string,
     expectedKobo: number,
+    providerReference: string | null,
   ): Promise<void> {
     const now = new Date();
     await tx.payment.update({
       where: { id: payment.id },
-      data: { status: "SUCCESS", paidAt: now, lastVerifiedAt: now },
+      data: {
+        status: "SUCCESS",
+        paidAt: now,
+        lastVerifiedAt: now,
+        ...(providerReference && !payment.providerReference
+          ? { providerReference }
+          : {}),
+      },
     });
     if (payment.mode === "TEST") return;
     // One PENDING payout per successful payment, eligible 24h after check-in.
@@ -718,8 +935,10 @@ export class BookingsService {
     const ownerPayoutKobo =
       payment.ownerPayoutKobo > 0
         ? payment.ownerPayoutKobo
-        : splitPayment(expectedKobo, payment.commissionRateBps || resolveCommissionBps())
-            .ownerPayoutKobo;
+        : splitPayment(
+            expectedKobo,
+            payment.commissionRateBps || resolveCommissionBps(),
+          ).ownerPayoutKobo;
     await tx.payout.upsert({
       where: { paymentId: payment.id },
       create: {
@@ -730,7 +949,9 @@ export class BookingsService {
         amount: ownerPayoutKobo,
         currency: payment.currency,
         status: "PENDING",
-        eligibleAt: new Date(payment.booking.checkIn.getTime() + PAYOUT_ELIGIBLE_AFTER_MS),
+        eligibleAt: new Date(
+          payment.booking.checkIn.getTime() + PAYOUT_ELIGIBLE_AFTER_MS,
+        ),
       },
       update: {},
     });

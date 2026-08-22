@@ -78,13 +78,25 @@ export interface NormalizedWebhookEvent {
   currency: string | null;
   /** The provider's own event name, preserved for the audit trail. */
   rawType: string;
-  /** The parsed payload, stored raw on the PaymentEvent row. */
+  /** Parsed adapter input; audit persistence keeps only normalized evidence. */
   payload: unknown;
+}
+
+/** Provider-authenticated identity that must match the persisted payment. */
+export interface PaymentTransitionEvidence {
+  provider: ProviderName;
+  mode: PaymentMode;
+  /** Staynex reference echoed by the provider response or signed webhook. */
+  reference: string;
+  /** Provider transaction id used only for binding and reconciliation. */
+  providerReference: string | null;
 }
 
 export class RefundNotSupportedError extends Error {
   constructor(provider: ProviderName, detail: string) {
-    super(`${provider} cannot refund this transaction automatically: ${detail}`);
+    super(
+      `${provider} cannot refund this transaction automatically: ${detail}`,
+    );
     this.name = "RefundNotSupportedError";
   }
 }

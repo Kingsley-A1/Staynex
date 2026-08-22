@@ -85,10 +85,12 @@ export class PaymentsWebhookController {
       await this.paymentEvents.record({
         eventType: event.rawType,
         provider: provider.name,
+        mode: provider.mode,
+        providerReference: event.providerReference,
         reference: event.reference,
         outcome: "NO_CHANGE",
         detail: `Processing failed: ${err instanceof Error ? err.message : "unknown"} — provider will retry.`,
-        payload: event.payload,
+        payload: normalizedAuditPayload(event),
       });
       throw err;
     }
@@ -96,10 +98,12 @@ export class PaymentsWebhookController {
     await this.paymentEvents.record({
       eventType: event.rawType,
       provider: provider.name,
+      mode: provider.mode,
+      providerReference: event.providerReference,
       reference: event.reference,
       outcome: result.outcome,
       detail: result.detail,
-      payload: event.payload,
+      payload: normalizedAuditPayload(event),
     });
     return { received: true };
   }
@@ -116,16 +120,36 @@ export class PaymentsWebhookController {
     }
     switch (event.kind) {
       case "charge.success":
-        return this.bookings.applyChargeSuccess(event.reference, {
-          amountKobo: event.amountKobo,
-          currency: event.currency,
-        });
+        return this.bookings.applyChargeSuccess(
+          event.reference,
+          {
+            amountKobo: event.amountKobo,
+            currency: event.currency,
+          },
+          {
+            provider: provider.name,
+            mode: provider.mode,
+            reference: event.reference,
+            providerReference: event.providerReference,
+          },
+        );
       case "charge.failed":
-        return this.bookings.applyChargeFailure(event.reference);
+        return this.bookings.applyChargeFailure(event.reference, {
+          provider: provider.name,
+          mode: provider.mode,
+          reference: event.reference,
+          providerReference: event.providerReference,
+        });
       case "refund.processed":
         return this.bookings.applyRefund(
           event.reference,
           `${provider.name} (refund webhook: ${event.rawType})`,
+          {
+            provider: provider.name,
+            mode: provider.mode,
+            reference: event.reference,
+            providerReference: event.providerReference,
+          },
         );
       default:
         if (
@@ -154,4 +178,14 @@ export class PaymentsWebhookController {
   status(@Param("reference") reference: string) {
     return this.bookings.getPaymentStatus(reference);
   }
+}
+
+function normalizedAuditPayload(event: NormalizedWebhookEvent) {
+  return {
+    kind: event.kind,
+    reference: event.reference,
+    providerReference: event.providerReference,
+    amountKobo: event.amountKobo,
+    currency: event.currency,
+  };
 }
