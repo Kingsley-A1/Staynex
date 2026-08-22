@@ -114,6 +114,9 @@ export function renderEmailLayout(input: EmailLayoutInput): RenderedEmail {
     .join("\n")
     .replace(/</g, "‹")
     .replace(/>/g, "›")
+    // Strip control characters so they cannot smuggle anything into the
+    // rendered email. The control-character class is the whole point here.
+    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
 
   return {

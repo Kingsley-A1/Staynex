@@ -288,7 +288,7 @@ export function AssistantWidget() {
   }, [desktopMode, expanded, isDesktop]);
 
   const refreshConversations = useCallback(async () => {
-    let server: AgentConversation[] = [];
+    let server: AgentConversation[];
     try {
       server = await agentApi.listConversations();
     } catch {

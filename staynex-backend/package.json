@@ -15,6 +15,7 @@
     "build": "nest build",
     "start": "pnpm prisma:migrate:deploy && node dist/src/main.js",
     "start:runtime": "node dist/src/main.js",
+    "precheck": "pnpm prisma:generate",
     "check": "tsc --noEmit",
     "test:property-review": "pnpm build && node --test test/property-review-policy.test.cjs",
     "test:emails": "pnpm build && node --test test/email-templates.test.cjs",
