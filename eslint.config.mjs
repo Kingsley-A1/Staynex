@@ -56,6 +56,10 @@ export default tseslint.config(
       "**/*.d.ts",
       "staynex-backend/prisma/migrations/**",
       "docs/archive/**",
+      // Nested git worktree: a separate branch checked out inside this one.
+      // It has its own history and lint baseline; linting it from here
+      // reports issues that do not exist on this branch.
+      "staynex-opay-review/**",
     ],
   },
 

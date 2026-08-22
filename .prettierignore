@@ -14,3 +14,6 @@ docs/archive
 # Generated previews
 .email-previews
 artifacts
+
+# Nested git worktree (separate branch, own history)
+staynex-opay-review

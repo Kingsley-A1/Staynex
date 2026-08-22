@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { getSupportContactFromEnv } from "../src/lib/support-contact.ts";
+import { apiClientSource } from "./read-source.mjs";
 
 async function source(path) {
   return readFile(new URL(path, import.meta.url), "utf8");
@@ -97,7 +98,7 @@ test("Google sign-in can hand admin managers into the MFA form", async () => {
   const [button, form, api, contract] = await Promise.all([
     source("../src/features/auth/google-auth-button.tsx"),
     source("../src/features/auth/auth-form.tsx"),
-    source("../src/lib/api.ts"),
+    apiClientSource(),
     // The API contract is owned by the backend; the frontend re-exports it.
     source("../../staynex-backend/types/api.ts"),
   ]);

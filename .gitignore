@@ -22,3 +22,7 @@ lighthouse-*.html
 *.p12
 *.key
 *.mobileprovision
+
+# Nested git worktrees checked out inside this one. Never commit these:
+# git add -A would otherwise stage them as an embedded repository.
+staynex-opay-review/
