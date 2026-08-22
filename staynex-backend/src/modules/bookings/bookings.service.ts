@@ -230,6 +230,7 @@ export class BookingsService {
           commissionRateBps: split.commissionRateBps,
           currency: CURRENCY,
           provider: provider.name,
+          mode: provider.mode,
           reference,
           status: "PENDING",
         },
@@ -266,6 +267,7 @@ export class BookingsService {
         reference,
         authorizationUrl: init.authorizationUrl,
         provider: provider.name,
+        mode: provider.mode,
       };
     } catch (err) {
       // Never leave a pending booking holding capacity if payment can't start —
@@ -372,12 +374,16 @@ export class BookingsService {
       const details: string[] = [`Refund initiated by ${initiatedBy}.`];
 
       if (booking.status === "CONFIRMED") {
-        await tx.availabilityCalendar.updateMany({
-          where: { roomTypeId, date: { in: nights }, bookedUnits: { gt: 0 } },
-          data: { bookedUnits: { decrement: 1 } },
-        });
+        if (payment.mode === "LIVE") {
+          await tx.availabilityCalendar.updateMany({
+            where: { roomTypeId, date: { in: nights }, bookedUnits: { gt: 0 } },
+            data: { bookedUnits: { decrement: 1 } },
+          });
+          details.push("Confirmed booking cancelled; capacity released.");
+        } else {
+          details.push("Test booking cancelled; live capacity was unchanged.");
+        }
         await tx.booking.update({ where: { id: booking.id }, data: { status: "CANCELLED" } });
-        details.push("Confirmed booking cancelled; capacity released.");
       } else if (booking.status === "PENDING_PAYMENT") {
         await this.cancelPendingBooking(tx, payment);
         details.push("Pending booking cancelled; held capacity released.");
@@ -614,7 +620,13 @@ export class BookingsService {
     if (booking.status === "PENDING_PAYMENT") {
       await tx.availabilityCalendar.updateMany({
         where: { roomTypeId, date: { in: nights }, heldUnits: { gt: 0 } },
-        data: { heldUnits: { decrement: 1 }, bookedUnits: { increment: 1 } },
+        data:
+          payment.mode === "TEST"
+            ? { heldUnits: { decrement: 1 } }
+            : {
+                heldUnits: { decrement: 1 },
+                bookedUnits: { increment: 1 },
+              },
       });
       await tx.booking.update({ where: { id: booking.id }, data: { status: "CONFIRMED" } });
       await this.settlePayment(tx, payment, property.ownerId, property.id, expectedKobo);
@@ -622,6 +634,24 @@ export class BookingsService {
     }
 
     if (booking.status === "EXPIRED" || booking.status === "CANCELLED") {
+      if (payment.mode === "TEST") {
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: { status: "CONFIRMED" },
+        });
+        await this.settlePayment(
+          tx,
+          payment,
+          property.ownerId,
+          property.id,
+          expectedKobo,
+        );
+        return {
+          outcome: "REVIVED",
+          confirmedBookingId: booking.id,
+          detail: "Test payment confirmed without changing live capacity.",
+        };
+      }
       // P1 — late success (slow bank transfer/USSD, webhook retries). The held
       // capacity is long released; re-book only if every night is still free.
       const rows = await tx.availabilityCalendar.findMany({
@@ -681,6 +711,7 @@ export class BookingsService {
       where: { id: payment.id },
       data: { status: "SUCCESS", paidAt: now, lastVerifiedAt: now },
     });
+    if (payment.mode === "TEST") return;
     // One PENDING payout per successful payment, eligible 24h after check-in.
     // `upsert` on the unique paymentId keeps this idempotent under webhook +
     // status-sync double delivery.

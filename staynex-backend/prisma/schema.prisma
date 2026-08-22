@@ -102,6 +102,11 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum PaymentMode {
+  TEST
+  LIVE
+}
+
 enum PayoutStatus {
   PENDING
   PROCESSING
@@ -651,12 +656,15 @@ model Payment {
   /// value — never from a default. Asking the wrong provider about a reference
   /// returns "not found", which the sync path would read as abandoned and use
   /// to cancel a booking the guest actually paid for.
-  provider          String?
+  provider          String        @default("paystack")
   /// OUR reference (`stx_<uuid>`), shown to the guest and used as the key.
   reference         String?       @unique
   /// The provider's own transaction id, when it issues one. Reconciliation
   /// only — never used to look up a payment.
   providerReference String?
+  /// Provider environment captured at checkout. TEST rows never contribute to
+  /// live inventory, revenue, settlement, host earnings, or payouts.
+  mode              PaymentMode   @default(TEST)
   status            PaymentStatus @default(PENDING)
   /// Set once when the payment is verified SUCCESS.
   paidAt            DateTime?
@@ -670,6 +678,7 @@ model Payment {
   payout  Payout?
 
   @@index([status])
+  @@index([provider, mode, status])
 }
 
 /// Immutable money audit trail: one row per provider webhook delivery, per

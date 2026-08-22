@@ -169,6 +169,8 @@ export type PaymentState =
   | "REQUIRES_REFUND"
   | "REFUNDED";
 
+export type PaymentMode = "TEST" | "LIVE";
+
 /** Verified availability + price for a room over a date range (kobo). */
 export interface AvailabilityQuote {
   roomTypeId: string;
@@ -211,6 +213,7 @@ export interface CheckoutResult {
   authorizationUrl: string;
   /** Which provider the guest is being redirected to, so the UI can say so. */
   provider: PaymentProviderName;
+  mode: PaymentMode;
 }
 
 export interface PaymentStatusView {
@@ -329,6 +332,8 @@ export interface AdminPaymentRow {
   ownerPayoutKobo: number;
   currency: string;
   provider: string | null;
+  providerReference: string | null;
+  mode: PaymentMode;
   status: PaymentState;
   paidAt: string | null;
   payoutStatus: PayoutStatusValue | null;

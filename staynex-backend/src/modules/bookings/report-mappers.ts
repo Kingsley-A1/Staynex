@@ -91,6 +91,8 @@ export function toPaymentRow(p: PaymentRowData): AdminPaymentRow {
     ownerPayoutKobo,
     currency: p.currency,
     provider: p.provider,
+    providerReference: p.providerReference,
+    mode: p.mode,
     status: p.status as PaymentState,
     paidAt: p.paidAt ? p.paidAt.toISOString() : null,
     payoutStatus: (p.payout?.status ?? null) as PayoutStatusValue | null,

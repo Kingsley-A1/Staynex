@@ -13,6 +13,7 @@ export interface ProviderRuntimeConfig {
 export interface PaymentRuntimeConfig {
   enabled: boolean;
   mode: PaymentMode;
+  isProduction: boolean;
   defaultProvider: ProviderName;
   opayRolloutPercent: number;
   appUrl: string;
@@ -146,6 +147,7 @@ export function resolvePaymentRuntime(env: Env): PaymentRuntimeConfig {
   return {
     enabled: env.PAYMENT_ENABLED,
     mode,
+    isProduction: env.NODE_ENV === "production",
     defaultProvider: env.PAYMENT_DEFAULT_PROVIDER,
     opayRolloutPercent: env.PAYMENT_OPAY_ROLLOUT_PERCENT,
     appUrl: env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",

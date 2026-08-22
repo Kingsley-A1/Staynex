@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Headers,
   Param,
@@ -13,6 +14,7 @@ import { RateLimit } from "../../common/rate-limit.guard";
 import { CurrentUser, SessionGuard } from "../auth/access-control";
 import { AuthService } from "../auth/auth.service";
 import { BookingsService } from "./bookings.service";
+import { PaymentConfigService } from "../payments/payment-config.service";
 import { checkoutSchema, createHoldSchema, quoteSchema } from "./dto";
 
 // Guest endpoints. Search/quote/hold work without an account; checkout (payment)
@@ -22,6 +24,7 @@ export class BookingsController {
   constructor(
     private readonly bookings: BookingsService,
     private readonly auth: AuthService,
+    private readonly paymentConfig: PaymentConfigService,
   ) {}
 
   @Post("bookings/quote")
@@ -67,6 +70,16 @@ export class BookingsController {
     keyBy: ["user", "ip"],
   })
   async checkout(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+    const payment = this.paymentConfig.current();
+    if (
+      payment.isProduction &&
+      payment.mode === "TEST" &&
+      !user.capabilities.includes("ADMIN_MANAGER")
+    ) {
+      throw new ForbiddenException(
+        "Test payments are restricted to authorised Staynex managers. No money will be charged. Sign in with a manager account or return to search.",
+      );
+    }
     return this.bookings.checkout(parseBody(checkoutSchema, body), user.id);
   }
 
