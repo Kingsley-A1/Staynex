@@ -2,11 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { Button, LinkButton } from "@/ui";
-import { guestApi } from "@/lib/api";
+import { RecoveryNotice } from "@/components/recovery-notice";
+import { apiErrorMessage, guestApi } from "@/lib/api";
 import type { PaymentStatusView } from "@/lib/types";
 
 const MAX_POLLS = 20; // ~60s of polling before the honest "still working" state
-const TERMINAL_STATES = ["SUCCESS", "FAILED", "REQUIRES_REFUND", "REFUNDED"] as const;
+const TERMINAL_STATES = [
+  "SUCCESS",
+  "FAILED",
+  "REQUIRES_REFUND",
+  "REFUNDED",
+] as const;
 
 export function PaymentStatusClient({ reference }: { reference: string }) {
   const [state, setState] = useState<PaymentStatusView | null>(null);
@@ -25,9 +31,17 @@ export function PaymentStatusClient({ reference }: { reference: string }) {
         if (!active) return;
         setError(null);
         setState(next);
-        if ((TERMINAL_STATES as readonly string[]).includes(next.paymentStatus)) return;
+        if ((TERMINAL_STATES as readonly string[]).includes(next.paymentStatus))
+          return;
       } catch (err) {
-        if (active) setError(err instanceof Error ? err.message : "Could not load payment status");
+        if (active) {
+          setError(
+            apiErrorMessage(
+              err,
+              "Staynex could not reach the payment record or your booking session is no longer valid.",
+            ),
+          );
+        }
       }
       tries += 1;
       if (!active) return;
@@ -49,21 +63,12 @@ export function PaymentStatusClient({ reference }: { reference: string }) {
 
   if (error) {
     return (
-      <div className="surface-card space-y-3 p-6 text-center">
-        <p className="text-sm text-error" role="alert">
-          {error}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Your session may have expired or Staynex could not reach the payment record. Retry after
-          signing in with the booking account, or close this status page.
-        </p>
-        <div className="flex justify-center gap-2">
-          <Button onClick={checkAgain}>Retry</Button>
-          <LinkButton href="/search" variant="secondary">
-            Close
-          </LinkButton>
-        </div>
-      </div>
+      <RecoveryNotice
+        title="Payment status is temporarily unavailable"
+        reason={`${error} Retry after signing in with the booking account, or close this status page.`}
+        onRetry={checkAgain}
+        secondaryAction={{ label: "Close", href: "/search" }}
+      />
     );
   }
 
@@ -99,7 +104,7 @@ export function PaymentStatusClient({ reference }: { reference: string }) {
     const isTest = state.paymentMode === "TEST";
     return (
       <div className="surface-card space-y-3 p-6 text-center">
-        <div className="mx-auto grid size-12 place-items-center rounded-full bg-error-surface text-lg font-bold text-error">
+        <div className="mx-auto grid size-12 place-items-center rounded-full bg-warning-surface text-lg font-bold text-warning">
           ✕
         </div>
         <h1 className="text-title-md text-ink">Payment not completed</h1>
@@ -115,7 +120,10 @@ export function PaymentStatusClient({ reference }: { reference: string }) {
     );
   }
 
-  if (state?.paymentStatus === "REQUIRES_REFUND" || state?.paymentStatus === "REFUNDED") {
+  if (
+    state?.paymentStatus === "REQUIRES_REFUND" ||
+    state?.paymentStatus === "REFUNDED"
+  ) {
     const isTest = state.paymentMode === "TEST";
     return (
       <div className="surface-card space-y-3 p-6 text-center">
@@ -154,13 +162,17 @@ export function PaymentStatusClient({ reference }: { reference: string }) {
         <div className="mx-auto grid size-12 place-items-center rounded-full bg-warning-surface text-lg font-bold text-warning">
           ⏳
         </div>
-        <h1 className="text-title-md text-ink">This is taking longer than expected</h1>
+        <h1 className="text-title-md text-ink">
+          This is taking longer than expected
+        </h1>
         <p className="text-muted-foreground">
-          Some banks confirm slowly. If you completed payment, your booking will confirm
-          automatically once the bank notifies us — check back shortly or contact support.
+          Some banks confirm slowly. If you completed payment, your booking will
+          confirm automatically once the bank notifies us — check back shortly
+          or contact support.
         </p>
         <p className="text-caption text-muted-foreground">
-          Keep your payment reference: <span className="font-mono">{reference}</span>
+          Keep your payment reference:{" "}
+          <span className="font-mono">{reference}</span>
         </p>
         <div className="flex justify-center gap-2">
           <Button onClick={checkAgain}>Check again</Button>
@@ -176,7 +188,9 @@ export function PaymentStatusClient({ reference }: { reference: string }) {
     <div className="surface-card space-y-3 p-6 text-center">
       <div className="mx-auto size-10 animate-spin rounded-full border-2 border-border border-t-primary" />
       <h1 className="text-title-md text-ink">
-        {state?.paymentMode === "TEST" ? "Confirming test payment…" : "Confirming your payment…"}
+        {state?.paymentMode === "TEST"
+          ? "Confirming test payment…"
+          : "Confirming your payment…"}
       </h1>
       <p className="text-muted-foreground">
         {state?.paymentMode === "TEST"

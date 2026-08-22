@@ -1,5 +1,5 @@
 import { KpiCard, LinkButton, PropertyCard } from "@/ui";
-import { getOwnerKpis } from "@/features/properties/fixtures";
+import { RecoveryNotice } from "@/components/recovery-notice";
 import { getHostBookings } from "@/lib/server-reports";
 import { getHostProperties } from "@/lib/server-host";
 import { formatNairaFromKobo } from "@/lib/format";
@@ -7,17 +7,21 @@ import { formatNairaFromKobo } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function OwnerDashboardPage() {
-  const fallback = getOwnerKpis();
   // Live booking KPIs + the owner's own listings for the signed-in owner.
-  const [{ data: live }, properties] = await Promise.all([
+  const [{ data: live }, propertiesResult] = await Promise.all([
     getHostBookings(),
     getHostProperties(),
   ]);
 
   const confirmed = live ? String(live.kpis.confirmedBookings) : "—";
   const pendingPayments = live ? String(live.kpis.pendingPayments) : "—";
-  const availableRooms = String(live?.kpis.availableRooms ?? fallback.availableRooms);
+  const availableRooms = live ? String(live.kpis.availableRooms) : "—";
   const earnings = live ? formatNairaFromKobo(live.kpis.netEarningsKobo) : "—";
+  const properties = propertiesResult.data ?? [];
+  const recoveryReasons = [
+    !live ? "Live booking and earnings totals could not be reached." : null,
+    propertiesResult.status === "unavailable" ? propertiesResult.reason : null,
+  ].filter((reason): reason is string => Boolean(reason));
 
   return (
     <div className="space-y-8">
@@ -34,6 +38,15 @@ export default async function OwnerDashboardPage() {
         </div>
       </header>
 
+      {recoveryReasons.length > 0 && (
+        <RecoveryNotice
+          title="Some live host data is temporarily unavailable"
+          reason={`${recoveryReasons.join(" ")} Unavailable values are shown as dashes until live records are verified.`}
+          retryHref="/host/dashboard?retry=live-data"
+          secondaryAction={{ label: "View bookings", href: "/host/bookings" }}
+        />
+      )}
+
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard
           label="Confirmed bookings"
@@ -41,8 +54,16 @@ export default async function OwnerDashboardPage() {
           href="/host/bookings"
           hint={live ? undefined : "Connect API for live data"}
         />
-        <KpiCard label="Pending payments" value={pendingPayments} href="/host/bookings" />
-        <KpiCard label="Available rooms" value={availableRooms} href="/host/properties" />
+        <KpiCard
+          label="Pending payments"
+          value={pendingPayments}
+          href="/host/bookings"
+        />
+        <KpiCard
+          label="Available rooms"
+          value={availableRooms}
+          href="/host/properties"
+        />
         <KpiCard
           label="Net earnings"
           value={earnings}
@@ -53,19 +74,26 @@ export default async function OwnerDashboardPage() {
 
       <section className="space-y-4">
         <h2 className="text-title-sm text-ink">Your properties</h2>
-        {properties && properties.length > 0 ? (
+        {propertiesResult.status === "unavailable" ? (
+          <p className="surface-card p-6 text-sm text-muted-foreground">
+            Property cards are hidden until Staynex can confirm your live
+            records.
+          </p>
+        ) : properties.length > 0 ? (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {properties.map((p) => (
-              <PropertyCard key={p.id} property={p} href={`/host/properties/${p.id}`} />
+              <PropertyCard
+                key={p.id}
+                property={p}
+                href={`/host/properties/${p.id}`}
+              />
             ))}
           </div>
         ) : (
           <div className="surface-card p-8 text-center">
-            <p className="text-muted-foreground">
-              {properties ? "No properties yet." : "Couldn't load your properties."}
-            </p>
+            <p className="text-muted-foreground">No properties yet.</p>
             <LinkButton href="/host/properties/new" className="mt-4">
-              {properties ? "Create your first property" : "Add a property"}
+              Create your first property
             </LinkButton>
           </div>
         )}

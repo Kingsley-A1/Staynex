@@ -2,10 +2,18 @@
 
 import { type FormEvent, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Field, Input, Select, GuestSelector, guestSummary, type GuestCounts } from "@/ui";
-import { CITIES } from "@/features/properties/fixtures";
-import { areasApi } from "@/lib/api";
-import { type AreaOption } from "@/lib/types";
+import {
+  Button,
+  Field,
+  Input,
+  Select,
+  GuestSelector,
+  guestSummary,
+  type GuestCounts,
+} from "@/ui";
+import { RecoveryNotice } from "@/components/recovery-notice";
+import { apiErrorMessage, areasApi, catalogApi } from "@/lib/api";
+import { type AreaOption, type CityOption } from "@/lib/types";
 
 interface Defaults {
   city?: string;
@@ -20,71 +28,6 @@ interface Defaults {
 function toCount(value: string | undefined, fallback: number): number {
   const n = Number(value);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
-}
-
-const FALLBACK_AREAS: Record<string, AreaOption[]> = {
-  Calabar: [
-    fallbackArea("Calabar Municipal", "calabar", "LOCAL_GOVERNMENT_AREA", true),
-    fallbackArea("Calabar South", "calabar", "LOCAL_GOVERNMENT_AREA", true),
-    fallbackArea("Marina", "calabar", "NEIGHBORHOOD", true),
-    fallbackArea("State Housing", "calabar", "NEIGHBORHOOD"),
-    fallbackArea("Diamond Hill", "calabar", "NEIGHBORHOOD"),
-  ],
-  Uyo: [
-    fallbackArea("Uyo", "uyo", "LOCAL_GOVERNMENT_AREA", true),
-    fallbackArea("Ewet Housing", "uyo", "NEIGHBORHOOD", true),
-    fallbackArea("Itam", "uyo", "NEIGHBORHOOD"),
-  ],
-  "Port Harcourt": [
-    fallbackArea(
-      "Port Harcourt City",
-      "port-harcourt",
-      "LOCAL_GOVERNMENT_AREA",
-      true,
-    ),
-    fallbackArea("Old GRA", "port-harcourt", "NEIGHBORHOOD", true),
-    fallbackArea("Diobu", "port-harcourt", "NEIGHBORHOOD"),
-  ],
-  Lagos: [
-    fallbackArea("Eti-Osa", "lagos", "LOCAL_GOVERNMENT_AREA", true),
-    fallbackArea("Victoria Island", "lagos", "NEIGHBORHOOD", true),
-    fallbackArea("Lekki", "lagos", "NEIGHBORHOOD", true),
-    fallbackArea("Ikeja", "lagos", "NEIGHBORHOOD"),
-  ],
-  Abuja: [
-    fallbackArea(
-      "Municipal Area Council",
-      "abuja",
-      "LOCAL_GOVERNMENT_AREA",
-      true,
-    ),
-    fallbackArea("Maitama", "abuja", "NEIGHBORHOOD", true),
-    fallbackArea("Wuse", "abuja", "NEIGHBORHOOD"),
-    fallbackArea("Garki", "abuja", "NEIGHBORHOOD"),
-  ],
-};
-
-function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
-
-function fallbackArea(
-  name: string,
-  citySlug: string,
-  type: AreaOption["type"],
-  notable = false,
-): AreaOption {
-  return {
-    id: `fallback_${citySlug}_${slugify(name)}`,
-    name,
-    slug: `${slugify(name)}-${citySlug}`,
-    type,
-    notable,
-    hasProperties: false,
-  };
 }
 
 function toDateInputValue(date: Date): string {
@@ -134,11 +77,20 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
   const optionsId = useId();
 
   const [city, setCity] = useState(defaults?.city ?? "");
+  const [cities, setCities] = useState<CityOption[]>([]);
+  const [cityLoadError, setCityLoadError] = useState<string | null>(null);
+  const [cityLoadRun, setCityLoadRun] = useState(0);
   const [area, setArea] = useState(defaults?.area ?? "");
   const [areas, setAreas] = useState<AreaOption[]>([]);
   const [loadingAreas, setLoadingAreas] = useState(false);
-  const [checkIn, setCheckIn] = useState(() => defaults?.checkIn ?? dateOffsetInput(0));
-  const [checkOut, setCheckOut] = useState(() => defaults?.checkOut ?? dateOffsetInput(1));
+  const [areaLoadError, setAreaLoadError] = useState<string | null>(null);
+  const [areaLoadRun, setAreaLoadRun] = useState(0);
+  const [checkIn, setCheckIn] = useState(
+    () => defaults?.checkIn ?? dateOffsetInput(0),
+  );
+  const [checkOut, setCheckOut] = useState(
+    () => defaults?.checkOut ?? dateOffsetInput(1),
+  );
   const [guests, setGuests] = useState<GuestCounts>(() => ({
     adults: Math.max(1, toCount(defaults?.adults, 2)),
     children: toCount(defaults?.children, 0),
@@ -147,12 +99,41 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
   const [showMore, setShowMore] = useState(
     Boolean(
       defaults?.checkIn ||
-        defaults?.checkOut ||
-        defaults?.adults ||
-        defaults?.children ||
-        defaults?.infants,
+      defaults?.checkOut ||
+      defaults?.adults ||
+      defaults?.children ||
+      defaults?.infants,
     ),
   );
+
+  useEffect(() => {
+    let active = true;
+    setCityLoadError(null);
+    catalogApi
+      .cities()
+      .then((list) => {
+        if (!active) return;
+        setCities(list);
+        if (list.length === 0) {
+          setCityLoadError(
+            "No live destinations are published yet, so stay search is paused.",
+          );
+        }
+      })
+      .catch((error) => {
+        if (!active) return;
+        setCities([]);
+        setCityLoadError(
+          apiErrorMessage(
+            error,
+            "Staynex could not reach the live destination service.",
+          ),
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [cityLoadRun]);
 
   useEffect(() => {
     let active = true;
@@ -162,18 +143,28 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
       return;
     }
     setLoadingAreas(true);
+    setAreaLoadError(null);
     areasApi
       .listForCity(city)
       .then((list) => {
         if (!active) return;
-        setAreas(list.length > 0 ? list : (FALLBACK_AREAS[city] ?? []));
+        setAreas(list);
       })
-      .catch(() => active && setAreas(FALLBACK_AREAS[city] ?? []))
+      .catch((error) => {
+        if (!active) return;
+        setAreas([]);
+        setAreaLoadError(
+          apiErrorMessage(
+            error,
+            "Staynex could not refresh live areas. You can retry or search the whole city.",
+          ),
+        );
+      })
       .finally(() => active && setLoadingAreas(false));
     return () => {
       active = false;
     };
-  }, [city]);
+  }, [city, areaLoadRun]);
 
   useEffect(() => {
     if (checkIn && (!checkOut || checkOut <= checkIn)) {
@@ -199,11 +190,31 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
     ? "Choose a city first"
     : loadingAreas
       ? "Loading areas..."
-      : "Choose an area or keep all areas.";
+      : areaLoadError
+        ? "Areas are unavailable; search the whole city or retry."
+        : "Choose an area or keep all areas.";
   const dateSummary = `${summaryDate(checkIn)} - ${summaryDate(checkOut)} · ${guestSummary(guests)}`;
 
   return (
-    <form onSubmit={submit} className="attention-border space-y-4 rounded-md p-4 sm:p-5">
+    <form
+      onSubmit={submit}
+      className="attention-border space-y-4 rounded-md p-4 sm:p-5"
+    >
+      {cityLoadError && (
+        <RecoveryNotice
+          compact
+          title="Live destinations are unavailable"
+          reason={`${cityLoadError} Search stays is disabled until a live destination list is available.`}
+          onRetry={() => setCityLoadRun((run) => run + 1)}
+          secondaryAction={{
+            label: "Clear selection",
+            onSelect: () => {
+              setCity("");
+              setArea("");
+            },
+          }}
+        />
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Where to" htmlFor="city">
           <Select
@@ -214,11 +225,12 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
               setArea("");
             }}
             required
+            disabled={cities.length === 0}
           >
             <option value="" disabled>
               Select a city
             </option>
-            {CITIES.map((c) => (
+            {cities.map((c) => (
               <option key={c.id} value={c.name}>
                 {c.name}
               </option>
@@ -242,6 +254,22 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
           </Select>
         </Field>
       </div>
+
+      {areaLoadError && (
+        <RecoveryNotice
+          compact
+          title="Live areas could not be refreshed"
+          reason={areaLoadError}
+          onRetry={() => setAreaLoadRun((run) => run + 1)}
+          secondaryAction={{
+            label: "Search all city areas",
+            onSelect: () => {
+              setArea("");
+              setAreaLoadError(null);
+            },
+          }}
+        />
+      )}
 
       {showMore && (
         <div id={optionsId} className="grid gap-3 sm:grid-cols-3">
@@ -291,7 +319,11 @@ export function SearchPanel({ defaults }: { defaults?: Defaults }) {
           </span>
         </button>
 
-        <Button type="submit" className="w-full sm:w-auto sm:shrink-0" disabled={!city}>
+        <Button
+          type="submit"
+          className="w-full sm:w-auto sm:shrink-0"
+          disabled={!city || cities.length === 0}
+        >
           Search stays
         </Button>
       </div>

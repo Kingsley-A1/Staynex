@@ -7,6 +7,7 @@ import { AvailabilityEditor } from "@/features/properties/availability-editor";
 import { SubmitForReview } from "@/features/properties/submit-for-review";
 import { MediaManager } from "@/features/media/media-manager";
 import { PropertyDeleteAction } from "@/features/properties/property-delete-action";
+import { RecoveryNotice } from "@/components/recovery-notice";
 import { getCities, getHostProperty } from "@/lib/server-host";
 
 export const dynamic = "force-dynamic";
@@ -19,11 +20,25 @@ export default async function EditPropertyPage({
   searchParams: Promise<{ edit?: string }>;
 }) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
-  const [property, cities] = await Promise.all([
+  const [propertyResult, citiesResult] = await Promise.all([
     getHostProperty(id),
     getCities(),
   ]);
-  if (!property) notFound();
+  if (propertyResult.status === "unavailable") {
+    return (
+      <RecoveryNotice
+        title="This property editor could not be loaded"
+        reason={`${propertyResult.reason} Editing is paused so no live property state can be overwritten.`}
+        retryHref={`/host/properties/${encodeURIComponent(id)}?retry=property`}
+        secondaryAction={{
+          label: "Back to properties",
+          href: "/host/properties",
+        }}
+      />
+    );
+  }
+  if (propertyResult.status === "not_found") notFound();
+  const property = propertyResult.data;
   const availabilityFrom = new Date().toISOString().slice(0, 10);
   const availabilityTo = addUtcDays(availabilityFrom, 29);
 
@@ -53,7 +68,16 @@ export default async function EditPropertyPage({
           <section id="property-details" className="scroll-mt-24 space-y-3">
             <h2 className="text-title-sm text-ink">Details</h2>
             <PropertyForm
-              cities={cities}
+              cities={citiesResult.data ?? []}
+              citiesAvailable={citiesResult.status === "data"}
+              citiesUnavailableReason={
+                citiesResult.status === "unavailable"
+                  ? citiesResult.reason
+                  : citiesResult.status === "empty"
+                    ? "No live destinations are configured, so property details cannot be safely changed."
+                    : undefined
+              }
+              citiesRetryHref={`/host/properties/${encodeURIComponent(id)}?retry=cities`}
               property={property}
               initialEditing={query.edit === "details"}
             />

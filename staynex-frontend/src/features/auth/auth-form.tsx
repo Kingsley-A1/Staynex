@@ -180,7 +180,12 @@ export function AuthForm({
       } else if (msg.includes("429")) {
         setError("Too many attempts. Please try again later.");
       } else {
-        setError("Something went wrong. Please try again.");
+        setError(
+          apiErrorMessage(
+            err,
+            "Staynex could not complete this account request because the authentication service did not return a reason. Check your connection and try again.",
+          ),
+        );
       }
       setBusy(false);
     }
@@ -204,7 +209,12 @@ export function AuthForm({
       } else if (msg.includes("429")) {
         setError("Too many attempts. Please try again later.");
       } else {
-        setError("Something went wrong. Please try again.");
+        setError(
+          apiErrorMessage(
+            err,
+            "Staynex could not verify this code because the authentication service did not return a reason. Check your connection and try again, or use a different account.",
+          ),
+        );
       }
       setBusy(false);
     }

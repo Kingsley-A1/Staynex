@@ -1,6 +1,6 @@
 // Typed API client for host/admin surfaces. Calls the NestJS backend over HTTP
-// (the frontend never touches Prisma/DB). Used by client components; server
-// components render from centralized fixtures until the API is wired live.
+// (the frontend never touches Prisma/DB). Client and server surfaces both use
+// live API state; unavailable operations render explicit recovery UI.
 
 import type {
   AdminBookingsPage,
