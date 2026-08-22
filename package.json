@@ -10,6 +10,7 @@
     "dev:mobile": "pnpm --filter @staynex/mobile start",
     "build": "pnpm -r --if-present build",
     "check": "pnpm -r --if-present check",
+    "test": "pnpm -r --if-present test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

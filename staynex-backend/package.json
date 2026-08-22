@@ -17,6 +17,8 @@
     "start:runtime": "node dist/src/main.js",
     "precheck": "pnpm prisma:generate",
     "check": "tsc --noEmit",
+    "pretest": "pnpm build",
+    "test": "node --test \"test/*.test.cjs\" \"test/*.test.mjs\"",
     "test:property-review": "pnpm build && node --test test/property-review-policy.test.cjs",
     "test:emails": "pnpm build && node --test test/email-templates.test.cjs",
     "email:preview": "pnpm build && node scripts/preview-emails.cjs",
