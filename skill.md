@@ -9,7 +9,9 @@ RULE: _No hardcoding_
 
 Staynex is a hospitality booking platform starting from Calabar and built for international expansion. Treat this file as the single source of truth for agent behavior in this repository.
 
-Use `Staynex_plan.md`, `Staynex_Blueprint.pdf`, and `docs/architecture.md` as supporting references when the task needs deeper planning context. Use the legacy `staynex-prototype/` only as reference unless the user explicitly asks to modify it.
+Use `Staynex_plan.md`, `Staynex_Blueprint.pdf`, and `docs/architecture.md` as supporting references when the task needs deeper planning context.
+
+Anything under `docs/archive/` is historical record only. Never follow it.
 
 ## 1. Agent Routing
 
@@ -63,22 +65,34 @@ Do not polish secondary features while the booking loop is broken or unverified.
 Main codebase structure:
 
 ```txt
-staynex-frontend      Next.js + TypeScript frontend project
+staynex-frontend      Next.js + TypeScript web project
   src/                routes, components, features, styles, and UI
 
 staynex-backend       NestJS + Prisma backend project
-  src/                API modules
+  src/modules/        API modules, one directory per domain
   prisma/             schema and migrations
   db/                 database client helpers
   types/              backend-owned domain and API contracts
   config/             environment and configuration helpers
 
+staynex-mobile        Expo / React Native guest app
+  app/                expo-router screens
+  src/                data access, core client, UI primitives
+
+packages/shared       Contracts shared by more than one app
+  src/                labels, design tokens, formatting helpers
+
 docs/                 Architecture and project documentation
 ```
+
+All four packages are pnpm workspace members and are covered by `pnpm check`.
+Anything needed by more than one app belongs in `packages/shared`, not
+duplicated. Divergent copies drift silently.
 
 Primary stack:
 
 - Web: Next.js, React, TypeScript
+- Mobile: Expo, React Native, TypeScript
 - API: NestJS, TypeScript
 - Database: CockroachDB-compatible PostgreSQL through Prisma
 - Storage: Cloudflare R2
@@ -246,7 +260,6 @@ Before marking work complete, verify the relevant items:
 - Security-sensitive flows do not trust client input.
 - Payment, booking, and admin actions preserve auditability.
 - New structure follows the monorepo boundaries.
-- Legacy prototype files remain untouched unless explicitly requested.
 
 Do not mark work complete if the product feels like a listing directory, the booking loop is broken, AI makes unsafe promises, or the implementation adds a shortcut that will obviously fail in production.
 

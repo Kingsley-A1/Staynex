@@ -8,9 +8,9 @@ Brand source of truth: [`skill.md` §6](../../../skill.md) and
 [`Staynex_plan.md`](../../../Staynex_plan.md). This implements Workstream 1
 (Design System).
 
-> Scope: lives in `staynex-frontend`. The legacy `staynex-prototype/` is left
-> untouched by design — but this system deliberately matches its Tailwind v4 +
-> shadcn-style token conventions so code reads the same across both.
+> Scope: lives in `staynex-frontend`. Uses Tailwind v4 + shadcn-style token
+> conventions. Brand token values are defined in `skill.md` §6, which is the
+> source of truth for them.
 
 ---
 

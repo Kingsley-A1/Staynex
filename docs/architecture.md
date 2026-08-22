@@ -182,7 +182,7 @@ Recommended build ownership:
 
 ## Legacy Prototype
 
-`staynex-prototype/` is reference material only. Do not modify it unless the user explicitly asks.
+Anything under `docs/archive/` is historical record only and must never be treated as current.
 
 ## Agent Rule
 

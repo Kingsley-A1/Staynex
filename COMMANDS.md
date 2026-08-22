@@ -12,7 +12,10 @@ Run commands from the repository root unless a section says otherwise.
 | `pnpm dev` | Start the frontend dev server through the root shortcut. Equivalent to `pnpm dev:frontend`. |
 | `pnpm dev:frontend` | Start the Next.js frontend in development mode. |
 | `pnpm dev:backend` | Start the NestJS backend in watch mode. |
+| `pnpm dev:mobile` | Start the Expo dev server for the mobile app. |
+| `pnpm db:generate` | Generate the Prisma client. **Run this before `pnpm check` on a fresh clone or after any schema change** — backend types are generated from the schema. |
 | `pnpm check` | Run TypeScript checks across all workspace packages. Use before handoff. |
+| `pnpm test` | Run every test suite in the repo. Use before handoff. |
 | `pnpm build` | Build all workspace packages that define a `build` script. Use before deployment or major handoff. |
 | `pnpm format` | Format the repo with Prettier. |
 
@@ -41,6 +44,23 @@ Path: `staynex-backend`
 | `pnpm --filter @staynex/backend start` | Production start: apply pending Prisma migrations, then start the built backend. This is the Railway start command. |
 | `pnpm --filter @staynex/backend start:runtime` | Start the built backend without running migrations. Use only for controlled local diagnostics after `build`. |
 
+## Mobile
+
+Package: `@staynex/mobile`  
+Path: `staynex-mobile`
+
+| Command | Use |
+| --- | --- |
+| `pnpm --filter @staynex/mobile start` | Start the Expo dev server. |
+| `pnpm --filter @staynex/mobile android` | Start Expo and open on Android. |
+| `pnpm --filter @staynex/mobile ios` | Start Expo and open on iOS. |
+| `pnpm --filter @staynex/mobile check` | Typecheck only the mobile app. |
+| `pnpm --filter @staynex/mobile lint` | Lint the mobile app via `expo lint`. |
+| `pnpm --filter @staynex/mobile doctor` | Diagnose Expo dependency issues. |
+
+The mobile app consumes backend contracts through `@staynex/backend/types` and
+`@staynex/shared`. It must not import backend services or Prisma.
+
 ## Database And Prisma
 
 Prisma lives in `staynex-backend/prisma`.
@@ -59,27 +79,43 @@ Prisma lives in `staynex-backend/prisma`.
 
 ## Recommended Verification Sets
 
+Always generate the Prisma client **before** typechecking. Backend types are
+generated from `prisma/schema.prisma`, so checking first against a stale client
+produces dozens of type errors unrelated to your change.
+
 Use this before handing off backend, booking, payment, or database work:
 
 ```powershell
+pnpm db:generate
 pnpm check
-pnpm --filter @staynex/backend prisma:generate
+pnpm test
 pnpm --filter @staynex/backend build
 ```
 
 Use this before handing off frontend or full-stack work:
 
 ```powershell
+pnpm db:generate
 pnpm check
+pnpm test
 pnpm --filter @staynex/frontend build
 pnpm --filter @staynex/backend build
+```
+
+Use this before handing off mobile work:
+
+```powershell
+pnpm db:generate
+pnpm --filter @staynex/mobile check
+pnpm --filter @staynex/mobile lint
 ```
 
 Use this before a full project handoff:
 
 ```powershell
+pnpm db:generate
 pnpm check
-pnpm --filter @staynex/backend prisma:generate
+pnpm test
 pnpm --filter @staynex/backend build
 pnpm --filter @staynex/frontend build
 ```

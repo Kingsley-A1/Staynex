@@ -7,6 +7,7 @@
     "dev": "pnpm --filter @staynex/frontend dev",
     "dev:frontend": "pnpm --filter @staynex/frontend dev",
     "dev:backend": "pnpm --filter @staynex/backend dev",
+    "dev:mobile": "pnpm --filter @staynex/mobile start",
     "build": "pnpm -r --if-present build",
     "check": "pnpm -r --if-present check",
     "format": "prettier --write .",
