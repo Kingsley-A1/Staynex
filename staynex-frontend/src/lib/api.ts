@@ -407,7 +407,11 @@ export const adminApi = {
   payouts: () => request<AdminPayoutsView>("/admin/payouts"),
   markPayoutPaid: (
     id: string,
-    body: { note?: string; overrideEligibility?: boolean } = {},
+    body: {
+      settlementReference: string;
+      note?: string;
+      overrideEligibility?: boolean;
+    },
   ) =>
     request<AdminPayoutRow>(`/admin/payouts/${id}/paid`, {
       method: "POST",

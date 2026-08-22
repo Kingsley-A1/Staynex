@@ -70,7 +70,11 @@ export class CapabilitiesGuard implements CanActivate {
     const allowed = required.some((capability) =>
       user.capabilities.includes(capability),
     );
-    if (!allowed) throw new ForbiddenException("Insufficient permissions");
+    if (!allowed) {
+      throw new ForbiddenException(
+        `This action requires one of these permissions: ${required.join(", ")}. Contact a Staynex manager if you need access.`,
+      );
+    }
 
     req.user = user;
     return true;

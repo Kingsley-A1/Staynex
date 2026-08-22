@@ -2,16 +2,23 @@ import { KpiCard } from "@/ui";
 import { PayoutStatusBadge } from "@/components/status-pill";
 import { PayoutActions } from "@/features/admin/payout-actions";
 import { getAdminPayouts } from "@/lib/server-reports";
+import { getServerUser } from "@/lib/server-auth";
 import { formatNairaFromKobo, formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPayoutsPage() {
-  const { data, offline } = await getAdminPayouts();
+  const [{ data, offline }, user] = await Promise.all([
+    getAdminPayouts(),
+    getServerUser(),
+  ]);
 
   if (!data) {
     return (
-      <div className="surface-card p-6 text-center text-muted-foreground" role="status">
+      <div
+        className="surface-card p-6 text-center text-muted-foreground"
+        role="status"
+      >
         {offline
           ? "We couldn't reach the payout service. Start the API to see live settlements."
           : "No payout data is available yet."}
@@ -20,13 +27,15 @@ export default async function AdminPayoutsPage() {
   }
 
   const now = Date.now();
+  const canManageMoney = user?.capabilities.includes("ADMIN_MANAGER") ?? false;
 
   return (
     <div className="space-y-8">
       <header>
         <h1 className="text-title-lg text-ink">Payouts</h1>
         <p className="text-muted-foreground">
-          Host settlements. Payouts are settled manually after check-in (net of the platform fee).
+          Host settlements. Payouts are settled manually after check-in (net of
+          the platform fee).
         </p>
       </header>
 
@@ -45,7 +54,10 @@ export default async function AdminPayoutsPage() {
           value={formatNairaFromKobo(data.totals.pendingPayoutKobo)}
           hint="Owed to hosts"
         />
-        <KpiCard label="Paid out" value={formatNairaFromKobo(data.totals.paidPayoutKobo)} />
+        <KpiCard
+          label="Paid out"
+          value={formatNairaFromKobo(data.totals.paidPayoutKobo)}
+        />
       </div>
 
       <section className="space-y-3">
@@ -62,7 +74,9 @@ export default async function AdminPayoutsPage() {
                   <th className="px-4 py-3 font-semibold">Property</th>
                   <th className="px-4 py-3 font-semibold">Host</th>
                   <th className="px-4 py-3 font-semibold">Destination</th>
-                  <th className="px-4 py-3 font-semibold text-right">Host payout</th>
+                  <th className="px-4 py-3 font-semibold text-right">
+                    Host payout
+                  </th>
                   <th className="px-4 py-3 font-semibold">Eligible</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold text-right">Action</th>
@@ -71,11 +85,14 @@ export default async function AdminPayoutsPage() {
               <tbody className="divide-y divide-border">
                 {data.payouts.map((p) => {
                   const eligible = new Date(p.eligibleAt).getTime() <= now;
-                  const settleable = p.status === "PENDING" || p.status === "PROCESSING";
+                  const settleable =
+                    p.status === "PENDING" || p.status === "PROCESSING";
                   return (
                     <tr key={p.id}>
                       <td className="px-4 py-3">
-                        <div className="font-medium text-ink">{p.propertyName}</div>
+                        <div className="font-medium text-ink">
+                          {p.propertyName}
+                        </div>
                         <div className="text-caption">{p.cityName}</div>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
@@ -86,11 +103,14 @@ export default async function AdminPayoutsPage() {
                           <>
                             <div className="text-ink">{p.bankName}</div>
                             <div className="text-caption">
-                              {p.accountName ?? "—"} ····{p.accountNumberLast4 ?? "????"}
+                              {p.accountName ?? "—"} ····
+                              {p.accountNumberLast4 ?? "????"}
                             </div>
                           </>
                         ) : (
-                          <span className="text-caption text-warning">No payout method</span>
+                          <span className="text-caption text-warning">
+                            No payout method
+                          </span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-ink">
@@ -102,11 +122,18 @@ export default async function AdminPayoutsPage() {
                       <td className="px-4 py-3 text-muted-foreground">
                         {formatDate(p.eligibleAt)}
                         {!eligible && settleable ? (
-                          <span className="block text-caption text-warning">Not yet eligible</span>
+                          <span className="block text-caption text-warning">
+                            Not yet eligible
+                          </span>
                         ) : null}
                       </td>
                       <td className="px-4 py-3">
                         <PayoutStatusBadge status={p.status} />
+                        {p.settlementReference && (
+                          <span className="mt-1 block max-w-56 font-mono text-caption text-muted-foreground">
+                            Ref: {p.settlementReference}
+                          </span>
+                        )}
                         {p.note && (
                           <span className="mt-1 block max-w-56 text-caption text-muted-foreground">
                             {p.note}
@@ -115,7 +142,16 @@ export default async function AdminPayoutsPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         {settleable ? (
-                          <PayoutActions payoutId={p.id} eligible={eligible} />
+                          canManageMoney ? (
+                            <PayoutActions
+                              payoutId={p.id}
+                              eligible={eligible}
+                            />
+                          ) : (
+                            <span className="text-caption text-muted-foreground">
+                              Manager approval required
+                            </span>
+                          )
                         ) : (
                           <span className="text-caption text-muted-foreground">
                             {p.paidAt
@@ -134,8 +170,9 @@ export default async function AdminPayoutsPage() {
           )}
         </div>
         <p className="text-caption">
-          Settling or failing a payout records an audit log entry. Early settlement requires an
-          explicit override with a note. Automated bank transfers arrive in Phase B.
+          Settling or failing a payout records an audit log entry. Early
+          settlement requires an explicit override with a note. Automated bank
+          transfers arrive in Phase B.
         </p>
       </section>
     </div>

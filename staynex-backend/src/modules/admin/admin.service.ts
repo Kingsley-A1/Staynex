@@ -740,6 +740,7 @@ export class AdminService {
           status: "PAID",
           approvedAt: now,
           paidAt: now,
+          settlementReference: input.settlementReference,
           processedByUserId: admin.id,
           ...(input.note?.trim() ? { note: input.note.trim() } : {}),
         },

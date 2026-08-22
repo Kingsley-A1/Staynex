@@ -439,7 +439,9 @@ export interface AdminPayoutRow {
   bankName: string | null;
   accountName: string | null;
   accountNumberLast4: string | null;
-  /** Settlement reference on PAID, reason on FAILED, clawback note on refunds. */
+  /** External bank or transfer identifier proving a PAID settlement. */
+  settlementReference: string | null;
+  /** Internal note, failure reason, or clawback explanation. */
   note: string | null;
   /** When the payout becomes eligible to settle (checkIn + 24h). */
   eligibleAt: string;

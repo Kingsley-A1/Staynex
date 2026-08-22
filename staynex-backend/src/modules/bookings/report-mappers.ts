@@ -18,12 +18,16 @@ export const bookingRowInclude = Prisma.validator<Prisma.BookingInclude>()({
   roomUnit: {
     include: {
       roomType: {
-        include: { property: { include: { city: { select: { name: true } } } } },
+        include: {
+          property: { include: { city: { select: { name: true } } } },
+        },
       },
     },
   },
 });
-export type BookingRowData = Prisma.BookingGetPayload<{ include: typeof bookingRowInclude }>;
+export type BookingRowData = Prisma.BookingGetPayload<{
+  include: typeof bookingRowInclude;
+}>;
 
 export function toBookingRow(b: BookingRowData): BookingRow {
   const roomType = b.roomUnit.roomType;
@@ -71,15 +75,24 @@ export const paymentRowInclude = Prisma.validator<Prisma.PaymentInclude>()({
   payout: { select: { status: true } },
   booking: {
     include: {
-      roomUnit: { include: { roomType: { include: { property: { select: { name: true } } } } } },
+      roomUnit: {
+        include: {
+          roomType: { include: { property: { select: { name: true } } } },
+        },
+      },
     },
   },
 });
-export type PaymentRowData = Prisma.PaymentGetPayload<{ include: typeof paymentRowInclude }>;
+export type PaymentRowData = Prisma.PaymentGetPayload<{
+  include: typeof paymentRowInclude;
+}>;
 
 export function toPaymentRow(p: PaymentRowData): AdminPaymentRow {
   const grossAmountKobo = p.grossAmountKobo > 0 ? p.grossAmountKobo : p.amount;
-  const ownerPayoutKobo = p.ownerPayoutKobo > 0 ? p.ownerPayoutKobo : grossAmountKobo - p.platformFeeKobo;
+  const ownerPayoutKobo =
+    p.ownerPayoutKobo > 0
+      ? p.ownerPayoutKobo
+      : grossAmountKobo - p.platformFeeKobo;
   return {
     reference: p.reference,
     bookingId: p.bookingId,
@@ -123,7 +136,9 @@ export const payoutRowInclude = Prisma.validator<Prisma.PayoutInclude>()({
     },
   },
 });
-export type PayoutRowData = Prisma.PayoutGetPayload<{ include: typeof payoutRowInclude }>;
+export type PayoutRowData = Prisma.PayoutGetPayload<{
+  include: typeof payoutRowInclude;
+}>;
 
 export function toPayoutRow(p: PayoutRowData): AdminPayoutRow {
   return {
@@ -142,6 +157,7 @@ export function toPayoutRow(p: PayoutRowData): AdminPayoutRow {
     bankName: p.owner.payoutMethod?.bankName ?? null,
     accountName: p.owner.payoutMethod?.accountName ?? null,
     accountNumberLast4: p.owner.payoutMethod?.accountNumberLast4 ?? null,
+    settlementReference: p.settlementReference,
     note: p.note,
     eligibleAt: p.eligibleAt.toISOString(),
     approvedAt: p.approvedAt ? p.approvedAt.toISOString() : null,

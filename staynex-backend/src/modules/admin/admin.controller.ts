@@ -114,6 +114,7 @@ export class AdminController {
   }
 
   @Post("payments/:reference/refund")
+  @RequireAnyCapability("ADMIN_MANAGER")
   @RateLimit({
     bucket: "admin:payment-refund",
     limit: 10,
@@ -151,6 +152,7 @@ export class AdminController {
   }
 
   @Post("payouts/:id/paid")
+  @RequireAnyCapability("ADMIN_MANAGER")
   @RateLimit({
     bucket: "admin:payout-paid",
     limit: 10,
@@ -170,6 +172,7 @@ export class AdminController {
   }
 
   @Post("payouts/:id/failed")
+  @RequireAnyCapability("ADMIN_MANAGER")
   @RateLimit({
     bucket: "admin:payout-failed",
     limit: 10,

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Headers,
   Ip,
@@ -10,6 +11,7 @@ import {
   Res,
   UseGuards,
 } from "@nestjs/common";
+import { loadEnv } from "../../../config/env";
 import type { AuthUser } from "../../../types";
 import { parseBody } from "../../common/http";
 import { RateLimit } from "../../common/rate-limit.guard";
@@ -55,6 +57,8 @@ function completeAuth(res: CookieResponse, result: AuthFlowResult) {
 
 @Controller("auth")
 export class AuthController {
+  private readonly env = loadEnv();
+
   constructor(private readonly auth: AuthService) {}
 
   @Get("csrf")
@@ -109,6 +113,11 @@ export class AuthController {
     @Ip() ip: string,
     @Res({ passthrough: true }) res: CookieResponse,
   ) {
+    if (!this.env.ADMIN_REGISTRATION_ENABLED) {
+      throw new ForbiddenException(
+        "Admin registration is closed. Contact platform operations for authorised access.",
+      );
+    }
     const result = await this.auth.adminRegister(
       parseBody(adminRegisterSchema, body),
       ip,

@@ -754,7 +754,9 @@ model Payout {
   paidAt            DateTime?
   /// Set when an admin marks the payout FAILED (reason lives in `note`).
   failedAt          DateTime?
-  /// Settlement note: bank-transfer reference on PAID, reason on FAILED,
+  /// External bank or transfer identifier proving a PAID settlement.
+  settlementReference String?
+  /// Internal note: early override reason on PAID, reason on FAILED, or
   /// clawback explanation when a refund cancels the payout.
   note              String?
   /// Admin who last actioned this payout (manual settlement marker).
