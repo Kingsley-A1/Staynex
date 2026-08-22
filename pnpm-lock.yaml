@@ -112,6 +112,9 @@ importers:
 
   staynex-frontend:
     dependencies:
+      '@staynex/shared':
+        specifier: workspace:*
+        version: link:../packages/shared
       '@vercel/analytics':
         specifier: ^2.0.1
         version: 2.0.1(next@15.5.19(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
@@ -131,6 +134,9 @@ importers:
         specifier: ^5.7.0
         version: 5.7.0(react@19.2.7)
     devDependencies:
+      '@staynex/backend':
+        specifier: workspace:*
+        version: link:../staynex-backend
       '@tailwindcss/postcss':
         specifier: ^4.1.14
         version: 4.3.1

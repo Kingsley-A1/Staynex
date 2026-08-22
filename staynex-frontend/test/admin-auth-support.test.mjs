@@ -94,18 +94,19 @@ test("support panel resolves direct contact through the backend runtime endpoint
 });
 
 test("Google sign-in can hand admin managers into the MFA form", async () => {
-  const [button, form, api, types] = await Promise.all([
+  const [button, form, api, contract] = await Promise.all([
     source("../src/features/auth/google-auth-button.tsx"),
     source("../src/features/auth/auth-form.tsx"),
     source("../src/lib/api.ts"),
-    source("../src/lib/types.ts"),
+    // The API contract is owned by the backend; the frontend re-exports it.
+    source("../../staynex-backend/types/api.ts"),
   ]);
 
   assert.match(
     api,
     /google: \(idToken: string, intent\?: "GUEST" \| "OWNER"\)/,
   );
-  assert.match(types, /mfaRequired: true/);
+  assert.match(contract, /mfaRequired: true/);
   assert.match(
     button,
     /onMfaRequired\?: \(challenge: AuthMfaChallenge\) => void/,
