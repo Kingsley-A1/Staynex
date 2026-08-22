@@ -1,8 +1,16 @@
 packages:
   - "staynex-frontend"
   - "staynex-backend"
+  - "staynex-mobile"
   - "packages/*"
+
 allowBuilds:
   "@prisma/client": true
   "@prisma/engines": true
   prisma: true
+
+# Security pins. Moved here from package.json "pnpm.overrides", which pnpm 10
+# no longer reads (it was being silently ignored).
+overrides:
+  multer: "2.2.0"
+  postcss: "8.5.16"

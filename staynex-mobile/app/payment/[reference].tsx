@@ -11,7 +11,12 @@ import { Screen } from "@/ui/Screen";
 import { Button } from "@/ui/Button";
 import { StatusPill } from "@/ui/StatusPill";
 
-const TERMINAL: PaymentState[] = ["SUCCESS", "FAILED", "REFUNDED"];
+const TERMINAL: PaymentState[] = [
+  "SUCCESS",
+  "FAILED",
+  "REQUIRES_REFUND",
+  "REFUNDED",
+];
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -84,6 +89,26 @@ export default function PaymentStatusScreen() {
 
   if (status === "SUCCESS") {
     return <Pending label="Payment confirmed — opening your booking…" />;
+  }
+
+  // Funds were captured but the stay cannot be honored. The backend has queued
+  // this for an admin refund (see PaymentState.REQUIRES_REFUND); never tell the
+  // guest the payment simply "failed" — their money left their account.
+  if (status === "REQUIRES_REFUND") {
+    return (
+      <Screen padded>
+        <View style={styles.center}>
+          <StatusPill label={PAYMENT_STATE_LABELS[status]} tone={PAYMENT_STATE_TONE[status]} />
+          <Text style={styles.title}>We could not confirm this stay</Text>
+          <Text style={styles.muted}>
+            Your payment went through, but the room was no longer available. Our
+            team has been notified and your refund is being processed.
+          </Text>
+          <Text style={styles.note}>Reference: {reference}</Text>
+          <Button label="Find another stay" onPress={retry} />
+        </View>
+      </Screen>
+    );
   }
 
   if (status === "FAILED" || status === "REFUNDED") {
