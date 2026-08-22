@@ -16,16 +16,31 @@ If you read nothing else, read these three rules:
 
 ## Route by task
 
-| Your task | Read these, in order |
-| --- | --- |
-| Setting up the repo for the first time | [`../README.md`](../README.md) → [`../CONTRIBUTING.md`](../CONTRIBUTING.md) |
-| Anything touching product behaviour or UI | [`../skill.md`](../skill.md) (follow its §1 Agent Routing) |
-| Finding an endpoint, module, or env var | [`../MAIN-ARCHITECTURE.md`](../MAIN-ARCHITECTURE.md) |
-| Which package does this code belong in? | [`architecture.md`](architecture.md) — boundary rules |
-| Running a command, test, or build | [`../COMMANDS.md`](../COMMANDS.md) |
-| Booking, payment, or refund logic | [`../skill.md`](../skill.md) §9 → [`../MAIN-ARCHITECTURE.md`](../MAIN-ARCHITECTURE.md) → [`future/payment-settlement.md`](future/payment-settlement.md) |
-| Manual/terminal QA of the AI assistant | [`../AI-TERMINAL-TESTING.MD`](../AI-TERMINAL-TESTING.MD) |
-| Long-range product plan | [`../Staynex_plan.md`](../Staynex_plan.md), `Staynex_Blueprint.pdf` |
+| Your task                                 | Read these, in order                                                                                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Setting up the repo for the first time    | [`../README.md`](../README.md) → [`../CONTRIBUTING.md`](../CONTRIBUTING.md)                                                                             |
+| Anything touching product behaviour or UI | [`../skill.md`](../skill.md) (follow its §1 Agent Routing)                                                                                              |
+| Finding an endpoint, module, or env var   | [`../MAIN-ARCHITECTURE.md`](../MAIN-ARCHITECTURE.md)                                                                                                    |
+| Which package does this code belong in?   | [`architecture.md`](architecture.md) — boundary rules                                                                                                   |
+| Running a command, test, or build         | [`../COMMANDS.md`](../COMMANDS.md)                                                                                                                      |
+| Booking, payment, or refund logic         | [`../skill.md`](../skill.md) §9 → [`../MAIN-ARCHITECTURE.md`](../MAIN-ARCHITECTURE.md) → [`future/payment-settlement.md`](future/payment-settlement.md) |
+| Manual/terminal QA of the AI assistant    | [`../AI-TERMINAL-TESTING.MD`](../AI-TERMINAL-TESTING.MD)                                                                                                |
+| Long-range product plan                   | [`../Staynex_plan.md`](../Staynex_plan.md), `Staynex_Blueprint.pdf`                                                                                     |
+
+## Directory contracts
+
+Each of these says what belongs in that directory and what does not. Read the
+one for the directory you are about to edit — it is shorter than the mistake.
+
+| Directory                          | Contract                                                                                                                    |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `staynex-backend/src/modules/`     | [modules/README.md](../staynex-backend/src/modules/README.md) — module layout, thin controllers, the rules that fail review |
+| `staynex-frontend/src/ui/`         | [ui/README.md](../staynex-frontend/src/ui/README.md) — generic primitives only                                              |
+| `staynex-frontend/src/components/` | [components/README.md](../staynex-frontend/src/components/README.md) — app chrome                                           |
+| `staynex-frontend/src/features/`   | [features/README.md](../staynex-frontend/src/features/README.md) — domain slices                                            |
+| `staynex-frontend/src/lib/`        | [lib/README.md](../staynex-frontend/src/lib/README.md) — API client and contract re-exports                                 |
+| `packages/shared/`                 | [shared/README.md](../packages/shared/README.md) — framework-agnostic shared contracts                                      |
+| `staynex-mobile/`                  | [mobile/README.md](../staynex-mobile/README.md) — Expo app, env, and two known traps                                        |
 
 ## The map
 

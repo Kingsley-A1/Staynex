@@ -1,3 +1,9 @@
+> **ARCHIVED 2026-08-22 — historical record only. Do not follow.**
+>
+> The one-time build prompt used to create the Expo app in Phase 0/1.
+> That work has shipped. For how to work on the mobile app now, see
+> `staynex-mobile/README.md`.
+
 # Staynex Mobile — Phase 0 + Phase 1 Agent Prompt
 
 > Prompt architecture: **R-G-C-T-C-O-E-E-I** (Role → Goal → Context → Task →
