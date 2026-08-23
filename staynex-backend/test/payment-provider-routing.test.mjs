@@ -51,6 +51,23 @@ function withEnv(vars, fn) {
   }
 }
 
+async function withEnvAsync(vars, fn) {
+  const saved = new Map();
+  for (const [key, value] of Object.entries(vars)) {
+    saved.set(key, process.env[key]);
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  try {
+    return await fn();
+  } finally {
+    for (const [key, value] of saved) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
 const PAYSTACK_ONLY = {
   NODE_ENV: "test",
   DATABASE_URL: "postgresql://user:password@localhost:26257/staynex?schema=public",
@@ -257,4 +274,51 @@ test("Opay maps unknown transaction statuses to pending, never to a terminal sta
     assert.equal(parse("SOMETHING_NEW").kind, "other");
     assert.equal(parse("PENDING").kind, "other");
   });
+});
+
+test("Opay separates the guest return URL from the signed webhook callback", async () => {
+  await withEnvAsync(
+    {
+      ...BOTH_ENABLED,
+      NEXT_PUBLIC_APP_URL: "https://sandbox.staynex.example",
+    },
+    async () => {
+      const originalFetch = global.fetch;
+      let requestBody;
+      global.fetch = async (_url, init) => {
+        requestBody = JSON.parse(init.body);
+        return new Response(
+          JSON.stringify({
+            code: "00000",
+            data: {
+              reference: "stx_callback_contract",
+              orderNo: "provider-order",
+              cashierUrl: "https://sandbox-checkout.example/pay",
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      };
+
+      try {
+        const opay = new OpayProvider();
+        await opay.initializeTransaction({
+          email: "sandbox-operator@example.com",
+          amountKobo: 100_000,
+          reference: "stx_callback_contract",
+        });
+      } finally {
+        global.fetch = originalFetch;
+      }
+
+      assert.equal(
+        requestBody.returnUrl,
+        "https://sandbox.staynex.example/payment/status",
+      );
+      assert.equal(
+        requestBody.callbackUrl,
+        "https://sandbox.staynex.example/api/backend/payments/opay/webhook",
+      );
+    },
+  );
 });

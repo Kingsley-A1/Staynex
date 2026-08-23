@@ -2,11 +2,12 @@
 
 Adding Opay as a **second payment provider** alongside Paystack.
 
-> **Status:** Slices 1–2 are **implemented and merged**, Slice 3 is **implemented
-> but dark** (inert until `OPAY_ENABLED=true`), and Slice 4's copy work is done.
-> The Opay wire contract is **not yet verified against a live sandbox** — see
-> **§11 Remaining work (your machine)** for exactly what is left and why it
-> cannot be done from CI.
+> **Status:** The provider abstraction, payment-mode contract, additive
+> migrations, persisted provider binding, and dark OPay adapter are implemented
+> on `codex/payment-production-readiness`. Local automated verification is green.
+> The OPay wire contract and provider sandbox journeys remain **UNVERIFIED**.
+> OPay must stay dark and no merge may proceed until the §11 acceptance gate
+> passes for both Paystack and OPay.
 
 This document is the plan of record: how payments work today, what Opay actually
 buys us, what it puts at risk, and the ordered slices that get us there without
@@ -79,6 +80,7 @@ eleven places.
 9. `bank-directory.service.ts:15` — `PROVIDER = "paystack"` for the **payout** bank directory (see §4, this is deliberately out of scope).
 
 **Frontend**
+
 10. `checkout-client.tsx:176,178` — "Pay … **with Paystack**", "redirected to Paystack's secure test checkout"; `payment-status-client.tsx:146` — "verify with **Paystack**".
 11. `types.ts:719,733` — `provider: "paystack"` as a **string-literal type**, plus `legal/page.tsx:58` and `policies/page.tsx:47` naming Paystack as the processor.
 
@@ -575,17 +577,22 @@ open question in §2.4.
 
 | Variable | Slice | Notes |
 | --- | --- | --- |
-| `OPAY_MERCHANT_ID` | 3 | Lazy-read at call time (mirrors `PAYSTACK_SECRET_KEY`) |
-| `OPAY_PUBLIC_KEY` | 3 | Per Slice 0 findings |
-| `OPAY_SECRET_KEY` | 3 | Never logged; absence ⇒ adapter unregistered |
-| `OPAY_BASE_URL` | 3 | Sandbox vs production |
-| `OPAY_ENABLED` | 3 | Master kill switch, default `false` |
+| `PAYMENT_ENABLED` | production | Strict boolean. `false` selects TEST credentials and never charges real money; `true` selects LIVE credentials and fails closed |
+| `PAYSTACK_TEST_SECRET_KEY` / `PAYSTACK_TEST_PUBLIC_KEY` | sandbox | Paystack test credentials only |
+| `PAYSTACK_LIVE_SECRET_KEY` / `PAYSTACK_LIVE_PUBLIC_KEY` | production | Paystack live credentials only |
+| `OPAY_TEST_MERCHANT_ID` / `OPAY_TEST_PUBLIC_KEY` / `OPAY_TEST_SECRET_KEY` | sandbox | Complete OPay test credential set |
+| `OPAY_TEST_BASE_URL` | sandbox | Provider-confirmed HTTPS sandbox URL |
+| `OPAY_LIVE_MERCHANT_ID` / `OPAY_LIVE_PUBLIC_KEY` / `OPAY_LIVE_SECRET_KEY` | production | Complete OPay live credential set |
+| `OPAY_LIVE_BASE_URL` | production | Provider-confirmed HTTPS production URL |
+| `OPAY_ENABLED` | 3 | Explicit OPay registration switch, default `false` |
 | `PAYMENT_DEFAULT_PROVIDER` | 4 | Defaults to `paystack` |
 | `PAYMENT_OPAY_ROLLOUT_PERCENT` | 4 | `0`–`100`, default `0` |
 | `PAYMENT_FAILOVER_ENABLED` | 5 | Default `false` until Slice 5 proves out |
 
-All secrets follow the existing lazy-read pattern so the API still boots
-unconfigured.
+Secret values must never be written to logs, test output, screenshots, issue
+comments, or acceptance transcripts. The selected mode is validated at startup;
+production configuration fails closed when the selected provider is incomplete
+or a credential is placed in the wrong mode-specific slot.
 
 ---
 
@@ -669,8 +676,9 @@ unknown status can no longer release a guest's held capacity.
 ### Slice 3 — Opay adapter, dark ✅
 
 - `payments/opay.provider.ts` — full adapter. **Inert** unless `OPAY_ENABLED=true`
-  *and* all three credentials are present, so a half-configured deploy silently
-  falls back to Paystack instead of failing checkout.
+  and the selected mode's complete credential set is present. An enabled but
+  incomplete provider fails configuration validation; existing payments never
+  fall back to a different provider.
 - `POST /payments/opay/webhook` + CSRF exemption.
 - Every provider-specific fact isolated in one `CONTRACT` block for verification.
 
@@ -710,107 +718,84 @@ on real traffic.
 
 ---
 
-## 11. Remaining work (your machine)
+## 11. Production acceptance gate
 
-None of the below can be done from this environment — each needs credentials,
-a database, or a real Opay account.
+Local implementation and schema validation do not prove a provider's external
+wire contract. The following gate needs operator-supplied TEST credentials, a
+reachable HTTPS callback URL, a migrated non-production database, and real
+sandbox transactions. Until it passes, provider acceptance is **UNVERIFIED**,
+OPay remains at 0% rollout, and this branch must not be merged.
 
-### 11.1 Apply the migration ⚠ required before deploy
+### 11.1 Migration status
 
-The schema changed (`Payment.providerReference` + an index). I updated
-`schema.prisma` but **did not generate a migration** — that needs a live
-database URL.
+The additive payment provider/mode migrations now exist in
+`staynex-backend/prisma/migrations` and pass the local migration contract tests.
+Applying them to a sandbox or production database is a separate operator action.
+Run `pnpm prisma:migrate:deploy` against the intended database before exercising
+the end-to-end flow; never use `prisma db push` as a production substitute.
+
+### 11.2 Presence-only preflight
+
+Configure mode-specific TEST variables without sharing their values in logs or
+review artifacts. Keep `PAYMENT_ENABLED=false`, `OPAY_ENABLED=true`, and
+`PAYMENT_OPAY_ROLLOUT_PERCENT=0`. Then run:
 
 ```bash
 cd staynex-backend
-pnpm prisma:migrate --name add_payment_provider_reference
-# review the generated SQL, then:
-pnpm prisma:migrate:deploy
+pnpm payment:sandbox:preflight
 ```
 
-Both changes are **additive and nullable**, so this is safe on live data and
-existing rows keep working. Deploying the code **without** the migration will
-break checkout — Prisma will reject the unknown `providerReference` field.
+The preflight reports only `present` or `missing`. It refuses live payment mode,
+live-looking Paystack credentials in TEST slots, incomplete OPay configuration,
+a live-looking OPay base URL, a non-HTTPS/local callback, or non-zero rollout.
+A PASS only means the environment is safe enough to start acceptance; it does
+not prove either provider works.
 
-### 11.2 Backfill `Payment.provider` on historical rows ⚠ important
+### 11.3 Required transaction matrix
 
-`provider` is nullable and older rows may hold `NULL`. The registry **throws**
-on `NULL` by design (it refuses to guess). Every payment created before this
-change was Paystack, so backfill them explicitly:
+For **each** provider (`paystack`, then `opay`), perform real sandbox journeys
+through the application and let the signed webhook reach Staynex:
 
-```sql
-UPDATE "Payment" SET provider = 'paystack' WHERE provider IS NULL;
-```
+- successful payment, followed by a replay of the signed callback;
+- failed or abandoned payment;
+- refunded payment, including the provider's terminal refund evidence.
 
-Skipping this means admin refund / re-verify on an old payment returns a
-"unknown payment provider" error instead of working. Run it right after the
-migration.
-
-### 11.3 Slice 0 — verify the Opay contract 🔴 blocks enabling Opay
-
-`opay.provider.ts` is written to Opay's *documented* Cashier shape but has
-**never touched a live sandbox**. Confirm every field in the `CONTRACT` block
-at the top of that file against your merchant dashboard + a real sandbox
-transaction, then fill in `docs/future/opay-contract.md`:
-
-- [ ] Base URLs (sandbox vs live) and whether `OPAY_BASE_URL` needs overriding
-- [ ] Create / status / refund endpoint paths and versions
-- [ ] **Amount representation** — the adapter assumes `{currency, total}` with
-      `total` in **kobo**. If it is decimal naira instead, change
-      `CONTRACT.minorUnitExponent` and re-run the R2 test. This is the 100×
-      money bug — verify it first.
-- [ ] Whether Opay accepts **our** `stx_<uuid>` reference (length/charset limits)
-- [ ] Webhook signature: algorithm, header name, and whether it signs the raw
-      body or a field subset. The adapter assumes HMAC-SHA512 over the raw body
-      in `Authorization: Bearer <hex>`.
-- [ ] Success/failure status vocabulary vs `CONTRACT.successStatuses` / `failedStatuses`
-- [ ] Response envelope success code (adapter assumes `"00000"`)
-- [ ] Which query param the return URL carries the reference in —
-      `/payment/status` currently reads `reference` and `trxref` (Paystack's names)
-- [ ] Refunds: supported? sync or async? partial-only? If async, wire the
-      terminal refund webhook to `applyRefund` (Slice 6)
-- [ ] Settlement schedule + per-rail fees (feeds Slice 7 and the §2.3 case)
-
-### 11.4 Configure and test in sandbox
+For every resulting Staynex reference, run the matching command:
 
 ```bash
-# staynex-backend/.env
-OPAY_ENABLED=true
-OPAY_MERCHANT_ID=...
-OPAY_PUBLIC_KEY=...
-OPAY_SECRET_KEY=...
-OPAY_BASE_URL=https://testapi.opaycheckout.com
-PAYMENT_DEFAULT_PROVIDER=paystack
-PAYMENT_OPAY_ROLLOUT_PERCENT=0        # keep at 0 until sandbox passes
+pnpm payment:sandbox:accept --provider paystack --reference stx_<reference> --expect success
+pnpm payment:sandbox:accept --provider paystack --reference stx_<reference> --expect failed
+pnpm payment:sandbox:accept --provider paystack --reference stx_<reference> --expect refunded
+pnpm payment:sandbox:accept --provider opay --reference stx_<reference> --expect success
+pnpm payment:sandbox:accept --provider opay --reference stx_<reference> --expect failed
+pnpm payment:sandbox:accept --provider opay --reference stx_<reference> --expect refunded
 ```
 
-Expose the webhook to Opay (`ngrok http 4000` → point
-`POST /payments/opay/webhook` at it), then walk the real flow:
+The acceptance script verifies the provider twice and inspects sanitized local
+evidence. It requires persisted provider binding, TEST mode, amount/currency
+agreement, one state transition with replay evidence, a provider-specific signed
+webhook event, zero payouts, and no change to LIVE inventory counters. Output
+contains a timestamp and reference fingerprint, never the raw reference, PII,
+credentials, or database URL.
 
-- [ ] initialize → pay → webhook → booking `CONFIRMED`, `PaymentEvent` row with
-      `provider: "opay"`
-- [ ] failed payment → `MARKED_FAILED`, capacity released
-- [ ] amount arrives **exactly** as charged (the R2 check, live)
-- [ ] refund → `REFUNDED`, booking cancelled, payout clawed back
-- [ ] re-run `pnpm test:payments` after any `CONTRACT` edit
+### 11.4 OPay contract evidence
 
-### 11.5 Roll out
+Before marking OPay accepted, reconcile the successful, failed, replay, and
+refund transcripts against the `CONTRACT` block in `opay.provider.ts`. Confirm
+the sandbox/live base URLs, request and response fields, amount unit, reference
+constraints, signature header and algorithm, signed payload, status vocabulary,
+return query parameter, refund semantics, and settlement behavior. Change code
+only from provider-produced evidence and repeat the complete matrix afterward.
 
-Only after 11.4 passes end to end:
+### 11.5 Gate outcome and rollout
 
-```
-PAYMENT_OPAY_ROLLOUT_PERCENT=5     # then 25, 50, 100
-```
+All six acceptance commands must return `RESULT: PASS`. Retain their sanitized,
+timestamped output as release evidence. Any FAIL, unavailable credential,
+unreachable callback, missing sandbox refund capability, or unconfirmed OPay
+contract keeps the result **UNVERIFIED** and blocks merge, branch normalization,
+and rollout.
 
-Watch per-provider confirm rate and the exception queue at each step.
-`PAYMENT_OPAY_ROLLOUT_PERCENT=0` is an instant, deploy-free kill switch;
-`OPAY_ENABLED=false` is the harder one.
-
-### 11.6 Commercial / compliance
-
-- [ ] Opay merchant account approved for production, settlement account confirmed
-- [ ] Negotiated per-rail fees recorded next to Paystack's for comparison
-- [ ] Legal/policy wording (now "licensed payment partners — currently Paystack,
-      and Opay as it is enabled") reviewed by whoever signs off on legal copy
-- [ ] `seo.ts` still carries the "Paystack hotel payments" keyword — intentional
-      (Paystack remains real), but revisit if Opay becomes the default
+After the gate passes, OPay may begin at 5% and advance only with monitored
+per-provider confirmation, refund, webhook, and exception-queue evidence.
+`PAYMENT_OPAY_ROLLOUT_PERCENT=0` remains the immediate routing kill switch;
+`OPAY_ENABLED=false` remains the hard provider switch.

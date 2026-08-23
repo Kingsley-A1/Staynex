@@ -26,8 +26,8 @@ import { PaymentConfigService } from "./payment-config.service";
  * This adapter is written to Opay's documented Cashier API shape, but every
  * provider-specific fact below is isolated in `CONTRACT` and MUST be confirmed
  * against Opay's current merchant docs + a real sandbox transaction before
- * `OPAY_ENABLED` is ever turned on. See `Opay-Integration.md` §"Remaining work"
- * for the exact checklist.
+ * `OPAY_ENABLED` is ever turned on. See `Opay-Integration.md` §11 for the
+ * exact acceptance gate.
  *
  * The adapter is inert until BOTH `OPAY_ENABLED=true` AND the credentials are
  * present, so shipping it cannot affect production checkout.
@@ -96,10 +96,7 @@ export class OpayProvider implements PaymentProvider {
     return this.paymentConfig.current().mode;
   }
 
-  /**
-   * Inert unless explicitly enabled AND fully credentialed. A half-configured
-   * deploy therefore falls back to Paystack rather than failing at checkout.
-   */
+  /** Inert unless explicitly enabled and fully credentialed for this mode. */
   isConfigured(): boolean {
     return this.paymentConfig.provider("opay").configured;
   }
@@ -130,9 +127,14 @@ export class OpayProvider implements PaymentProvider {
     return this.mode === "LIVE" ? CONTRACT.liveBaseUrl : CONTRACT.testBaseUrl;
   }
 
-  private callbackUrl(): string {
+  private returnUrl(): string {
     const base = this.paymentConfig.current().appUrl;
     return `${base.replace(/\/$/, "")}/payment/status`;
+  }
+
+  private callbackUrl(): string {
+    const base = this.paymentConfig.current().appUrl;
+    return `${base.replace(/\/$/, "")}/api/backend/payments/opay/webhook`;
   }
 
   /** Opay authenticates requests with an HMAC-SHA512 signature over the body. */
@@ -157,7 +159,7 @@ export class OpayProvider implements PaymentProvider {
         currency: "NGN",
         total: toProviderAmount(input.amountKobo),
       },
-      returnUrl: this.callbackUrl(),
+      returnUrl: this.returnUrl(),
       callbackUrl: this.callbackUrl(),
       expireAt: 30,
       userInfo: { userEmail: input.email },
