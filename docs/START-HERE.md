@@ -54,6 +54,7 @@ MAIN-ARCHITECTURE.md   Engineering map: modules, endpoints, env vars
 AI-TERMINAL-TESTING.MD Manual QA script for the AI assistant
 Staynex_plan.md        Long-range product plan
 docs/
+  HANDOFF.md           In-flight branches, merge order, unfinished work
   architecture.md      Package boundary rules (what may import what)
   future/              Designed but not yet built
   archive/             HISTORICAL ONLY. Never follow. See below.
