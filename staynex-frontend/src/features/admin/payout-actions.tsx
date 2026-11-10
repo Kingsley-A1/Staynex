@@ -19,12 +19,14 @@ export function PayoutActions({
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"idle" | "paid" | "failed">("idle");
+  const [settlementReference, setSettlementReference] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
     setMode("idle");
+    setSettlementReference("");
     setNote("");
     setError(null);
   }
@@ -36,6 +38,7 @@ export function PayoutActions({
     try {
       if (mode === "paid") {
         await adminApi.markPayoutPaid(payoutId, {
+          settlementReference: settlementReference.trim(),
           note: note.trim() || undefined,
           // The backend enforces eligibility; sending the override only for
           // early settlements keeps the audit trail honest.
@@ -68,27 +71,66 @@ export function PayoutActions({
   }
 
   const failing = mode === "failed";
-  const requiresNote = failing || !eligible;
   return (
-    <form onSubmit={submit} className="flex w-56 flex-col items-stretch gap-1.5">
+    <form
+      onSubmit={submit}
+      className="flex w-56 flex-col items-stretch gap-1.5"
+    >
       {!eligible && !failing && (
         <p className="text-caption font-medium text-warning">
           Not yet eligible — this records an early-settlement override.
         </p>
       )}
-      <input
-        autoFocus
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        required={requiresNote}
-        minLength={failing ? 3 : undefined}
-        maxLength={500}
-        placeholder={failing ? "Reason (required)" : "Transfer reference / note"}
-        aria-label={failing ? "Failure reason" : "Settlement note"}
-        className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-      />
+      {failing ? (
+        <input
+          autoFocus
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          required
+          minLength={3}
+          maxLength={500}
+          placeholder="Reason (required)"
+          aria-label="Failure reason"
+          className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+        />
+      ) : (
+        <>
+          <label className="flex flex-col gap-1 text-caption text-muted-foreground">
+            Settlement reference
+            <input
+              autoFocus
+              value={settlementReference}
+              onChange={(e) => setSettlementReference(e.target.value)}
+              required
+              minLength={3}
+              maxLength={120}
+              placeholder="Bank or transfer reference"
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm text-ink"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-caption text-muted-foreground">
+            {!eligible ? "Early-settlement reason" : "Internal note (optional)"}
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              required={!eligible}
+              maxLength={500}
+              placeholder={
+                !eligible ? "Reason for settling early" : "Optional context"
+              }
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm text-ink"
+            />
+          </label>
+        </>
+      )}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={reset} disabled={busy}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={reset}
+          disabled={busy}
+        >
           Cancel
         </Button>
         <Button type="submit" size="sm" disabled={busy}>

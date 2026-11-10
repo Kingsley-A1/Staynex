@@ -55,7 +55,10 @@ export default function LegalPageRoute() {
 
       <LegalSection heading="Payments and card data">
         <p>
-          Card processing is handled by <GradientText>Paystack</GradientText>.
+          Payments are processed by our{" "}
+          <GradientText>licensed payment partners</GradientText> — currently
+          Paystack, and Opay as it is enabled. You are told which partner is
+          handling your payment before you are redirected to complete it.
           Staynex records payment status, references, booking amounts, platform
           fees, and settlement information, but does not store raw card numbers.
         </p>

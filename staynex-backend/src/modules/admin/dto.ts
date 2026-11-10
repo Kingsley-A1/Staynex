@@ -16,7 +16,13 @@ export const adminListQuerySchema = z.object({
 export type AdminListQuery = z.infer<typeof adminListQuerySchema>;
 
 export const markPayoutPaidSchema = z.object({
-  /** Bank-transfer reference or settlement note. */
+  /** External bank or transfer identifier proving out-of-band settlement. */
+  settlementReference: z
+    .string()
+    .trim()
+    .min(3, "A bank or transfer settlement reference is required")
+    .max(120),
+  /** Internal context, including the mandatory reason for an early override. */
   note: z.string().trim().max(500).optional(),
   /** Explicit acknowledgement required to settle before eligibleAt. */
   overrideEligibility: z.boolean().optional(),

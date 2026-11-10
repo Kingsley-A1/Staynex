@@ -1,22 +1,29 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Field, Input, Select, Textarea } from "@/ui";
-import { areasApi, hostApi } from "@/lib/api";
-import type { PropertyDetail } from "@/lib/types";
-import type { CityOption } from "@/features/properties/fixtures";
+import { RecoveryNotice } from "@/components/recovery-notice";
+import { apiErrorMessage, areasApi, hostApi } from "@/lib/api";
+import type { CityOption, PropertyDetail } from "@/lib/types";
 
 export function PropertyForm({
   cities,
+  citiesAvailable = true,
+  citiesUnavailableReason,
+  citiesRetryHref = "/host/properties?retry=cities",
   property,
   initialEditing = false,
 }: {
   cities: CityOption[];
+  citiesAvailable?: boolean;
+  citiesUnavailableReason?: string;
+  citiesRetryHref?: string;
   property?: PropertyDetail;
   initialEditing?: boolean;
 }) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const editing = Boolean(property);
   const initialCityId =
     property?.cityId ??
@@ -91,6 +98,12 @@ export function PropertyForm({
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!citiesAvailable) {
+      setError(
+        "Live destinations are required before Staynex can safely save this property.",
+      );
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -114,7 +127,12 @@ export function PropertyForm({
         router.push(`/host/properties/${created.id}`);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(
+        apiErrorMessage(
+          err,
+          "Staynex could not save this property because the property service did not accept the request. Check the form and try again.",
+        ),
+      );
     } finally {
       setPending(false);
     }
@@ -170,9 +188,25 @@ export function PropertyForm({
 
   return (
     <form
+      ref={formRef}
       onSubmit={onSubmit}
       className="surface-card max-w-2xl space-y-5 p-5 sm:p-6"
     >
+      {!citiesAvailable && (
+        <RecoveryNotice
+          compact
+          title="Property saving is paused"
+          reason={
+            citiesUnavailableReason ??
+            "Live destinations are required before Staynex can safely save this property."
+          }
+          retryHref={citiesRetryHref}
+          secondaryAction={{
+            label: "Back to properties",
+            href: "/host/properties",
+          }}
+        />
+      )}
       <Field label="Property name" htmlFor="name" required>
         <Input
           id="name"
@@ -192,6 +226,7 @@ export function PropertyForm({
             setAreaId("");
           }}
           required
+          disabled={!citiesAvailable}
         >
           {cities.map((c) => (
             <option key={c.id} value={c.id}>
@@ -244,12 +279,21 @@ export function PropertyForm({
         />
       </Field>
       {error && (
-        <p className="text-sm text-error" role="alert">
-          {error}
-        </p>
+        <RecoveryNotice
+          compact
+          title="The property was not saved"
+          reason={error}
+          retryLabel="Try saving again"
+          onRetry={() => formRef.current?.requestSubmit()}
+          secondaryAction={
+            editing
+              ? { label: "Cancel editing", onSelect: cancelEdit }
+              : { label: "Back to properties", href: "/host/properties" }
+          }
+        />
       )}
       <div className="flex gap-2">
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending || !citiesAvailable}>
           {pending ? "Saving…" : editing ? "Save changes" : "Create draft"}
         </Button>
         {editing && (

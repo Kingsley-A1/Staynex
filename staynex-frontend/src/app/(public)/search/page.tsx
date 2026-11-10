@@ -1,7 +1,7 @@
 import { PropertyCard } from "@/ui";
 import { SearchPanel } from "@/features/booking/search-panel";
+import { RecoveryNotice } from "@/components/recovery-notice";
 import { searchProperties } from "@/lib/server-catalog";
-import type { PropertySummary } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -44,19 +44,21 @@ export default async function SearchPage({
   if (sp.infants) detailQs.set("infants", sp.infants);
   const qs = detailQs.toString();
 
-  let items: PropertySummary[] = [];
-  let live = true;
-  if (city) {
-    const res = await searchProperties({
-      city,
-      area: sp.area,
-      checkIn: sp.checkIn,
-      checkOut: sp.checkOut,
-      guests: occupants,
-    });
-    items = res.items;
-    live = res.live;
+  const result = city
+    ? await searchProperties({
+        city,
+        area: sp.area,
+        checkIn: sp.checkIn,
+        checkOut: sp.checkOut,
+        guests: occupants,
+      })
+    : null;
+  const items = result?.data ?? [];
+  const retryQuery = new URLSearchParams();
+  for (const [key, value] of Object.entries(raw)) {
+    if (value) retryQuery.set(key, value);
   }
+  const retryHref = `/search?${retryQuery.toString()}`;
 
   return (
     <main className="layout-container py-8">
@@ -80,13 +82,22 @@ export default async function SearchPage({
             </p>
           </header>
 
-          {items.length === 0 && (
+          {result && result.status === "unavailable" && (
+            <RecoveryNotice
+              title="Live stays are temporarily unavailable"
+              reason={`${result.reason} Results are withheld because availability and pricing must come from the live service.`}
+              retryHref={retryHref}
+              secondaryAction={{ label: "Change search", href: "/search" }}
+            />
+          )}
+
+          {result && result.status === "empty" && (
             <div className="surface-card p-10 text-center text-muted-foreground">
               No approved stays found for {city}.
             </div>
           )}
 
-          {items.length > 0 && (
+          {result && result.status === "data" && (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {items.map((p) => (
                 <PropertyCard
@@ -97,12 +108,6 @@ export default async function SearchPage({
                 />
               ))}
             </div>
-          )}
-
-          {!live && (
-            <p className="text-caption">
-              Showing sample data — live results appear when the API is connected.
-            </p>
           )}
         </div>
       )}

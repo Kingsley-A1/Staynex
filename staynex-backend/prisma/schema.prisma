@@ -102,6 +102,11 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum PaymentMode {
+  TEST
+  LIVE
+}
+
 enum PayoutStatus {
   PENDING
   PROCESSING
@@ -646,8 +651,20 @@ model Payment {
   /// Snapshotted so historical accounting never shifts if the platform rate changes.
   commissionRateBps Int           @default(0)
   currency          String        @default("NGN")
-  provider          String?
+  /// Which payin provider captured this payment ("paystack" | "opay"). Every
+  /// later operation (verify, refund, webhook) resolves its adapter from THIS
+  /// value — never from a default. Asking the wrong provider about a reference
+  /// returns "not found", which the sync path would read as abandoned and use
+  /// to cancel a booking the guest actually paid for.
+  provider          String        @default("paystack")
+  /// OUR reference (`stx_<uuid>`), shown to the guest and used as the key.
   reference         String?       @unique
+  /// The provider's own transaction id, when it issues one. Reconciliation
+  /// only — never used to look up a payment.
+  providerReference String?
+  /// Provider environment captured at checkout. TEST rows never contribute to
+  /// live inventory, revenue, settlement, host earnings, or payouts.
+  mode              PaymentMode   @default(TEST)
   status            PaymentStatus @default(PENDING)
   /// Set once when the payment is verified SUCCESS.
   paidAt            DateTime?
@@ -661,6 +678,7 @@ model Payment {
   payout  Payout?
 
   @@index([status])
+  @@index([provider, mode, status])
 }
 
 /// Immutable money audit trail: one row per provider webhook delivery, per
@@ -668,8 +686,10 @@ model Payment {
 /// always with the processing outcome. Nothing that touches funds may resolve
 /// invisibly (payment-review P1).
 model PaymentEvent {
-  id        String   @id @default(cuid())
-  provider  String   @default("paystack")
+  id                String      @id @default(cuid())
+  provider          String      @default("paystack")
+  mode              PaymentMode @default(TEST)
+  providerReference String?
   /// e.g. charge.success, charge.failed, refund.processed, sync.verify, admin.refund
   eventType String
   reference String?
@@ -683,6 +703,7 @@ model PaymentEvent {
   createdAt DateTime @default(now())
 
   @@index([reference])
+  @@index([provider, mode, reference])
   @@index([outcome])
   @@index([createdAt])
 }
@@ -733,7 +754,9 @@ model Payout {
   paidAt            DateTime?
   /// Set when an admin marks the payout FAILED (reason lives in `note`).
   failedAt          DateTime?
-  /// Settlement note: bank-transfer reference on PAID, reason on FAILED,
+  /// External bank or transfer identifier proving a PAID settlement.
+  settlementReference String?
+  /// Internal note: early override reason on PAID, reason on FAILED, or
   /// clawback explanation when a refund cancels the payout.
   note              String?
   /// Admin who last actioned this payout (manual settlement marker).

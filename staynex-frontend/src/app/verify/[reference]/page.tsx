@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getVoucherVerification } from "@/lib/server-catalog";
-import { formatDate, formatOccupancy } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import type { VoucherVerification } from "@/lib/types";
 
 // Reception scans a QR to reach this page; it must always reflect live truth.
@@ -20,6 +20,12 @@ const TONE: Record<Status, { wrap: string; icon: string; title: string; note: st
     icon: "✓",
     title: "Valid booking",
     note: "Paid & confirmed on Staynex.",
+  },
+  TEST: {
+    wrap: "border-warning-border bg-warning-surface text-warning",
+    icon: "T",
+    title: "Test booking — not valid for check-in",
+    note: "No money was charged and no live room was reserved.",
   },
   PENDING: {
     wrap: "border-warning-border bg-warning-surface text-warning",
@@ -67,16 +73,27 @@ export default async function VerifyPage({
           <div className="surface-card space-y-3 p-6 text-center">
             <p className="text-title-sm text-ink">Couldn&apos;t verify right now</p>
             <p className="text-sm text-muted-foreground">
-              We couldn&apos;t reach Staynex to check this booking. Check the connection and try
-              again.
+              Staynex could not reach the booking records. Check the connection, then retry;
+              do not use this page as check-in approval until verification succeeds.
             </p>
+            <div className="flex justify-center gap-3">
+              <Link
+                href={`/verify/${encodeURIComponent(reference)}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                Retry verification
+              </Link>
+              <Link href="/" className="text-muted-foreground hover:underline">
+                Close
+              </Link>
+            </div>
           </div>
         ) : (
           <VerificationCard v={verification} />
         )}
 
         <p className="text-center text-caption text-muted-foreground">
-          Live status from Staynex records · not a screenshot.
+          Current status from Staynex records · not a screenshot.
         </p>
       </div>
     </main>
@@ -101,29 +118,17 @@ function VerificationCard({ v }: { v: VoucherVerification }) {
 
       {showDetails && (
         <div className="divide-y divide-border px-5 py-1 text-sm">
-          {(v.guestName || v.guestEmailMasked) && (
-            <DetailRow label="Guest" value={v.guestName ?? v.guestEmailMasked ?? "—"} />
-          )}
           {v.propertyName && (
             <DetailRow
               label="Property"
-              value={[v.propertyName, v.areaName ?? v.cityName].filter(Boolean).join(" · ")}
+              value={[v.propertyName, v.cityName].filter(Boolean).join(" · ")}
             />
           )}
           {v.roomTypeName && (
-            <DetailRow
-              label="Room"
-              value={
-                v.unitCode ? `${v.roomTypeName} · Unit ${v.unitCode}` : v.roomTypeName
-              }
-            />
+            <DetailRow label="Room type" value={v.roomTypeName} />
           )}
           {v.checkIn && <DetailRow label="Check-in" value={formatDate(v.checkIn)} />}
           {v.checkOut && <DetailRow label="Check-out" value={formatDate(v.checkOut)} />}
-          {v.nights != null && (
-            <DetailRow label="Nights" value={`${v.nights} night${v.nights === 1 ? "" : "s"}`} />
-          )}
-          {v.guests && <DetailRow label="Guests" value={formatOccupancy(v.guests)} />}
           <DetailRow label="Reference" value={v.reference} />
         </div>
       )}

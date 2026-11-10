@@ -5,6 +5,8 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { PaymentConfigService } from "./payment-config.service";
+import type { PaymentMode } from "./payment-provider.port";
 
 interface InitializeInput {
   email: string;
@@ -78,25 +80,41 @@ export interface VerifiedPaystackTransaction {
 export class PaystackService {
   private readonly logger = new Logger(PaystackService.name);
 
+  constructor(
+    private readonly paymentConfig: PaymentConfigService = new PaymentConfigService(),
+  ) {}
+
+  get mode(): PaymentMode {
+    return this.paymentConfig.current().mode;
+  }
+
+  isConfigured(): boolean {
+    return this.paymentConfig.provider("paystack").configured;
+  }
+
   private secret(): string {
-    const key = process.env.PAYSTACK_SECRET_KEY;
+    const key = this.paymentConfig.provider("paystack").secretKey;
     if (!key) {
       throw new ServiceUnavailableException(
-        "Paystack is not configured (PAYSTACK_SECRET_KEY missing)",
+        `Paystack ${this.mode.toLowerCase()} payments are not configured`,
       );
     }
     return key;
   }
 
   private callbackUrl(): string {
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const base = this.paymentConfig.current().appUrl;
     return `${base.replace(/\/$/, "")}/payment/status`;
+  }
+
+  private baseUrl(): string {
+    return this.paymentConfig.provider("paystack").baseUrl!;
   }
 
   async initializeTransaction(
     input: InitializeInput,
   ): Promise<{ authorizationUrl: string; reference: string }> {
-    const res = await fetch("https://api.paystack.co/transaction/initialize", {
+    const res = await fetch(`${this.baseUrl()}/transaction/initialize`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.secret()}`,
@@ -131,7 +149,7 @@ export class PaystackService {
     reference: string,
   ): Promise<VerifiedPaystackTransaction> {
     const res = await fetch(
-      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+      `${this.baseUrl()}/transaction/verify/${encodeURIComponent(reference)}`,
       {
         method: "GET",
         headers: { Authorization: `Bearer ${this.secret()}` },
@@ -172,7 +190,7 @@ export class PaystackService {
         });
         if (next) query.set("next", next);
         const res = await fetch(
-          `https://api.paystack.co/bank?${query.toString()}`,
+          `${this.baseUrl()}/bank?${query.toString()}`,
           {
             method: "GET",
             headers: { Authorization: `Bearer ${this.secret()}` },
@@ -231,7 +249,7 @@ export class PaystackService {
     });
     try {
       const res = await fetch(
-        `https://api.paystack.co/bank/resolve?${query.toString()}`,
+        `${this.baseUrl()}/bank/resolve?${query.toString()}`,
         {
           method: "GET",
           headers: { Authorization: `Bearer ${this.secret()}` },
@@ -280,7 +298,7 @@ export class PaystackService {
    * caller never records a refund that was not accepted.
    */
   async refundTransaction(reference: string): Promise<void> {
-    const res = await fetch("https://api.paystack.co/refund", {
+    const res = await fetch(`${this.baseUrl()}/refund`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.secret()}`,

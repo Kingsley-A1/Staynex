@@ -1,8 +1,12 @@
 import { notFound } from "next/navigation";
 import { RoomGalleryCarousel } from "@/ui";
 import { BookingWidget } from "@/features/booking/booking-widget";
+import { RecoveryNotice } from "@/components/recovery-notice";
 import { TestimonialCard } from "@/features/reviews/testimonial-card";
-import { getApprovedTestimonials, getPublicProperty } from "@/lib/server-catalog";
+import {
+  getApprovedTestimonials,
+  getPublicProperty,
+} from "@/lib/server-catalog";
 import { formatNairaFromKobo } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +26,21 @@ export default async function StayPage({
 }) {
   const { slug } = await params;
   const sp = await searchParams;
-  const { property } = await getPublicProperty(slug);
+  const result = await getPublicProperty(slug);
+  if (result.status === "unavailable") {
+    return (
+      <main className="layout-container py-8">
+        <RecoveryNotice
+          title="This live property could not be loaded"
+          reason={`${result.reason} Booking is paused until Staynex can confirm the property, rooms, pricing, and availability.`}
+          retryHref={`/stays/${encodeURIComponent(slug)}`}
+          secondaryAction={{ label: "Back to search", href: "/search" }}
+        />
+      </main>
+    );
+  }
+  if (result.status === "not_found") notFound();
+  const property = result.status === "data" ? result.data : null;
   if (!property) notFound();
 
   const reviews = await getApprovedTestimonials(slug, 4);
@@ -49,7 +67,10 @@ export default async function StayPage({
 
       <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
         <div className="space-y-6">
-          <RoomGalleryCarousel slides={slides} label={`${property.name} gallery`} />
+          <RoomGalleryCarousel
+            slides={slides}
+            label={`${property.name} gallery`}
+          />
           <section className="surface-card p-5">
             <h2 className="text-title-sm">About this stay</h2>
             <p className="mt-2 text-body-sm text-muted-foreground">
@@ -92,7 +113,9 @@ export default async function StayPage({
           {rooms.length > 0 ? (
             <BookingWidget rooms={rooms} defaults={sp} />
           ) : (
-            <div className="surface-card p-5 text-muted-foreground">No rooms available yet.</div>
+            <div className="surface-card p-5 text-muted-foreground">
+              No rooms available yet.
+            </div>
           )}
         </aside>
       </div>

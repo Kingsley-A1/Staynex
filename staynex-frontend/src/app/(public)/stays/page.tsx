@@ -2,17 +2,18 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
 import { AnimatedGradient } from "@/components/animated-gradient";
+import { RecoveryNotice } from "@/components/recovery-notice";
 import { PropertyCard, PropertyCardSkeletonGrid } from "@/ui";
 import { SearchPanel } from "@/features/booking/search-panel";
-import { CITIES } from "@/features/properties/fixtures";
-import { searchProperties } from "@/lib/server-catalog";
+import { getCatalogCities, searchProperties } from "@/lib/server-catalog";
 import type { PropertySummary } from "@/lib/types";
 
 export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Your stays — Staynex",
-  description: "Browse available stays across Staynex launch cities, neatly aggregated.",
+  description:
+    "Browse available stays across Staynex launch cities, neatly aggregated.",
 };
 
 export default async function StaysDashboardPage() {
@@ -24,11 +25,10 @@ export default async function StaysDashboardPage() {
         <AnimatedGradient />
         <div className="layout-container relative z-10 space-y-5 py-10 sm:py-12">
           <header className="space-y-1">
-            <h1 className="text-display-sm text-ink">
-              Find your next stay
-            </h1>
+            <h1 className="text-display-sm text-ink">Find your next stay</h1>
             <p className="text-body-lg text-muted-foreground">
-              Verified stays across our launch cities — pick up where you left off.
+              Verified stays across our launch cities — pick up where you left
+              off.
             </p>
           </header>
           <div className="max-w-4xl">
@@ -42,22 +42,6 @@ export default async function StaysDashboardPage() {
         <Suspense fallback={<StaysSectionsFallback />}>
           <StaysSections />
         </Suspense>
-
-        {/* Explore by city — static, no data dependency */}
-        <section className="space-y-4">
-          <h2 className="text-title-md text-ink">Explore by city</h2>
-          <div className="flex flex-wrap gap-2">
-            {CITIES.map((c) => (
-              <Link
-                key={c.id}
-                href={`/search?city=${encodeURIComponent(c.name)}`}
-                className="inline-flex items-center rounded-full border border-border bg-surface-raised px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
-              >
-                {c.name}
-              </Link>
-            ))}
-          </div>
-        </section>
       </div>
     </main>
   );
@@ -66,22 +50,57 @@ export default async function StaysDashboardPage() {
 interface CitySection {
   city: string;
   items: PropertySummary[];
-  live: boolean;
+  unavailableReason: string | null;
 }
 
 async function StaysSections() {
+  const citiesResult = await getCatalogCities();
+  if (citiesResult.status === "unavailable") {
+    return (
+      <RecoveryNotice
+        title="Live destinations could not be loaded"
+        reason={`${citiesResult.reason} Staynex cannot show destinations or properties until live records are verified.`}
+        retryHref="/stays?retry=destinations"
+        secondaryAction={{ label: "Open search", href: "/search" }}
+      />
+    );
+  }
+  if (citiesResult.status === "empty") {
+    return (
+      <div className="surface-card p-10 text-center text-muted-foreground">
+        No destinations are published yet.
+      </div>
+    );
+  }
+
   const sections = await Promise.all(
-    CITIES.map(async (c): Promise<CitySection> => {
+    citiesResult.data.map(async (c): Promise<CitySection> => {
       const res = await searchProperties({ city: c.name });
-      return { city: c.name, items: res.items, live: res.live };
+      return {
+        city: c.name,
+        items: res.data ?? [],
+        unavailableReason: res.status === "unavailable" ? res.reason : null,
+      };
     }),
   );
 
   const populated = sections.filter((s) => s.items.length > 0);
   const featured = populated.flatMap((s) => s.items).slice(0, 4);
-  const anyLive = sections.some((s) => s.live);
+  const unavailable = sections
+    .map((section) => section.unavailableReason)
+    .filter((reason): reason is string => Boolean(reason));
 
   if (populated.length === 0) {
+    if (unavailable.length > 0) {
+      return (
+        <RecoveryNotice
+          title="Live stays could not be loaded"
+          reason={`${unavailable[0]} Results are withheld because current availability must be verified.`}
+          retryHref="/stays?retry=properties"
+          secondaryAction={{ label: "Open search", href: "/search" }}
+        />
+      );
+    }
     return (
       <div className="surface-card p-10 text-center">
         <p className="text-muted-foreground">No stays to show yet.</p>
@@ -97,7 +116,19 @@ async function StaysSections() {
 
   return (
     <div className="space-y-12">
-      <StaySection title="Featured stays" subtitle="Hand-picked places to start." items={featured} />
+      {unavailable.length > 0 && (
+        <RecoveryNotice
+          title="Some destinations could not be refreshed"
+          reason={`${unavailable[0]} The stays below are only from destinations that returned live data.`}
+          retryHref="/stays?retry=properties"
+          secondaryAction={{ label: "Open search", href: "/search" }}
+        />
+      )}
+      <StaySection
+        title="Featured stays"
+        subtitle="Hand-picked places to start."
+        items={featured}
+      />
       {populated.map((s) => (
         <StaySection
           key={s.city}
@@ -107,11 +138,20 @@ async function StaysSections() {
           items={s.items.slice(0, 4)}
         />
       ))}
-      {!anyLive && (
-        <p className="text-caption">
-          Showing sample data — live results appear when the API is connected.
-        </p>
-      )}
+      <section className="space-y-4">
+        <h2 className="text-title-md text-ink">Explore by city</h2>
+        <div className="flex flex-wrap gap-2">
+          {citiesResult.data.map((city) => (
+            <Link
+              key={city.id}
+              href={`/search?city=${encodeURIComponent(city.name)}`}
+              className="inline-flex items-center rounded-full border border-border bg-surface-raised px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+            >
+              {city.name}
+            </Link>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
@@ -154,7 +194,12 @@ function StaySection({
       </div>
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {items.map((p) => (
-          <PropertyCard key={p.id} property={p} href={`/stays/${p.slug}`} actionLabel="View" />
+          <PropertyCard
+            key={p.id}
+            property={p}
+            href={`/stays/${p.slug}`}
+            actionLabel="View"
+          />
         ))}
       </div>
     </section>

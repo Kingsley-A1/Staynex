@@ -5,10 +5,25 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { prisma } from "../dist/db/client.js";
+import { loadEnv } from "../dist/config/env.js";
 import { BankDirectoryService } from "../dist/src/modules/payments/bank-directory.service.js";
+import { resolvePaymentRuntime } from "../dist/src/modules/payments/payment-config.service.js";
 import { PaystackService } from "../dist/src/modules/payments/paystack.service.js";
 
-process.env.PAYSTACK_SECRET_KEY = "test-secret";
+function paystackService() {
+  const runtime = resolvePaymentRuntime(
+    loadEnv({
+      NODE_ENV: "test",
+      DATABASE_URL: "postgresql://user:password@localhost:26257/staynex?schema=public",
+      PAYMENT_ENABLED: "false",
+      PAYSTACK_TEST_SECRET_KEY: "sk_test_bank_directory",
+    }),
+  );
+  return new PaystackService({
+    current: () => runtime,
+    provider: (name, mode = runtime.mode) => runtime.providersByMode[mode][name],
+  });
+}
 
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -45,7 +60,7 @@ test("bank directory follows Paystack cursors, filters inactive banks, and sorts
   };
 
   try {
-    const banks = await new PaystackService().listBanks();
+    const banks = await paystackService().listBanks();
     assert.deepEqual(
       banks.map((bank) => bank.name),
       ["Alpha Bank", "Zulu Bank"],
@@ -59,7 +74,7 @@ test("bank directory follows Paystack cursors, filters inactive banks, and sorts
 
 test("account resolution returns the provider name and surfaces invalid details as a client error", async () => {
   const originalFetch = globalThis.fetch;
-  const service = new PaystackService();
+  const service = paystackService();
   globalThis.fetch = async () =>
     jsonResponse({
       status: true,

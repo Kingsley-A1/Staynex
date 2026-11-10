@@ -33,15 +33,27 @@ export default async function ConfirmedPage({
   if (!booking) {
     return (
       <main className="layout-container py-16 text-center">
-        <p className="text-muted-foreground">We couldn&apos;t load this booking.</p>
-        <LinkButton href="/search" className="mt-4">
-          Search stays
-        </LinkButton>
+        <h1 className="text-title-md text-ink">This booking could not be opened</h1>
+        <p className="mx-auto mt-2 max-w-lg text-muted-foreground">
+          It may belong to another account, your session may have expired, or Staynex may be
+          temporarily unavailable. Sign in with the booking account, then retry.
+        </p>
+        <div className="mt-4 flex justify-center gap-3">
+          {bookingId ? (
+            <LinkButton href={`/booking/confirmed?booking=${encodeURIComponent(bookingId)}`}>
+              Retry
+            </LinkButton>
+          ) : null}
+          <LinkButton href="/search" variant="secondary">
+            Close and search stays
+          </LinkButton>
+        </div>
       </main>
     );
   }
 
   const confirmed = booking.status === "CONFIRMED";
+  const isTest = booking.paymentMode === "TEST";
   const reference = booking.paymentReference;
   const showVoucher = confirmed && Boolean(reference);
   const roomSub = booking.unitCode
@@ -54,17 +66,21 @@ export default async function ConfirmedPage({
         <div className="space-y-2 text-center">
           <div
             className={`mx-auto grid size-12 place-items-center rounded-full text-lg font-bold ${
-              confirmed ? "bg-success-surface text-success" : "bg-warning-surface text-warning"
+              confirmed && !isTest
+                ? "bg-success-surface text-success"
+                : "bg-warning-surface text-warning"
             }`}
           >
-            {confirmed ? "✓" : "…"}
+            {isTest ? "T" : confirmed ? "✓" : "…"}
           </div>
           <h1 className="text-title-lg text-ink">
-            {confirmed ? "Booking confirmed" : "Booking pending"}
+            {isTest ? "Test booking confirmed" : confirmed ? "Booking confirmed" : "Booking pending"}
           </h1>
           <p className="text-muted-foreground">
-            {confirmed
-              ? "Your stay is reserved. Present this confirmation at check-in."
+            {isTest
+              ? "No money was charged. This sandbox booking does not reserve live inventory and is not valid for check-in."
+              : confirmed
+                ? "Your stay is reserved. Present this confirmation at check-in."
               : "We're still confirming your payment for this booking."}
           </p>
         </div>
@@ -74,16 +90,19 @@ export default async function ConfirmedPage({
           <div className="surface-card flex flex-col items-center gap-4 p-5 text-center sm:flex-row sm:text-left">
             <img
               src={voucherQrUrl(reference)}
-              alt="Scan to verify this booking at check-in"
+              alt={isTest ? "Scan to verify this test booking" : "Scan to verify this booking at check-in"}
               width={132}
               height={132}
               className="size-[132px] shrink-0 rounded-lg border border-border bg-white p-2"
             />
             <div className="min-w-0 space-y-2">
-              <p className="text-sm font-semibold text-ink">Present this at check-in</p>
+              <p className="text-sm font-semibold text-ink">
+                {isTest ? "Test evidence — not valid for check-in" : "Present this at check-in"}
+              </p>
               <p className="text-caption text-muted-foreground">
-                The host scans this code to verify your booking on Staynex — no screenshot needed.
-                Your receipt is also in your email.
+                {isTest
+                  ? "The verification page will identify this as a no-charge test booking."
+                  : "The host scans this code to verify your booking on Staynex — no screenshot needed. Your receipt is also in your email."}
               </p>
               <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
                 <a href={voucherPdfUrl(reference)} className={DOWNLOAD_BTN}>
@@ -114,13 +133,19 @@ export default async function ConfirmedPage({
               infants: booking.infants,
             })}
           />
-          <Row label="Amount paid" value={formatNairaFromKobo(booking.amountKobo)} />
-          <Row label="Payment" value={booking.paymentStatus} />
+          <Row
+            label={isTest ? "Test amount" : "Amount paid"}
+            value={formatNairaFromKobo(booking.amountKobo)}
+          />
+          <Row
+            label="Payment"
+            value={isTest ? "Test payment — no money charged" : booking.paymentStatus}
+          />
           <Row label="Reference" value={reference ?? "—"} />
         </div>
 
         <div className="flex flex-wrap gap-3">
-          {confirmed && (
+          {confirmed && !isTest && (
             <LinkButton href={`/reviews/submit?booking=${booking.id}`}>Write a review</LinkButton>
           )}
           <LinkButton href="/search" variant="secondary">

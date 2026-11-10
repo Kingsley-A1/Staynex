@@ -125,6 +125,18 @@ test("host property authoring supports validated city-area selection", async () 
   assert.match(mapper, /area: \{ select: \{ id: true, name: true \} \}/);
 });
 
+test("host property creation fails closed when live city identifiers are unavailable", async () => {
+  const [newPage, form, serverHost] = await Promise.all([
+    source("../src/app/(host)/host/properties/new/page.tsx"),
+    source("../src/features/properties/property-form.tsx"),
+    source("../src/lib/server-host.ts"),
+  ]);
+  assert.match(newPage, /citiesAvailable=\{result\.status === "data"\}/);
+  assert.match(form, /disabled=\{pending \|\| !citiesAvailable\}/);
+  assert.match(form, /Live destinations are required/);
+  assert.doesNotMatch(serverHost, /\bCITIES\b/);
+});
+
 test("welcome gradient avoids oversized conic textures and blur filters", async () => {
   const motion = await source("../src/styles/motion.css");
   const gradient = motion.slice(

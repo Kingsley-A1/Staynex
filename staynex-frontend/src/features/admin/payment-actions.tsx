@@ -4,7 +4,19 @@ import { type FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/ui";
 import { adminApi, apiErrorMessage } from "@/lib/api";
-import type { PaymentState } from "@/lib/types";
+import {
+  PAYMENT_PROVIDER_LABELS,
+  type PaymentProviderName,
+  type PaymentState,
+} from "@/lib/types";
+
+/** Label the provider that actually captured this payment; never assume one. */
+function providerLabel(provider: string | null): string {
+  if (provider && provider in PAYMENT_PROVIDER_LABELS) {
+    return PAYMENT_PROVIDER_LABELS[provider as PaymentProviderName];
+  }
+  return "the payment provider";
+}
 
 /**
  * Audited money actions for one payment. Re-verify forces a fresh provider
@@ -15,9 +27,15 @@ import type { PaymentState } from "@/lib/types";
 export function PaymentActions({
   reference,
   status,
+  provider = null,
+  canRefund = false,
 }: {
   reference: string;
   status: PaymentState;
+  /** Provider persisted on the payment row — drives the confirmation copy. */
+  provider?: string | null;
+  /** Only ADMIN_MANAGER may initiate a money-moving refund. */
+  canRefund?: boolean;
 }) {
   const router = useRouter();
   const [confirmingRefund, setConfirmingRefund] = useState(false);
@@ -57,16 +75,26 @@ export function PaymentActions({
     }
   }
 
-  if (!refundable && !reverifiable) {
+  if (!reverifiable && !(refundable && canRefund)) {
+    if (refundable) {
+      return (
+        <span className="text-caption text-muted-foreground">
+          Manager approval required
+        </span>
+      );
+    }
     return <span className="text-caption text-muted-foreground">—</span>;
   }
 
   if (confirmingRefund) {
     return (
-      <form onSubmit={refund} className="flex w-56 flex-col items-stretch gap-1.5">
+      <form
+        onSubmit={refund}
+        className="flex w-56 flex-col items-stretch gap-1.5"
+      >
         <p className="text-caption font-medium text-error">
-          Refund the full amount via Paystack? The booking is cancelled and any
-          unsettled payout is clawed back.
+          Refund the full amount via {providerLabel(provider)}? The booking is
+          cancelled and any unsettled payout is clawed back.
         </p>
         <input
           autoFocus
@@ -87,7 +115,12 @@ export function PaymentActions({
           >
             Cancel
           </Button>
-          <Button type="submit" variant="danger" size="sm" disabled={busy === "refund"}>
+          <Button
+            type="submit"
+            variant="danger"
+            size="sm"
+            disabled={busy === "refund"}
+          >
             {busy === "refund" ? "Refunding…" : "Confirm refund"}
           </Button>
         </div>
@@ -104,12 +137,21 @@ export function PaymentActions({
     <div className="flex flex-col items-end gap-1">
       <div className="flex gap-2">
         {reverifiable && (
-          <Button variant="secondary" size="sm" onClick={reverify} disabled={busy !== null}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={reverify}
+            disabled={busy !== null}
+          >
             {busy === "reverify" ? "Checking…" : "Re-verify"}
           </Button>
         )}
-        {refundable && (
-          <Button variant="ghost" size="sm" onClick={() => setConfirmingRefund(true)}>
+        {refundable && canRefund && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setConfirmingRefund(true)}
+          >
             Refund…
           </Button>
         )}

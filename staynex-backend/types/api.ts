@@ -169,6 +169,8 @@ export type PaymentState =
   | "REQUIRES_REFUND"
   | "REFUNDED";
 
+export type PaymentMode = "TEST" | "LIVE";
+
 /** Verified availability + price for a room over a date range (kobo). */
 export interface AvailabilityQuote {
   roomTypeId: string;
@@ -198,14 +200,25 @@ export interface HoldSummary {
   expired: boolean;
 }
 
+/**
+ * Payin providers the platform can charge a guest through. Distinct from the
+ * payout-side `provider: "paystack"` fields below — payouts are a separate
+ * money direction and remain Paystack-only.
+ */
+export type PaymentProviderName = "paystack" | "opay";
+
 export interface CheckoutResult {
   bookingId: string;
   reference: string;
   authorizationUrl: string;
+  /** Which provider the guest is being redirected to, so the UI can say so. */
+  provider: PaymentProviderName;
+  mode: PaymentMode;
 }
 
 export interface PaymentStatusView {
   reference: string;
+  paymentMode: PaymentMode;
   paymentStatus: PaymentState;
   bookingId: string;
   bookingStatus: BookingStatus;
@@ -230,6 +243,7 @@ export interface BookingView {
   unitCode: string | null;
   paymentStatus: PaymentState;
   paymentReference: string | null;
+  paymentMode: PaymentMode | null;
 }
 
 /**
@@ -239,22 +253,16 @@ export interface BookingView {
  * paid booking without leaking price or PII to whoever holds the QR.
  */
 export interface VoucherVerification {
-  /** True only when the booking is CONFIRMED and its payment is SUCCESS. */
-  valid: boolean;
-  status: "CONFIRMED" | "PENDING" | "CANCELLED" | "NOT_FOUND";
+  /** TEST bookings are always false even after a successful sandbox charge. */
+  validForCheckIn: boolean;
+  status: "CONFIRMED" | "TEST" | "PENDING" | "CANCELLED" | "NOT_FOUND";
   reference: string;
-  guestName: string | null;
-  guestEmailMasked: string | null;
+  mode: PaymentMode | null;
   propertyName: string | null;
   cityName: string | null;
-  areaName: string | null;
   roomTypeName: string | null;
-  unitCode: string | null;
   checkIn: string | null;
   checkOut: string | null;
-  nights: number | null;
-  guests: { adults: number; children: number; infants: number } | null;
-  confirmedAt: string | null;
 }
 
 // --- Phase 4: dashboards, notifications, AI logs ---
@@ -320,6 +328,8 @@ export interface AdminPaymentRow {
   ownerPayoutKobo: number;
   currency: string;
   provider: string | null;
+  providerReference: string | null;
+  mode: PaymentMode;
   status: PaymentState;
   paidAt: string | null;
   payoutStatus: PayoutStatusValue | null;
@@ -359,6 +369,8 @@ export interface AdminPaymentExceptionRow {
   guestEmail: string | null;
   grossAmountKobo: number;
   currency: string;
+  /** Provider that captured the payment — refunds are actioned from here. */
+  provider: string | null;
   status: PaymentState;
   createdAt: string;
   updatedAt: string;
@@ -427,7 +439,9 @@ export interface AdminPayoutRow {
   bankName: string | null;
   accountName: string | null;
   accountNumberLast4: string | null;
-  /** Settlement reference on PAID, reason on FAILED, clawback note on refunds. */
+  /** External bank or transfer identifier proving a PAID settlement. */
+  settlementReference: string | null;
+  /** Internal note, failure reason, or clawback explanation. */
   note: string | null;
   /** When the payout becomes eligible to settle (checkIn + 24h). */
   eligibleAt: string;

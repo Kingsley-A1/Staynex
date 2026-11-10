@@ -116,6 +116,28 @@ test("Google sign-in can hand admin managers into the MFA form", async () => {
   assert.match(form, /setMfaChallenge\(challenge\)/);
 });
 
+test("admin money controls expose mutations only to managers", async () => {
+  const [payoutPage, payoutActions, bookingPage, paymentActions] =
+    await Promise.all([
+      source("../src/app/(admin)/admin/payouts/page.tsx"),
+      source("../src/features/admin/payout-actions.tsx"),
+      source("../src/app/(admin)/admin/bookings/page.tsx"),
+      source("../src/features/admin/payment-actions.tsx"),
+    ]);
+
+  assert.match(payoutPage, /getServerUser\(\)/);
+  assert.match(payoutPage, /capabilities\.includes\("ADMIN_MANAGER"\)/);
+  assert.match(payoutPage, /canManageMoney\s*\?\s*\(/);
+  assert.match(payoutActions, /Settlement reference/);
+  assert.match(payoutActions, /settlementReference/);
+
+  assert.match(bookingPage, /getServerUser\(\)/);
+  assert.match(bookingPage, /capabilities\.includes\("ADMIN_MANAGER"\)/);
+  assert.match(bookingPage, /canRefund=\{canManageMoney\}/);
+  assert.match(paymentActions, /canRefund/);
+  assert.match(paymentActions, /refundable && canRefund/);
+});
+
 function restoreEnv(name, value) {
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;

@@ -10,6 +10,7 @@ import {
   getAdminPaymentExceptions,
   getAdminPayments,
 } from "@/lib/server-reports";
+import { getServerUser } from "@/lib/server-auth";
 import { formatNairaFromKobo, formatDate, formatOccupancy } from "@/lib/format";
 import {
   BOOKING_STATUS_LABELS,
@@ -29,7 +30,10 @@ interface PageSearchParams {
 }
 
 /** Same-page link that swaps one cursor param, preserving the filters. */
-function pageHref(params: PageSearchParams, patch: Partial<PageSearchParams>): string {
+function pageHref(
+  params: PageSearchParams,
+  patch: Partial<PageSearchParams>,
+): string {
   const next = new URLSearchParams();
   const merged = { ...params, ...patch };
   for (const [key, value] of Object.entries(merged)) {
@@ -45,15 +49,27 @@ export default async function AdminBookingsPage({
   searchParams: Promise<PageSearchParams>;
 }) {
   const params = await searchParams;
-  const [bookingsRes, paymentsRes, exceptionsRes] = await Promise.all([
-    getAdminBookings({ q: params.q, status: params.bstatus, cursor: params.bcursor }),
-    getAdminPayments({ q: params.q, status: params.pstatus, cursor: params.pcursor }),
+  const [bookingsRes, paymentsRes, exceptionsRes, user] = await Promise.all([
+    getAdminBookings({
+      q: params.q,
+      status: params.bstatus,
+      cursor: params.bcursor,
+    }),
+    getAdminPayments({
+      q: params.q,
+      status: params.pstatus,
+      cursor: params.pcursor,
+    }),
     getAdminPaymentExceptions(),
+    getServerUser(),
   ]);
 
   if (!bookingsRes.data || !paymentsRes.data) {
     return (
-      <div className="surface-card p-6 text-center text-muted-foreground" role="status">
+      <div
+        className="surface-card p-6 text-center text-muted-foreground"
+        role="status"
+      >
         {bookingsRes.offline || paymentsRes.offline
           ? "We couldn't reach the booking service. Start the API to see live bookings and payments."
           : "No booking data is available yet."}
@@ -64,6 +80,7 @@ export default async function AdminBookingsPage({
   const bookings = bookingsRes.data;
   const payments = paymentsRes.data;
   const exceptions = exceptionsRes.data ?? [];
+  const canManageMoney = user?.capabilities.includes("ADMIN_MANAGER") ?? false;
 
   return (
     <div className="space-y-10">
@@ -84,7 +101,9 @@ export default async function AdminBookingsPage({
                 <tr>
                   <th className="px-4 py-3 font-semibold">Reference</th>
                   <th className="px-4 py-3 font-semibold">Property / guest</th>
-                  <th className="px-4 py-3 font-semibold text-right">Captured</th>
+                  <th className="px-4 py-3 font-semibold text-right">
+                    Captured
+                  </th>
                   <th className="px-4 py-3 font-semibold">Why</th>
                   <th className="px-4 py-3 font-semibold text-right">Action</th>
                 </tr>
@@ -96,20 +115,33 @@ export default async function AdminBookingsPage({
                       {e.reference ?? "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-ink">{e.propertyName}</div>
-                      <div className="text-caption">{e.guestEmail ?? "anonymous guest"}</div>
+                      <div className="font-medium text-ink">
+                        {e.propertyName}
+                      </div>
+                      <div className="text-caption">
+                        {e.guestEmail ?? "anonymous guest"}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">
                       {formatNairaFromKobo(e.grossAmountKobo)}
                     </td>
                     <td className="max-w-[320px] px-4 py-3 text-caption text-muted-foreground">
-                      {e.events[0]?.detail ?? e.events[0]?.outcome ?? "Flagged for refund."}
+                      {e.events[0]?.detail ??
+                        e.events[0]?.outcome ??
+                        "Flagged for refund."}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {e.reference ? (
-                        <PaymentActions reference={e.reference} status={e.status} />
+                        <PaymentActions
+                          reference={e.reference}
+                          status={e.status}
+                          provider={e.provider}
+                          canRefund={canManageMoney}
+                        />
                       ) : (
-                        <span className="text-caption text-muted-foreground">No reference</span>
+                        <span className="text-caption text-muted-foreground">
+                          No reference
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -121,7 +153,10 @@ export default async function AdminBookingsPage({
       )}
 
       {/* Shared search + per-section status filters (GET form, server-rendered). */}
-      <form method="GET" className="surface-card flex flex-wrap items-end gap-3 p-4">
+      <form
+        method="GET"
+        className="surface-card flex flex-wrap items-end gap-3 p-4"
+      >
         <label className="flex min-w-56 flex-1 flex-col gap-1 text-caption font-medium text-muted-foreground">
           Search
           <input
@@ -169,7 +204,10 @@ export default async function AdminBookingsPage({
           Filter
         </button>
         {(params.q || params.bstatus || params.pstatus) && (
-          <Link href="/admin/bookings" className="text-sm text-muted-foreground underline">
+          <Link
+            href="/admin/bookings"
+            className="text-sm text-muted-foreground underline"
+          >
             Clear
           </Link>
         )}
@@ -179,7 +217,9 @@ export default async function AdminBookingsPage({
         <h2 className="text-title-sm text-ink">Bookings</h2>
         <div className="surface-card overflow-x-auto">
           {bookings.rows.length === 0 ? (
-            <p className="p-6 text-center text-muted-foreground">No bookings match.</p>
+            <p className="p-6 text-center text-muted-foreground">
+              No bookings match.
+            </p>
           ) : (
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="border-b border-border text-caption uppercase tracking-wide text-muted-foreground">
@@ -196,11 +236,17 @@ export default async function AdminBookingsPage({
                 {bookings.rows.map((b) => (
                   <tr key={b.id}>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-ink">{b.propertyName}</div>
-                      <div className="text-caption">{b.roomName} · {b.cityName}</div>
+                      <div className="font-medium text-ink">
+                        {b.propertyName}
+                      </div>
+                      <div className="text-caption">
+                        {b.roomName} · {b.cityName}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-muted-foreground">{b.guestEmail ?? "—"}</div>
+                      <div className="text-muted-foreground">
+                        {b.guestEmail ?? "—"}
+                      </div>
                       <div className="text-caption">{formatOccupancy(b)}</div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
@@ -209,8 +255,14 @@ export default async function AdminBookingsPage({
                     <td className="px-4 py-3 font-medium text-ink">
                       {formatNairaFromKobo(b.amountKobo)}
                     </td>
-                    <td className="px-4 py-3"><BookingStatusBadge status={b.status as BookingStatus} /></td>
-                    <td className="px-4 py-3"><PaymentStatusBadge status={b.paymentStatus as PaymentState} /></td>
+                    <td className="px-4 py-3">
+                      <BookingStatusBadge status={b.status as BookingStatus} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <PaymentStatusBadge
+                        status={b.paymentStatus as PaymentState}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -219,7 +271,10 @@ export default async function AdminBookingsPage({
         </div>
         <div className="flex justify-between">
           {params.bcursor ? (
-            <Link href={pageHref(params, { bcursor: undefined })} className="text-sm text-primary underline">
+            <Link
+              href={pageHref(params, { bcursor: undefined })}
+              className="text-sm text-primary underline"
+            >
               ← Newest
             </Link>
           ) : (
@@ -240,7 +295,9 @@ export default async function AdminBookingsPage({
         <h2 className="text-title-sm text-ink">Payments</h2>
         <div className="surface-card overflow-x-auto">
           {payments.rows.length === 0 ? (
-            <p className="p-6 text-center text-muted-foreground">No payments match.</p>
+            <p className="p-6 text-center text-muted-foreground">
+              No payments match.
+            </p>
           ) : (
             <table className="w-full min-w-[980px] text-left text-sm">
               <thead className="border-b border-border text-caption uppercase tracking-wide text-muted-foreground">
@@ -248,12 +305,18 @@ export default async function AdminBookingsPage({
                   <th className="px-4 py-3 font-semibold">Reference</th>
                   <th className="px-4 py-3 font-semibold">Property / guest</th>
                   <th className="px-4 py-3 font-semibold text-right">Gross</th>
-                  <th className="px-4 py-3 font-semibold text-right">Staynex fee</th>
-                  <th className="px-4 py-3 font-semibold text-right">Host payout</th>
+                  <th className="px-4 py-3 font-semibold text-right">
+                    Staynex fee
+                  </th>
+                  <th className="px-4 py-3 font-semibold text-right">
+                    Host payout
+                  </th>
                   <th className="px-4 py-3 font-semibold">Payment</th>
                   <th className="px-4 py-3 font-semibold">Payout</th>
                   <th className="px-4 py-3 font-semibold">Created</th>
-                  <th className="px-4 py-3 font-semibold text-right">Actions</th>
+                  <th className="px-4 py-3 font-semibold text-right">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -275,14 +338,27 @@ export default async function AdminBookingsPage({
                     <td className="px-4 py-3 text-right font-medium text-ink">
                       {formatNairaFromKobo(p.ownerPayoutKobo)}
                     </td>
-                    <td className="px-4 py-3"><PaymentStatusBadge status={p.status} /></td>
-                    <td className="px-4 py-3"><PayoutStatusBadge status={p.payoutStatus} /></td>
-                    <td className="px-4 py-3 text-muted-foreground">{formatDate(p.createdAt)}</td>
+                    <td className="px-4 py-3">
+                      <PaymentStatusBadge status={p.status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <PayoutStatusBadge status={p.payoutStatus} />
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {formatDate(p.createdAt)}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       {p.reference ? (
-                        <PaymentActions reference={p.reference} status={p.status} />
+                        <PaymentActions
+                          reference={p.reference}
+                          status={p.status}
+                          provider={p.provider}
+                          canRefund={canManageMoney}
+                        />
                       ) : (
-                        <span className="text-caption text-muted-foreground">—</span>
+                        <span className="text-caption text-muted-foreground">
+                          —
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -293,7 +369,10 @@ export default async function AdminBookingsPage({
         </div>
         <div className="flex justify-between">
           {params.pcursor ? (
-            <Link href={pageHref(params, { pcursor: undefined })} className="text-sm text-primary underline">
+            <Link
+              href={pageHref(params, { pcursor: undefined })}
+              className="text-sm text-primary underline"
+            >
               ← Newest
             </Link>
           ) : (
