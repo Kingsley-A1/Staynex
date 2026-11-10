@@ -7,23 +7,28 @@
     "dev": "pnpm --filter @staynex/frontend dev",
     "dev:frontend": "pnpm --filter @staynex/frontend dev",
     "dev:backend": "pnpm --filter @staynex/backend dev",
+    "dev:mobile": "pnpm --filter @staynex/mobile start",
     "build": "pnpm -r --if-present build",
     "check": "pnpm -r --if-present check",
+    "test": "pnpm -r --if-present test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "db:generate": "pnpm --filter @staynex/backend prisma:generate",
     "db:push": "pnpm --filter @staynex/backend prisma:push",
     "db:migrate": "pnpm --filter @staynex/backend prisma:migrate",
-    "db:migrate:deploy": "pnpm --filter @staynex/backend prisma:migrate:deploy"
+    "db:migrate:deploy": "pnpm --filter @staynex/backend prisma:migrate:deploy",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^9.39.5",
+    "globals": "^17.11.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
     "prettier": "^3.6.2",
     "turbo": "^2.5.6",
-    "typescript": "^5.9.2"
-  },
-  "pnpm": {
-    "overrides": {
-      "multer": "2.2.0",
-      "postcss": "8.5.16"
-    }
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.67.0"
   }
 }

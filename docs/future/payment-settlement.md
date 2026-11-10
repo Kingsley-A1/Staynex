@@ -20,11 +20,11 @@ commissionRateBps = the rate used, in basis points (1000 = 10%)
 - `platformFeeKobo + ownerPayoutKobo === grossAmountKobo` exactly (the owner
   receives the rounding remainder — no leak).
 - The single implementation lives in
-  [`commission.ts`](../staynex-backend/src/modules/payments/commission.ts)
+  [`commission.ts`](../../staynex-backend/src/modules/payments/commission.ts)
   (`splitPayment`, `resolveCommissionBps`). Nothing else re-derives the split.
 - Commission defaults to **1000 bps (10%)** and is overridable via the
   `PLATFORM_COMMISSION_BPS` env var, validated at boot in
-  [`config/env.ts`](../staynex-backend/config/env.ts).
+  [`config/env.ts`](../../staynex-backend/config/env.ts).
 
 ### `Payment.amount` (compatibility)
 
@@ -42,7 +42,7 @@ is created as **pending** and settled **manually**.
 
 ### Flow
 
-1. **Checkout** ([`bookings.service.ts`](../staynex-backend/src/modules/bookings/bookings.service.ts) `checkout`)
+1. **Checkout** ([`bookings.service.ts`](../../staynex-backend/src/modules/bookings/bookings.service.ts) `checkout`)
    creates a `PENDING_PAYMENT` booking and a `PENDING` payment, snapshotting
    `grossAmountKobo / platformFeeKobo / ownerPayoutKobo / commissionRateBps`.
    Paystack collects the **full gross** amount from the guest.

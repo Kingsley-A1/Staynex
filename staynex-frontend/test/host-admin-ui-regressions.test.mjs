@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { apiClientSource } from "./read-source.mjs";
 
 async function source(path) {
   return readFile(new URL(path, import.meta.url), "utf8");
@@ -105,7 +106,7 @@ test("mobile workspace drawer overlays sticky header and breadcrumbs", async () 
 test("host property authoring supports validated city-area selection", async () => {
   const [form, api, dto, service, mapper] = await Promise.all([
     source("../src/features/properties/property-form.tsx"),
-    source("../src/lib/api.ts"),
+    apiClientSource(),
     source("../../staynex-backend/src/modules/properties/dto.ts"),
     source(
       "../../staynex-backend/src/modules/properties/properties.service.ts",
@@ -139,7 +140,7 @@ test("welcome gradient avoids oversized conic textures and blur filters", async 
 test("host room counts use explicit accessible increase and decrease controls", async () => {
   const [rooms, api] = await Promise.all([
     source("../src/features/properties/room-manager.tsx"),
-    source("../src/lib/api.ts"),
+    apiClientSource(),
   ]);
   assert.match(rooms, /Physical rooms/);
   assert.match(rooms, /aria-label={`Remove one/);
@@ -271,7 +272,7 @@ test("property lifecycle controls hide expired guest inventory and expose safe d
       source("../src/features/properties/property-delete-action.tsx"),
       source("../src/app/(host)/host/properties/[id]/page.tsx"),
       source("../src/app/(admin)/admin/approvals/[id]/page.tsx"),
-      source("../src/lib/api.ts"),
+      apiClientSource(),
       source("../src/app/(admin)/admin/properties/page.tsx"),
     ]);
 
@@ -291,7 +292,7 @@ test("property lifecycle controls hide expired guest inventory and expose safe d
 test("new room types visibly and server-contractually default to one room", async () => {
   const [rooms, api] = await Promise.all([
     source("../src/features/properties/room-manager.tsx"),
-    source("../src/lib/api.ts"),
+    apiClientSource(),
   ]);
   assert.match(rooms, /const DEFAULT_ROOM_QUANTITY = 1/);
   assert.match(rooms, /label="Room quantity"/);

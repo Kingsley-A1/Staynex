@@ -12,3 +12,17 @@ pnpm-debug.log*
 *.docx
 skill.zip
 .email-previews/
+artifacts/
+lighthouse-*.html
+
+# Expo / React Native
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Nested git worktrees checked out inside this one. Never commit these:
+# git add -A would otherwise stage them as an embedded repository.
+staynex-opay-review/

@@ -7,7 +7,7 @@ export function escapeHtml(value: string | number): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
+    .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
 
@@ -15,12 +15,16 @@ export function escapeHtmlAttribute(value: string): string {
   return escapeHtml(value).replace(/`/g, "&#96;");
 }
 
-export function optionalText(value: string | null | undefined): string | undefined {
+export function optionalText(
+  value: string | null | undefined,
+): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
 
-export function firstName(value: string | null | undefined): string | undefined {
+export function firstName(
+  value: string | null | undefined,
+): string | undefined {
   return optionalText(value)?.split(/\s+/)[0];
 }
 
@@ -42,7 +46,7 @@ export function validateStaynexAppOrigin(origin: string): string {
   } catch {
     throw new Error("NEXT_PUBLIC_APP_URL must be an absolute URL");
   }
-  if (!['http:', 'https:'].includes(url.protocol)) {
+  if (!["http:", "https:"].includes(url.protocol)) {
     throw new Error("NEXT_PUBLIC_APP_URL must use http or https");
   }
   if (url.username || url.password || url.search || url.hash) {
@@ -53,13 +57,19 @@ export function validateStaynexAppOrigin(origin: string): string {
   return url.origin;
 }
 
-export function buildStaynexUrl(appOrigin: string, internalPath: string): string {
+export function buildStaynexUrl(
+  appOrigin: string,
+  internalPath: string,
+): string {
   const origin = validateStaynexAppOrigin(appOrigin);
   if (!internalPath.startsWith("/") || internalPath.startsWith("//")) {
-    throw new Error("Staynex Bookings email links must use a known internal path");
+    throw new Error(
+      "Staynex Bookings email links must use a known internal path",
+    );
   }
   const url = new URL(internalPath, `${origin}/`);
-  if (url.origin !== origin) throw new Error("Staynex Bookings email link changed origin");
+  if (url.origin !== origin)
+    throw new Error("Staynex Bookings email link changed origin");
   return url.toString();
 }
 
@@ -76,7 +86,8 @@ export function formatDate(value: Date | string): string {
 
 export function formatDateTime(value: Date | string): string {
   const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) throw new Error("Email date/time is invalid");
+  if (Number.isNaN(date.getTime()))
+    throw new Error("Email date/time is invalid");
   return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "long",
@@ -90,9 +101,12 @@ export function formatDateTime(value: Date | string): string {
 
 export function formatAmount(amountMinor: number, currency: string): string {
   if (!Number.isSafeInteger(amountMinor) || amountMinor < 0) {
-    throw new Error("Email amount must be a non-negative integer in minor units");
+    throw new Error(
+      "Email amount must be a non-negative integer in minor units",
+    );
   }
-  if (!/^[A-Z]{3}$/.test(currency)) throw new Error("Email currency must be ISO 4217");
+  if (!/^[A-Z]{3}$/.test(currency))
+    throw new Error("Email currency must be ISO 4217");
   return new Intl.NumberFormat("en-NG", {
     style: "currency",
     currency,
@@ -100,19 +114,29 @@ export function formatAmount(amountMinor: number, currency: string): string {
   }).format(amountMinor / 100);
 }
 
-export function calculateNights(checkIn: Date | string, checkOut: Date | string): number {
+export function calculateNights(
+  checkIn: Date | string,
+  checkOut: Date | string,
+): number {
   const start = checkIn instanceof Date ? checkIn : new Date(checkIn);
   const end = checkOut instanceof Date ? checkOut : new Date(checkOut);
   const nights = Math.round((end.getTime() - start.getTime()) / 86_400_000);
-  if (!Number.isSafeInteger(nights) || nights < 1) throw new Error("Stay dates are invalid");
+  if (!Number.isSafeInteger(nights) || nights < 1)
+    throw new Error("Stay dates are invalid");
   return nights;
 }
 
-export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+export function pluralize(
+  count: number,
+  singular: string,
+  plural = `${singular}s`,
+): string {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
-export function presentDetails(details: EmailDetail[]): Array<{ label: string; value: string }> {
+export function presentDetails(
+  details: EmailDetail[],
+): Array<{ label: string; value: string }> {
   return details.flatMap((detail) => {
     if (detail.value === null || detail.value === undefined) return [];
     const value = String(detail.value).trim();
@@ -121,7 +145,11 @@ export function presentDetails(details: EmailDetail[]): Array<{ label: string; v
   });
 }
 
-export function sanitizeSingleLine(value: string | null | undefined): string | undefined {
-  const text = optionalText(value)?.replace(/[\r\n\t]+/g, " ").replace(/\s{2,}/g, " ");
+export function sanitizeSingleLine(
+  value: string | null | undefined,
+): string | undefined {
+  const text = optionalText(value)
+    ?.replace(/[\r\n\t]+/g, " ")
+    .replace(/\s{2,}/g, " ");
   return text;
 }

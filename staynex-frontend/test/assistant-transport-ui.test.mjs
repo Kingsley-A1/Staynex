@@ -10,6 +10,7 @@ import {
   clampFloatingPosition,
   floatingPanelSize,
 } from "../src/features/ai/assistant-panel-layout.ts";
+import { apiClientSource } from "./read-source.mjs";
 
 test("SSE parsing survives CRLF proxy framing and heartbeat comments", () => {
   const input =
@@ -53,7 +54,7 @@ test("the widget sends route context and uses an activity-based stream timeout",
       new URL("../src/features/ai/assistant-widget.tsx", import.meta.url),
       "utf8",
     ),
-    readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8"),
+    apiClientSource(),
   ]);
   assert.match(widget, /pagePath: pathname/);
   assert.match(api, /AI_STREAM_IDLE_TIMEOUT_MS/);
@@ -119,7 +120,7 @@ test("message actions are server-backed and the universal launcher stays compact
       new URL("../src/features/ai/assistant-widget.tsx", import.meta.url),
       "utf8",
     ),
-    readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8"),
+    apiClientSource(),
     readFile(new URL("../src/ui/property-card.tsx", import.meta.url), "utf8"),
   ]);
 

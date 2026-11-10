@@ -1,0 +1,19 @@
+# Generated or vendored output
+node_modules
+dist
+.next
+.expo
+coverage
+pnpm-lock.yaml
+staynex-backend/prisma/migrations
+
+# Historical record. Reformatting these would churn the diff of documents
+# that exist precisely to preserve what was written at the time.
+docs/archive
+
+# Generated previews
+.email-previews
+artifacts
+
+# Nested git worktree (separate branch, own history)
+staynex-opay-review

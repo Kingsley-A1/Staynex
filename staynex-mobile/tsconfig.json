@@ -1,0 +1,27 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@staynex/shared": ["../packages/shared/src/index.ts"],
+      "@staynex/backend/types": ["../staynex-backend/types/index.ts"],
+      // React Native 0.76 is a React 18 runtime, but staynex-frontend and
+      // staynex-backend are on React 19, so both @types/react major versions
+      // exist in the workspace store. Without this pin, transitive deps
+      // (expo-router, safe-area-context) resolve the React 19 types and every
+      // navigator fails with TS2786 "cannot be used as a JSX component".
+      // Keep this until the whole workspace shares one React major.
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ],
+  "exclude": ["node_modules"]
+}
